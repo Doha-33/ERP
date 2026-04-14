@@ -1,0 +1,450 @@
+@import "tailwindcss";
+
+@theme {
+  /* Main Palette */
+  --color-primary: #4361EE;
+  --color-primary-hover: #3730A3;
+  --color-primary-soft: #EEF2FF;
+
+  /* Backgrounds */
+  --color-light-bg: #F8FAFC;
+  --color-light-card: #FFFFFF;
+  --color-light-surface: #F1F5F9;
+
+  /* Dark Backgrounds */
+  --color-dark-bg: #0F172A;
+  --color-dark-card: #1E293B;
+  --color-dark-surface: #1E293B;
+
+  /* Text */
+  --color-light-text: #1E293B;
+  --color-muted: #64748B;
+  --color-light-heading: #0F172A;
+
+  /* Dark Text */
+  --color-dark-text: #F1F5F9;
+  --color-dark-muted: #94A3B8;
+  --color-dark-heading: #FFFFFF;
+
+  /* Borders */
+  --color-light-border: #E2E8F0;
+  --color-light-border-strong: #CBD5E1;
+
+  /* Dark Borders */
+  --color-dark-border: #334155;
+  --color-dark-border-strong: #475569;
+
+  /* Status Colors */
+  --color-success-bg: #ECFDF5;
+  --color-success-text: #059669;
+
+  --color-warning-bg: #FFFBEB;
+  --color-warning-text: #D97706;
+
+  --color-danger-bg: #FEF2F2;
+  --color-danger-text: #DC2626;
+
+  --color-info-bg: #EFF6FF;
+  --color-info-text: #2563EB;
+
+  /* Sidebar */
+  --color-sidebar-bg: #ffffff;
+  --color-sidebar-text: #64748b;
+  --color-sidebar-active-bg: #4f46e5;
+  --color-sidebar-active-text: #ffffff;
+
+  /* Table */
+  --color-table-head-bg: #f8fafc;
+  --color-table-head-text: #475569;
+  --color-table-row-hover: #f1f5f9;
+}
+
+:root {
+  --light-bg: #f4f7fb;
+  --light-text: #0f172a;
+  --light-heading: #111827;
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --primary-soft: #eef2ff;
+
+  --card-bg: #ffffff;
+  --surface-bg: #f8fafc;
+
+  --muted: #64748b;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+
+  --success-bg: #ecfdf3;
+  --success-text: #15803d;
+
+  --warning-bg: #fff7ed;
+  --warning-text: #ea580c;
+
+  --danger-bg: #fef2f2;
+  --danger-text: #dc2626;
+
+  --info-bg: #eff6ff;
+  --info-text: #2563eb;
+
+  --sidebar-bg: #ffffff;
+  --sidebar-text: #64748b;
+  --sidebar-active-bg: #4f46e5;
+  --sidebar-active-text: #ffffff;
+
+  --table-head-bg: #f8fafc;
+  --table-head-text: #475569;
+  --table-row-hover: #f1f5f9;
+
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 4px 14px rgba(15, 23, 42, 0.06);
+}
+
+.dark {
+  --light-bg: #0b1120;
+  --light-text: #f1f5f9;
+  --light-heading: #ffffff;
+  --muted: #94a3b8;
+  --border: #1e293b;
+  --border-strong: #334155;
+  --card-bg: #111c44;
+  --surface-bg: #1b254b;
+  --sidebar-bg: #0b1120;
+  --sidebar-text: #94a3b8;
+  --table-head-bg: #1b254b;
+  --table-head-text: #f1f5f9;
+  --table-row-hover: #1b254b;
+  
+  --success-bg: rgba(21, 128, 61, 0.1);
+  --success-text: #4ade80;
+  --warning-bg: rgba(234, 88, 12, 0.1);
+  --warning-text: #fb923c;
+  --danger-bg: rgba(220, 38, 38, 0.1);
+  --danger-text: #f87171;
+  --info-bg: rgba(37, 99, 235, 0.1);
+  --info-text: #60a5fa;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: "Inter", "Cairo", sans-serif;
+  background: var(--light-bg);
+  color: var(--light-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* General Typography */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--light-heading);
+  font-weight: 700;
+}
+
+p,
+span,
+label,
+small {
+  color: var(--muted);
+}
+
+.text-muted {
+  color: var(--muted) !important;
+}
+
+.text-heading {
+  color: var(--light-heading) !important;
+}
+
+.text-body {
+  color: var(--light-text) !important;
+}
+
+/* Cards */
+.card,
+.dashboard-card,
+.stat-card,
+.panel,
+.widget {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  border-radius: 14px;
+}
+
+/* Inputs */
+input,
+select,
+textarea {
+  background: var(--card-bg);
+  color: var(--light-text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  transition: all 0.2s ease;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+}
+
+/* Buttons */
+button,
+.btn,
+a.btn {
+  transition: all 0.2s ease;
+}
+
+.btn-primary,
+button.primary,
+a.primary {
+  background: var(--primary);
+  color: #ffffff;
+  border: 1px solid var(--primary);
+}
+
+.btn-primary:hover,
+button.primary:hover,
+a.primary:hover {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+}
+
+.btn-outline,
+button.outline,
+a.outline {
+  background: var(--card-bg);
+  color: var(--light-text);
+  border: 1px solid var(--border-strong);
+}
+
+.btn-outline:hover,
+button.outline:hover,
+a.outline:hover {
+  background: var(--surface-bg);
+}
+
+/* Sidebar */
+aside,
+.sidebar,
+.layout-sidebar {
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border);
+}
+
+.sidebar a,
+.sidebar .nav-link,
+.sidebar .menu-item {
+  color: var(--sidebar-text);
+  border-radius: 10px;
+  transition: all 0.2s ease;
+}
+
+.sidebar a:hover,
+.sidebar .nav-link:hover,
+.sidebar .menu-item:hover {
+  background: #f1f5f9;
+  color: var(--light-heading);
+}
+
+.sidebar .active,
+.sidebar a.active,
+.sidebar .nav-link.active,
+.sidebar .menu-item.active {
+  background: var(--sidebar-active-bg);
+  color: var(--sidebar-active-text) !important;
+}
+
+/* Header / Topbar */
+header,
+.topbar,
+.navbar {
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(8px);
+}
+
+/* Tables */
+table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--card-bg);
+}
+
+table th {
+  background: var(--table-head-bg);
+  color: var(--table-head-text);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid var(--border);
+}
+
+table td {
+  color: var(--light-text);
+  font-weight: 500;
+  border-bottom: 1px solid #edf2f7;
+}
+
+table th,
+table td {
+  padding: 14px 16px;
+}
+
+table tbody tr:hover {
+  background: var(--table-row-hover);
+}
+
+/* Table Wrapper */
+.table-wrapper,
+.table-container {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Status Badges */
+.badge,
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.badge-success,
+.status-active {
+  background: var(--success-bg);
+  color: var(--success-text);
+}
+
+.badge-warning,
+.status-pending {
+  background: var(--warning-bg);
+  color: var(--warning-text);
+}
+
+.badge-danger,
+.status-inactive {
+  background: var(--danger-bg);
+  color: var(--danger-text);
+}
+
+.badge-info {
+  background: var(--info-bg);
+  color: var(--info-text);
+}
+
+/* Stat Boxes */
+.stat-box,
+.summary-card,
+.metric-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.stat-box.primary {
+  background: #eef2ff;
+  color: #3730a3;
+}
+
+.stat-box.success {
+  background: var(--success-bg);
+  color: var(--success-text);
+}
+
+.stat-box.warning {
+  background: var(--warning-bg);
+  color: var(--warning-text);
+}
+
+.stat-box.danger {
+  background: var(--danger-bg);
+  color: var(--danger-text);
+}
+
+/* Icons */
+.icon-soft-primary {
+  background: #eef2ff;
+  color: var(--primary);
+}
+
+.icon-soft-success {
+  background: var(--success-bg);
+  color: var(--success-text);
+}
+
+.icon-soft-warning {
+  background: var(--warning-bg);
+  color: var(--warning-text);
+}
+
+.icon-soft-danger {
+  background: var(--danger-bg);
+  color: var(--danger-text);
+}
+
+/* Borders Helpers */
+.border-light {
+  border-color: var(--border) !important;
+}
+
+.border-strong {
+  border-color: var(--border-strong) !important;
+}
+
+/* Background Helpers */
+.bg-card {
+  background: var(--card-bg) !important;
+}
+
+.bg-surface {
+  background: var(--surface-bg) !important;
+}
+
+.bg-page {
+  background: var(--light-bg) !important;
+}
+
+/* Text Helpers */
+.text-primary {
+  color: var(--primary) !important;
+}
+
+.text-success {
+  color: var(--success-text) !important;
+}
+
+.text-warning {
+  color: var(--warning-text) !important;
+}
+
+.text-danger {
+  color: var(--danger-text) !important;
+}
+
+/* Smooth look */
+* {
+  box-sizing: border-box;
+}
