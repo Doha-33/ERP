@@ -25,7 +25,7 @@ async function startServer() {
 
   // API routes
   app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', message: 'Frontend server is running. Backend should be at http://localhost:5000/api' });
+    res.json({ status: 'ok', message: 'Frontend server is running. Backend should be at https://cavalier-exposable-overcast.ngrok-free.dev/api' });
   });
 
   // Vite Integration
