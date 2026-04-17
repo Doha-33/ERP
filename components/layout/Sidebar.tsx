@@ -302,6 +302,12 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
           icon: ArrowUpRight,
         },
         {
+          id: "accounting-taxes",
+          label: "taxes",
+          path: "/accounting/taxes",
+          icon: Landmark,
+        },
+        {
           id: "accounting-closing",
           label: "monthly_closing",
           path: "/accounting/monthly-closing",
@@ -806,19 +812,20 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
       )}
 
       {/* Mobile menu button */}
-      <button
+      {/* <button
         onClick={onClose}
-        className="fixed top-4 z-30 lg:hidden p-2.5 rounded-xl bg-white dark:bg-gray-800 shadow-lg border border-gray-100 dark:border-gray-700 text-gray-700 dark:text-gray-200"
-        style={{
-          [isRTL ? "right" : "left"]: isOpen
+        className={`fixed top-4 z-30 lg:hidden p-2.5 rounded-xl bg-white dark:bg-gray-800 shadow-lg border border-gray-100 dark:border-gray-700 text-gray-700 dark:text-gray-200 transition-all duration-300 ${
+          isOpen
             ? isRTL
-              ? "auto"
-              : "auto"
-            : "1rem",
-        }}
+              ? "right-64"
+              : "left-64"
+            : isRTL
+              ? "right-4"
+              : "left-4"
+        }`}
       >
         {isOpen ? <X size={20} /> : <Menu size={20} />}
-      </button>
+      </button> */}
 
       <aside
         className={`fixed lg:static top-0 z-30 h-screen w-64 

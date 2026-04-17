@@ -110,6 +110,7 @@ import { JournalEntries } from './pages/accounting/JournalEntries';
 import { GeneralLedger } from './pages/accounting/GeneralLedger';
 import { AccountsReceivable } from './pages/accounting/AccountsReceivable';
 import { AccountsPayable } from './pages/accounting/AccountsPayable';
+import { Taxes } from './pages/accounting/Taxes';
 import { MonthlyClosing } from './pages/accounting/MonthlyClosing';
 import { FinancialReports } from './pages/accounting/FinancialReports';
 
@@ -323,6 +324,7 @@ const App: React.FC = () => {
                 <Route path="/accounting/general-ledger" element={<ProtectedRoute><MainLayout><GeneralLedger /></MainLayout></ProtectedRoute>} />
                 <Route path="/accounting/accounts-receivable" element={<ProtectedRoute><MainLayout><AccountsReceivable /></MainLayout></ProtectedRoute>} />
                 <Route path="/accounting/accounts-payable" element={<ProtectedRoute><MainLayout><AccountsPayable /></MainLayout></ProtectedRoute>} />
+                <Route path="/accounting/taxes" element={<ProtectedRoute><MainLayout><Taxes /></MainLayout></ProtectedRoute>} />
                 <Route path="/accounting/monthly-closing" element={<ProtectedRoute><MainLayout><MonthlyClosing /></MainLayout></ProtectedRoute>} />
                 <Route path="/accounting/financial-reports" element={<ProtectedRoute><MainLayout><FinancialReports /></MainLayout></ProtectedRoute>} />
 

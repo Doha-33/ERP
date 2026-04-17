@@ -2,7 +2,8 @@ import React, { createContext, useContext, useEffect, useCallback, useState, use
 import { useUserModule } from './hr/useUserModule';
 import { useOrganizationModule } from './hr/useOrganizationModule';
 import { useEmployeeModule } from './hr/useEmployeeModule';
-import { useFinanceModule } from './hr/useFinanceModule';
+import { useHRFinanceModule } from './hr/useHRFinanceModule';
+import { useAccountingModule } from './accounting/useAccountingModule';
 import { useRequestModule } from './hr/useRequestModule';
 import { useOnboardingModule } from './hr/useOnboardingModule';
 import { useSalesModule } from './sales/useSalesModule';
@@ -14,7 +15,8 @@ import { Employee } from '../types';
 type UserModule = ReturnType<typeof useUserModule>;
 type OrganizationModule = ReturnType<typeof useOrganizationModule>;
 type EmployeeModule = ReturnType<typeof useEmployeeModule>;
-type FinanceModule = ReturnType<typeof useFinanceModule>;
+type HRFinanceModule = ReturnType<typeof useHRFinanceModule>;
+type AccountingModule = ReturnType<typeof useAccountingModule>;
 type RequestModule = ReturnType<typeof useRequestModule>;
 type OnboardingModule = ReturnType<typeof useOnboardingModule>;
 type SalesModule = ReturnType<typeof useSalesModule>;
@@ -25,7 +27,8 @@ export interface DataContextType extends
   UserModule, 
   OrganizationModule, 
   EmployeeModule, 
-  FinanceModule, 
+  HRFinanceModule,
+  AccountingModule,
   RequestModule, 
   OnboardingModule, 
   SalesModule, 
@@ -46,7 +49,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const salesFetchRef = useRef<(() => Promise<void>) | null>(null);
   const orgFetchRef = useRef<(() => Promise<void>) | null>(null);
   const employeeFetchRef = useRef<(() => Promise<void>) | null>(null);
-  const financeFetchRef = useRef<(() => Promise<void>) | null>(null);
+  const hrFinanceFetchRef = useRef<(() => Promise<void>) | null>(null);
+  const accountingFetchRef = useRef<(() => Promise<void>) | null>(null);
   const requestFetchRef = useRef<(() => Promise<void>) | null>(null);
   const inventoryFetchRef = useRef<(() => Promise<void>) | null>(null);
   const purchaseFetchRef = useRef<(() => Promise<void>) | null>(null);
@@ -58,7 +62,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         salesFetchRef.current?.(),
         orgFetchRef.current?.(),
         employeeFetchRef.current?.(),
-        financeFetchRef.current?.(),
+        hrFinanceFetchRef.current?.(),
+        accountingFetchRef.current?.(),
         requestFetchRef.current?.(),
         inventoryFetchRef.current?.(),
         purchaseFetchRef.current?.(),
@@ -73,7 +78,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const userModule = useUserModule(fetchAllDataCentral);
   const orgModule = useOrganizationModule(fetchAllDataCentral);
   const employeeModule = useEmployeeModule(fetchAllDataCentral);
-  const financeModule = useFinanceModule(fetchAllDataCentral);
+  const hrFinanceModule = useHRFinanceModule(fetchAllDataCentral);
+  const accountingModule = useAccountingModule(fetchAllDataCentral);
   const requestModule = useRequestModule(fetchAllDataCentral);
   const onboardingModule = useOnboardingModule(fetchAllDataCentral);
   const salesModule = useSalesModule(fetchAllDataCentral);
@@ -84,7 +90,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     salesFetchRef.current = salesModule.fetchSalesData;
     orgFetchRef.current = orgModule.fetchOrganizationData;
     employeeFetchRef.current = employeeModule.fetchEmployeeData;
-    financeFetchRef.current = financeModule.fetchFinanceData;
+    hrFinanceFetchRef.current = hrFinanceModule.fetchFinanceData;
+    accountingFetchRef.current = accountingModule.fetchAccountingData;
     requestFetchRef.current = requestModule.fetchRequestData;
     inventoryFetchRef.current = inventoryModule.fetchInventoryData;
     purchaseFetchRef.current = purchaseModule.fetchPurchaseData;
@@ -92,7 +99,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     salesModule.fetchSalesData, 
     orgModule.fetchOrganizationData, 
     employeeModule.fetchEmployeeData,
-    financeModule.fetchFinanceData,
+    hrFinanceModule.fetchFinanceData,
+    accountingModule.fetchAccountingData,
     requestModule.fetchRequestData,
     inventoryModule.fetchInventoryData,
     purchaseModule.fetchPurchaseData
@@ -114,7 +122,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     ...userModule,
     ...orgModule,
     ...employeeModule,
-    ...financeModule,
+    ...hrFinanceModule,
+    ...accountingModule,
     ...requestModule,
     ...onboardingModule,
     ...salesModule,

@@ -968,3 +968,166 @@ export interface StockMovement {
   userRole: string;
   date: string;
 }
+
+export interface Account {
+  id: string;
+  _id?: string;
+  accountCode: string;
+  accountName: string;
+  accountType: 'ASSET' | 'LIABILITY' | 'EQUITY' | 'REVENUE' | 'EXPENSE' | string;
+  parentAccountId?: any | null;
+  level?: number;
+  isActive?: boolean;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface JournalLine {
+  accountId: any;
+  debit: number;
+  credit: number;
+  description?: string;
+}
+
+export interface JournalEntry {
+  id: string;
+  _id?: string;
+  entryDate: string;
+  referenceNumber: string;
+  memo: string;
+  lines: JournalLine[];
+  status: 'DRAFT' | 'POSTED' | 'CANCELLED' | string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface AccountReceivable {
+  id: string;
+  _id?: string;
+  customerName: string;
+  invoiceNumber: string;
+  invoiceDate: string;
+  dueDate: string;
+  amount: number;
+  paidAmount: number;
+  status: 'PENDING' | 'PARTIAL' | 'PAID' | string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface LedgerLine {
+  date: string;
+  reference: string;
+  description: string;
+  debit: number;
+  credit: number;
+  balance: number;
+}
+
+export interface GeneralLedgerReport {
+  account: {
+    id: string;
+    code: string;
+    name: string;
+    type: string;
+  };
+  fromDate: string;
+  toDate: string;
+  totalTransactions: number;
+  ledgerLines: LedgerLine[];
+  closingBalance: number;
+}
+
+export interface BalanceSheetReport {
+  asOfDate: string;
+  assets: { accountCode: string; accountName: string; amount: number }[];
+  liabilities: { accountCode: string; accountName: string; amount: number }[];
+  equity: { accountCode: string; accountName: string; amount: number }[];
+  totalAssets: number;
+  totalLiabilities: number;
+  totalEquity: number;
+  isBalanced: boolean;
+}
+
+export interface TrialBalanceReport {
+  fromDate: string;
+  toDate: string;
+  totalAccounts: number;
+  totalDebit: number;
+  totalCredit: number;
+  isBalanced: boolean;
+  lines: {
+    accountId: string;
+    accountCode: string;
+    accountName: string;
+    accountType: string;
+    debit: number;
+    credit: number;
+  }[];
+}
+
+export interface ProfitLossReport {
+  fromDate: string;
+  toDate: string;
+  revenues: { accountCode: string; accountName: string; amount: number }[];
+  expenses: { accountCode: string; accountName: string; amount: number }[];
+  totalRevenue: number;
+  totalExpense: number;
+  netProfit: number;
+}
+
+export interface AccountPayable {
+  id: string;
+  _id?: string;
+  vendorName: string;
+  invoiceNumber: string;
+  invoiceDate: string;
+  dueDate: string;
+  amount: number;
+  paidAmount: number;
+  status: 'PENDING' | 'PARTIAL' | 'PAID' | string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface APPayment {
+  id: string;
+  _id?: string;
+  apInvoiceId: string | any;
+  paymentDate: string;
+  amount: number;
+  paymentMethod: string;
+  referenceNumber: string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ARPayment {
+  id: string;
+  _id?: string;
+  arInvoiceId: string | any;
+  paymentDate: string;
+  amount: number;
+  paymentMethod: string;
+  referenceNumber: string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Tax {
+  id: string;
+  _id?: string;
+  taxName: string;
+  taxCode: string;
+  taxType: 'VAT' | 'WITHHOLDING' | 'SALES_TAX' | string;
+  rate: number;
+  isActive: boolean;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
