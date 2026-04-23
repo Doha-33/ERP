@@ -21,7 +21,7 @@ export const FinancialReports: React.FC = () => {
         const data = await financeService.getBalanceSheet({ asOfDate: toDate });
         setBalanceSheet(data);
       } else if (activeTab === 'profit_loss') {
-        const data = await financeService.getProfitLoss({ fromDate: fromDate, toDate: toDate });
+        const data = await financeService.getProfitLoss({ fromDate, toDate });
         setProfitLoss(data);
       }
     } catch (error) {

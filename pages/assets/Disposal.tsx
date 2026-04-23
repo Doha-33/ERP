@@ -1,111 +1,246 @@
-import React, { useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Plus, Search, Edit2, Trash2, DollarSign, Trash, FileText, Upload, Laptop } from 'lucide-react';
-import { Card, Button, Input, Select, Badge, ExportDropdown, TextArea } from '../../components/ui/Common';
-import { Table, Column } from '../../components/ui/Table';
-import { Modal } from '../../components/ui/Modal';
-
-interface Disposal {
-  id: string;
-  assetId: string;
-  assetName: string;
-  model: string;
-  serialNumber: string;
-  category: string;
-  brand: string;
-  currentValue: string;
-  purchaseCost: string;
-  purchaseDate: string;
-  disposalType: 'scrap' | 'donation' | 'sale';
-  disposalValue: string;
-  invoiceNumber: string;
-  paymentMethod: string;
-  attachment: string;
-  notes: string;
-}
+import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
+import {
+  Plus,
+  Search,
+  Edit2,
+  Trash2,
+  Laptop,
+  DollarSign,
+  FileText,
+  CreditCard,
+  Tag,
+  Calendar,
+} from "lucide-react";
+import {
+  Button,
+  Input,
+  ExportDropdown,
+} from "../../components/ui/Common";
+import { Table, Column } from "../../components/ui/Table";
+import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
+import { DisposalFormModal } from "../../components/assets/DisposalFormModal";
+import { useData } from "../../context/DataContext";
+import { Disposal as DisposalType } from "../../types";
+import { toast } from "sonner";
 
 export const Disposal: React.FC = () => {
   const { t } = useTranslation();
+  const {
+    disposals,
+    assets,
+    assetsLoading,
+    addDisposal,
+    updateDisposal,
+    deleteDisposal,
+  } = useData();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedDisposal, setSelectedDisposal] = useState<Disposal | null>(null);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [selectedDisposal, setSelectedDisposal] = useState<DisposalType | null>(
+    null,
+  );
+  const [disposalIdToDelete, setDisposalIdToDelete] = useState<string | null>(
+    null,
+  );
+  const [searchTerm, setSearchTerm] = useState("");
 
-  const disposalData: Disposal[] = [
-    {
-      id: '1',
-      assetId: 'EDR2333',
-      assetName: 'Laptop Lenovo',
-      model: 'ccccc',
-      serialNumber: 'EDR2333',
-      category: 'electronics',
-      brand: 'EDR2333',
-      currentValue: '23234$',
-      purchaseCost: '23234$',
-      purchaseDate: '12/3/2040',
-      disposalType: 'sale',
-      disposalValue: '23234$',
-      invoiceNumber: '1234565432',
-      paymentMethod: 'cash',
-      attachment: 'pdf',
-      notes: 'Sample notes',
-    },
-  ];
+  const filteredDisposals = disposals.filter((d) => {
+    const asset = d.assetId as any;
+    const assetName = asset?.assetName || d.assetName || "";
+    const assetCode = asset?.assetCode || d.disposalCode || "";
+    return (
+      assetName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      assetCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      d.disposalType?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  });
 
-  const getStatusBadge = (type: Disposal['disposalType']) => {
-    const variants = {
-      scrap: 'danger',
-      donation: 'info',
-      sale: 'success',
-    } as const;
+  const handleSave = async (
+    data: Partial<DisposalType>,
+    attachments?: string[],
+  ) => {
+    try {
+      const processedData = {
+        ...data,
+        attachments: attachments || selectedDisposal?.attachments || [],
+      };
 
-    const labels = {
-      scrap: t('scrap'),
-      donation: t('donation'),
-      sale: t('sale'),
-    };
-
-    return <Badge variant={variants[type]}>{labels[type]}</Badge>;
+      if (selectedDisposal) {
+        await updateDisposal(
+          selectedDisposal._id || selectedDisposal.id!,
+          processedData,
+        );
+        toast.success(t("disposal_updated_successfully"));
+      } else {
+        await addDisposal(processedData);
+        toast.success(t("disposal_added_successfully"));
+      }
+      setIsModalOpen(false);
+    } catch (error) {
+      console.error("Failed to save disposal:", error);
+      toast.error(t("failed_to_save_disposal"));
+    }
   };
 
-  const columns: Column<Disposal>[] = [
-    { header: t('asset_id'), accessorKey: 'assetId' },
-    { 
-      header: t('asset_name'), 
-      accessorKey: 'assetName',
+  const handleDelete = async () => {
+    if (!disposalIdToDelete) return;
+    try {
+      await deleteDisposal(disposalIdToDelete);
+      setIsDeleteModalOpen(false);
+      setDisposalIdToDelete(null);
+      toast.success(t("disposal_deleted_successfully"));
+    } catch (error) {
+      console.error("Failed to delete disposal:", error);
+      toast.error(t("failed_to_delete_disposal"));
+    }
+  };
+
+  const getDisposalTypeBadge = (type: string) => {
+    const typeLower = type?.toLowerCase(); // غيرنا من t إلى typeLower
+
+    const typeMap: Record<string, { label: string; color: string }> = {
+      sale: { label: t("sale"), color: "green" },
+      scrap: { label: t("scrap"), color: "red" },
+      donation: { label: t("donation"), color: "blue" },
+      transfer: { label: t("transfer"), color: "purple" },
+    };
+
+    const { label, color } = typeMap[typeLower] || {
+      label: type || t("unknown"),
+      color: "gray",
+    };
+
+    const colorClasses = {
+      green: "bg-green-50 text-green-700 border-green-200",
+      red: "bg-red-50 text-red-700 border-red-200",
+      blue: "bg-blue-50 text-blue-700 border-blue-200",
+      purple: "bg-purple-50 text-purple-700 border-purple-200",
+      gray: "bg-gray-50 text-gray-700 border-gray-200",
+    };
+
+    return (
+      <div
+        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${colorClasses[color as keyof typeof colorClasses]}`}
+      >
+        <Tag size={12} />
+        <span>{label}</span>
+      </div>
+    );
+  };
+
+  const getPaymentMethodBadge = (method: string) => {
+    const methodLower = method?.toLowerCase(); // غيرنا من m إلى methodLower
+
+    const methodMap: Record<string, { label: string; color: string }> = {
+      cash: { label: t("cash"), color: "green" },
+      "bank transfer": { label: t("bank_transfer"), color: "blue" },
+      cheque: { label: t("cheque"), color: "purple" },
+      card: { label: t("credit_card"), color: "orange" },
+    };
+
+    const { label, color } = methodMap[methodLower] || {
+      label: method || t("unknown"),
+      color: "gray",
+    };
+
+    const colorClasses = {
+      green: "bg-green-50 text-green-700 border-green-200",
+      blue: "bg-blue-50 text-blue-700 border-blue-200",
+      purple: "bg-purple-50 text-purple-700 border-purple-200",
+      orange: "bg-orange-50 text-orange-700 border-orange-200",
+      gray: "bg-gray-50 text-gray-700 border-gray-200",
+    };
+
+    return (
+      <div
+        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${colorClasses[color as keyof typeof colorClasses]}`}
+      >
+        <CreditCard size={12} />
+        <span>{label}</span>
+      </div>
+    );
+  };
+
+  const columns: Column<DisposalType>[] = [
+    { header: t("code"), accessorKey: "disposalCode" },
+    {
+      header: t("asset_name"),
       render: (item) => (
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded bg-blue-50 flex items-center justify-center text-blue-600">
             <Laptop size={16} />
           </div>
-          <span>{item.assetName}</span>
+          <div className="flex flex-col">
+            <span className="font-medium text-sm text-gray-900">
+              {item.assetName}
+            </span>
+            <span className="text-xs text-gray-500">{item.model}</span>
+          </div>
         </div>
-      )
+      ),
     },
-    { header: t('model'), accessorKey: 'model' },
-    { header: t('serial_number'), accessorKey: 'serialNumber' },
-    { header: t('category'), accessorKey: 'category' },
-    { header: t('brand'), accessorKey: 'brand' },
-    { header: t('current_value'), accessorKey: 'currentValue' },
-    { header: t('purchase_cost'), accessorKey: 'purchaseCost' },
-    { header: t('purchase_date'), accessorKey: 'purchaseDate' },
+    { header: t("category"), accessorKey: "category" },
+    { header: t("model"), accessorKey: "model" },
+    { header: t("serial_number"), accessorKey: "serialNumber" },
+    { header: t("brand"), accessorKey: "brand" },
     {
-      header: t('disposal_type'),
-      accessorKey: 'disposalType',
-      render: (item) => getStatusBadge(item.disposalType),
-    },
-    { header: t('disposal_value'), accessorKey: 'disposalValue' },
-    { header: t('invoice_number'), accessorKey: 'invoiceNumber' },
-    { header: t('payment_method'), accessorKey: 'paymentMethod' },
-    { 
-      header: t('attachment'), 
-      accessorKey: 'attachment',
+      header: t("purchase_info"),
       render: (item) => (
-        <span className="text-gray-500">{item.attachment}</span>
-      )
+        <div className="flex flex-col text-sm">
+          <div className="flex items-center gap-1">
+            <Calendar size={12} className="text-gray-400" />
+            <span>
+              {item.purchaseDate
+                ? new Date(item.purchaseDate).toLocaleDateString()
+                : "-"}
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <DollarSign size={12} className="text-gray-400" />
+            <span>{item.purchaseCost?.toLocaleString()} SAR</span>
+          </div>
+        </div>
+      ),
     },
     {
-      header: t('actions'),
-      accessorKey: 'id',
+      header: t("current_value"),
+      render: (item) => (
+        <div className="text-sm font-medium text-gray-900">
+          {item.currentValue?.toLocaleString()} SAR
+        </div>
+      ),
+    },
+    { header: t("purchase_cost"), accessorKey: "purchaseCost" },
+    { header: t("purchase_date"), accessorKey: "purchaseDate" },
+    {
+      header: t("disposal_type"),
+      render: (item) => getDisposalTypeBadge(item.disposalType),
+    },
+    {
+      header: t("disposal_value"),
+      render: (item) => (
+        <div className="text-sm font-medium text-green-600">
+          {item.disposalValue?.toLocaleString()} SAR
+        </div>
+      ),
+    },
+    {
+      header: t("payment_method"),
+      render: (item) => getPaymentMethodBadge(item.paymentMethod),
+    },
+    {
+      header: t("invoice_number"),
+      accessorKey: "invoiceNumber",
+      render: (item) => (
+        <div className="flex items-center gap-1">
+          <FileText size={12} className="text-gray-400" />
+          <span className="text-sm">{item.invoiceNumber}</span>
+        </div>
+      ),
+    },
+    { header: t("attachments"), accessorKey: "attachments" },
+    {
+      header: t("actions"),
       render: (item) => (
         <div className="flex items-center gap-2">
           <button
@@ -113,11 +248,17 @@ export const Disposal: React.FC = () => {
               setSelectedDisposal(item);
               setIsModalOpen(true);
             }}
-            className="p-1 hover:bg-gray-100 rounded text-blue-600"
+            className="p-1.5 text-gray-400 hover:text-primary transition-colors border border-gray-200 rounded-lg"
           >
             <Edit2 size={16} />
           </button>
-          <button className="p-1 hover:bg-gray-100 rounded text-red-600">
+          <button
+            onClick={() => {
+              setDisposalIdToDelete(item._id || item.id!);
+              setIsDeleteModalOpen(true);
+            }}
+            className="p-1.5 text-gray-400 hover:text-red-500 transition-colors border border-gray-200 rounded-lg"
+          >
             <Trash2 size={16} />
           </button>
         </div>
@@ -127,13 +268,15 @@ export const Disposal: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('disposal_page')}</h1>
-          <p className="text-gray-500 dark:text-gray-400">{t('manage_your_disposal_page')}</p>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {t("disposal_page")}
+          </h1>
+          <p className="text-gray-500">{t("manage_your_disposal_page")}</p>
         </div>
         <div className="flex gap-3">
-          <ExportDropdown />
+          <ExportDropdown data={disposals} filename="disposal" />
           <Button
             variant="primary"
             onClick={() => {
@@ -143,170 +286,45 @@ export const Disposal: React.FC = () => {
             className="bg-indigo-600 hover:bg-indigo-700"
           >
             <Plus size={18} />
-            {t('add_disposal')}
+            {t("add_disposal")}
           </Button>
         </div>
       </div>
 
-      <Card>
-        <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex flex-wrap gap-4 items-center justify-end">
-          <Select
-            options={[
-              { label: t('asset_id'), value: 'asset_id' },
-            ]}
-            className="w-48"
-            placeholder={t('asset_id')}
-          />
-        </div>
-        <div className="overflow-x-auto">
-          <Table 
-            columns={columns} 
-            data={disposalData} 
-            keyExtractor={(item) => item.id}
-            selectable
-            selectedIds={selectedIds}
-            onSelectionChange={setSelectedIds}
-            minWidth="min-w-[1800px]"
-          />
-        </div>
-      </Card>
+      <div className="p-4 flex flex-wrap gap-4 items-center">
+        <Input
+          placeholder={t("search_disposal")}
+          icon={<Search size={18} />}
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="max-w-md"
+          fullWidth={false}
+        />
+      </div>
 
-      <Modal
+      <Table
+        columns={columns}
+        data={filteredDisposals}
+        keyExtractor={(item) => item._id || item.id!}
+        isLoading={assetsLoading}
+        selectable
+      />
+
+      <DisposalFormModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={
-          <div className="flex items-center gap-2">
-            {selectedDisposal ? <Edit2 size={20} /> : <Plus size={20} />}
-            {selectedDisposal ? t('edit_disposal') : t('add_disposal')}
-          </div>
-        }
-        size="4xl"
-      >
-        <form className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('asset_name')} <span className="text-red-500">*</span></label>
-              <Select
-                options={[
-                  { label: 'aaaa', value: 'aaaa' },
-                ]}
-                defaultValue={selectedDisposal?.assetName}
-                required
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('model')} <span className="text-red-500">*</span></label>
-              <Select
-                options={[
-                  { label: 'aaaa', value: 'aaaa' },
-                ]}
-                defaultValue={selectedDisposal?.model}
-                required
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('serial_number')} <span className="text-red-500">*</span></label>
-              <Select
-                options={[
-                  { label: 'aaaa', value: 'aaaa' },
-                ]}
-                defaultValue={selectedDisposal?.serialNumber}
-                required
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('brand')} <span className="text-red-500">*</span></label>
-              <Select
-                options={[
-                  { label: 'aaaa', value: 'aaaa' },
-                ]}
-                defaultValue={selectedDisposal?.brand}
-                required
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('current_value')} <span className="text-red-500">*</span></label>
-              <Input defaultValue={selectedDisposal?.currentValue} placeholder="aaaaaaa" required />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('purchase_date')} <span className="text-red-500">*</span></label>
-              <Input type="date" defaultValue={selectedDisposal?.purchaseDate} required />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('purchase_cost')} <span className="text-red-500">*</span></label>
-              <Input defaultValue={selectedDisposal?.purchaseCost} placeholder="aaaaaaa" required />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('disposal_type')} <span className="text-red-500">*</span></label>
-              <Select
-                options={[
-                  { label: t('sale'), value: 'sale' },
-                  { label: t('scrap'), value: 'scrap' },
-                  { label: t('donation'), value: 'donation' },
-                ]}
-                defaultValue={selectedDisposal?.disposalType || 'sale'}
-                required
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('disposal_value')} <span className="text-red-500">*</span></label>
-              <Input defaultValue={selectedDisposal?.disposalValue} placeholder="444555" required />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('invoice_number')} <span className="text-red-500">*</span></label>
-              <Select
-                options={[
-                  { label: 'aaaa', value: 'aaaa' },
-                ]}
-                defaultValue={selectedDisposal?.invoiceNumber}
-                required
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('payment_method')} <span className="text-red-500">*</span></label>
-              <Select
-                options={[
-                  { label: t('present'), value: 'present' },
-                ]}
-                defaultValue={selectedDisposal?.paymentMethod || 'present'}
-                required
-              />
-            </div>
-          </div>
+        selectedDisposal={selectedDisposal}
+        assets={assets}
+        onSave={handleSave}
+      />
 
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('notes')} <span className="text-red-500">*</span></label>
-            <TextArea 
-              defaultValue={selectedDisposal?.notes} 
-              className="min-h-[120px] border-blue-200 focus:border-blue-500"
-              required 
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('upload_attachment')}</label>
-            <div className="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl p-10 flex flex-col items-center justify-center text-gray-400 hover:border-blue-400 hover:bg-blue-50/50 transition-all cursor-pointer group">
-              <div className="w-12 h-12 rounded-full bg-gray-50 dark:bg-gray-800 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                <Upload size={24} className="text-gray-400 group-hover:text-blue-500" />
-              </div>
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-3 mt-8">
-            <Button variant="secondary" onClick={() => setIsModalOpen(false)} className="bg-slate-700 text-white hover:bg-slate-800 border-none px-8">
-              {t('cancel')}
-            </Button>
-            <Button variant="primary" type="submit" className="bg-indigo-600 hover:bg-indigo-700 px-8">
-              {selectedDisposal ? t('save') : (
-                <div className="flex items-center gap-2">
-                  <Plus size={18} />
-                  {t('add_disposal')}
-                </div>
-              )}
-            </Button>
-          </div>
-        </form>
-      </Modal>
+      <ConfirmationModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleDelete}
+        title={t("delete_disposal")}
+        message={t("are_you_sure_delete_disposal")}
+      />
     </div>
   );
 };

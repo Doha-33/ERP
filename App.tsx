@@ -5,6 +5,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
 import { MainLayout } from './components/layout/MainLayout';
+import { Toaster } from 'sonner';
 
 // Auth Pages
 import { SignIn } from './pages/auth/SignIn';
@@ -111,6 +112,9 @@ import { GeneralLedger } from './pages/accounting/GeneralLedger';
 import { AccountsReceivable } from './pages/accounting/AccountsReceivable';
 import { AccountsPayable } from './pages/accounting/AccountsPayable';
 import { Taxes } from './pages/accounting/Taxes';
+import { Budget } from './pages/accounting/Budget';
+import { Currencies } from './pages/accounting/Currencies';
+import { ExchangeRates } from './pages/accounting/ExchangeRates';
 import { MonthlyClosing } from './pages/accounting/MonthlyClosing';
 import { FinancialReports } from './pages/accounting/FinancialReports';
 
@@ -202,6 +206,7 @@ const App: React.FC = () => {
         <AuthProvider>
           <ErrorBoundary>
             <DataProvider>
+              <Toaster richColors position="top-right" />
               <Routes>
                 {/* Public Routes */}
                 <Route path="/signin" element={<SignIn />} />
@@ -318,6 +323,7 @@ const App: React.FC = () => {
                 {/* Accounting Module */}
                 <Route path="/accounting/income" element={<ProtectedRoute><MainLayout><Income /></MainLayout></ProtectedRoute>} />
                 <Route path="/accounting/expenses" element={<ProtectedRoute><MainLayout><Expenses /></MainLayout></ProtectedRoute>} />
+                <Route path="/accounting/budget" element={<ProtectedRoute><MainLayout><Budget /></MainLayout></ProtectedRoute>} />
                 <Route path="/accounting/chart-of-accounts" element={<ProtectedRoute><MainLayout><ChartOfAccounts /></MainLayout></ProtectedRoute>} />
                 <Route path="/accounting/bank-accounts" element={<ProtectedRoute><MainLayout><BankAccounts /></MainLayout></ProtectedRoute>} />
                 <Route path="/accounting/journal-entries" element={<ProtectedRoute><MainLayout><JournalEntries /></MainLayout></ProtectedRoute>} />
@@ -325,6 +331,8 @@ const App: React.FC = () => {
                 <Route path="/accounting/accounts-receivable" element={<ProtectedRoute><MainLayout><AccountsReceivable /></MainLayout></ProtectedRoute>} />
                 <Route path="/accounting/accounts-payable" element={<ProtectedRoute><MainLayout><AccountsPayable /></MainLayout></ProtectedRoute>} />
                 <Route path="/accounting/taxes" element={<ProtectedRoute><MainLayout><Taxes /></MainLayout></ProtectedRoute>} />
+                <Route path="/accounting/currencies" element={<ProtectedRoute><MainLayout><Currencies /></MainLayout></ProtectedRoute>} />
+                <Route path="/accounting/exchange-rates" element={<ProtectedRoute><MainLayout><ExchangeRates /></MainLayout></ProtectedRoute>} />
                 <Route path="/accounting/monthly-closing" element={<ProtectedRoute><MainLayout><MonthlyClosing /></MainLayout></ProtectedRoute>} />
                 <Route path="/accounting/financial-reports" element={<ProtectedRoute><MainLayout><FinancialReports /></MainLayout></ProtectedRoute>} />
 

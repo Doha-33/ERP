@@ -1,67 +1,35 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Edit2, Trash2, Building2, CreditCard, Wallet, Landmark } from 'lucide-react';
-import { Card, Button, Input, Select, Badge, StatCard, ExportDropdown } from '../../components/ui/Common';
+import { Plus, Edit2, Trash2, Search } from 'lucide-react';
+import { Card, Button, Input, Select, Badge, ExportDropdown } from '../../components/ui/Common';
 import { Modal } from '../../components/ui/Modal';
 import { Table, Column } from '../../components/ui/Table';
-
-interface BankAccount {
-  id: string;
-  company: string;
-  accountNumber: string;
-  iban: string;
-  currency: string;
-  bankName: string;
-  branch: string;
-  currentBalance: number;
-  chartAccount: string;
-  status: 'Active' | 'Inactive';
-}
+import { ConfirmationModal } from '../../components/ui/ConfirmationModal';
+import { useData } from '../../context/DataContext';
+import { BankAccount } from '../../types';
+import { toast } from 'sonner';
 
 export const BankAccounts: React.FC = () => {
   const { t } = useTranslation();
+  const { bankAccounts, currencies, accountingLoading, addBankAccount, updateBankAccount, deleteBankAccount } = useData();
+  
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<BankAccount | null>(null);
+  const [accountIdToDelete, setAccountIdToDelete] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [companyFilter, setCompanyFilter] = useState('');
 
-  const [accounts] = useState<BankAccount[]>([
-    {
-      id: '1',
-      company: 'IN849',
-      accountNumber: 'Marketing',
-      iban: '111111',
-      currency: 'SAR',
-      bankName: 'Cash',
-      branch: 'Z Supplier',
-      currentBalance: 150000.00,
-      chartAccount: 'eee',
-      status: 'Active',
-    },
-    {
-      id: '2',
-      company: 'IN849',
-      accountNumber: 'Office Supplies',
-      iban: '1111111',
-      currency: 'USD',
-      bankName: 'Bank Transfer',
-      branch: 'Z Supplier',
-      currentBalance: 45000.00,
-      chartAccount: 'ttttt',
-      status: 'Inactive',
-    },
-    {
-      id: '3',
-      company: 'IN849',
-      accountNumber: 'Office Supplies',
-      iban: '11111111111',
-      currency: 'SAR',
-      bankName: 'Online',
-      branch: 'Z Supplier',
-      currentBalance: 12000.00,
-      chartAccount: 'ttttt',
-      status: 'Inactive',
-    },
-  ]);
+  const filteredAccounts = bankAccounts.filter(account => {
+    const matchesSearch = 
+      (account.bankName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (account.accountNumber || '').toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesCompany = companyFilter ? account.company === companyFilter : true;
+    
+    return matchesSearch && matchesCompany;
+  });
 
   const columns: Column<BankAccount>[] = [
     { header: t('company'), accessorKey: 'company' },
@@ -72,14 +40,13 @@ export const BankAccounts: React.FC = () => {
     { header: t('branch'), accessorKey: 'branch' },
     { 
       header: t('current_balance'), 
-      render: (item) => `${item.currentBalance.toLocaleString()} ${item.currency}`
+      render: (item) => `${item.currentBalance?.toLocaleString() || 0} ${item.currency}`
     },
-    { header: t('chart_account'), accessorKey: 'chartAccount' },
     { 
       header: t('status'), 
       render: (item) => (
-        <Badge status={item.status === 'Active' ? 'success' : 'secondary'}>
-          {t(item.status.toLowerCase())}
+        <Badge variant={item.status === 'Active' ? 'success' : 'secondary'}>
+          {t((item.status || 'inactive').toLowerCase())}
         </Badge>
       )
     },
@@ -93,13 +60,79 @@ export const BankAccounts: React.FC = () => {
           >
             <Edit2 size={16} />
           </button>
-          <button className="p-1.5 text-gray-400 hover:text-red-500 transition-colors border border-gray-200 dark:border-gray-700 rounded-lg">
+          <button 
+            onClick={() => { setAccountIdToDelete(item._id || item.id); setIsDeleteModalOpen(true); }}
+            className="p-1.5 text-gray-400 hover:text-red-500 transition-colors border border-gray-200 dark:border-gray-700 rounded-lg"
+          >
             <Trash2 size={16} />
           </button>
         </div>
       )
     }
   ];
+
+  const handleAdd = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    const data = {
+      bankName: formData.get('bankName'),
+      accountNumber: formData.get('accountNumber'),
+      iban: formData.get('iban'),
+      currency: formData.get('currency'),
+      branch: formData.get('branch'),
+      currentBalance: Number(formData.get('currentBalance')),
+      company: formData.get('company'),
+      status: 'Active'
+    };
+    try {
+      await addBankAccount(data);
+      setIsAddModalOpen(false);
+      toast.success(t('account_added_successfully'));
+    } catch (error) {
+      console.error(error);
+      toast.error(t('failed_to_add_account'));
+    }
+  };
+
+  const handleEdit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!selectedAccount?._id && !selectedAccount?.id) return;
+    const formData = new FormData(e.currentTarget);
+    const data = {
+      bankName: formData.get('bankName'),
+      accountNumber: formData.get('accountNumber'),
+      iban: formData.get('iban'),
+      currency: formData.get('currency'),
+      branch: formData.get('branch'),
+      currentBalance: Number(formData.get('currentBalance')),
+      company: formData.get('company'),
+      status: formData.get('status')
+    };
+    try {
+      await updateBankAccount((selectedAccount._id || selectedAccount.id)!, data);
+      setIsEditModalOpen(false);
+      setSelectedAccount(null);
+      toast.success(t('account_updated_successfully'));
+    } catch (error) {
+      console.error(error);
+      toast.error(t('failed_to_update_account'));
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!accountIdToDelete) return;
+    try {
+      await deleteBankAccount(accountIdToDelete);
+      setIsDeleteModalOpen(false);
+      setAccountIdToDelete(null);
+      toast.success(t('account_deleted_successfully'));
+    } catch (error) {
+      console.error(error);
+      toast.error(t('failed_to_delete_account'));
+    }
+  };
+
+  const companies = Array.from(new Set(bankAccounts.map(a => a.company))).filter(Boolean);
 
   return (
     <div className="space-y-6">
@@ -109,108 +142,110 @@ export const BankAccounts: React.FC = () => {
           <p className="text-gray-500 dark:text-gray-400">{t('manage_your_bank_accounts')}</p>
         </div>
         <div className="flex gap-3">
-          <ExportDropdown data={accounts} filename="bank_accounts" />
+          <ExportDropdown data={bankAccounts} filename="bank_accounts" />
           <Button onClick={() => setIsAddModalOpen(true)}>
             <Plus size={20} /> {t('add_bank_account')}
           </Button>
         </div>
       </div>
 
-      <Card className="p-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Select 
-            label={t('company')} 
-            options={[{ value: 'all', label: t('company') }]} 
+      <Card>
+        <div className="flex flex-col md:flex-row justify-between gap-4 mb-4">
+          <Input 
+            placeholder={t('search_bank_accounts')} 
+            icon={<Search size={18} />} 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="max-w-md"
           />
           <Select 
-            label={t('account_number')} 
-            options={[{ value: 'all', label: t('account_number') }]} 
+            options={[
+              { value: '', label: t('all_companies') },
+              ...companies.map(c => ({ value: c!, label: c! }))
+            ]} 
+            value={companyFilter}
+            onChange={(e) => setCompanyFilter(e.target.value)}
+            className="w-48"
           />
         </div>
-      </Card>
-
-      <Card>
-        <Table data={accounts} columns={columns} keyExtractor={(item) => item.id} selectable />
+        <Table 
+          data={filteredAccounts} 
+          columns={columns} 
+          keyExtractor={(item) => item._id || item.id} 
+          isLoading={accountingLoading}
+        />
       </Card>
 
       {/* Add Modal */}
       <Modal 
         isOpen={isAddModalOpen} 
         onClose={() => setIsAddModalOpen(false)}
-        title={<div className="flex items-center gap-2"><Plus size={20} className="text-primary" /> {t('add_bank_account')}</div>}
+        title={t('add_bank_account')}
       >
-        <div className="grid grid-cols-2 gap-4 mt-4">
-          <Select 
-            label={t('company')} 
-            options={[
-              { value: 'aaa', label: 'aaa' },
-            ]} 
-            required 
-          />
-          <Input label={t('account_number')} placeholder={t('account_number')} required />
+        <form onSubmit={handleAdd} className="grid grid-cols-2 gap-4 mt-4">
+          <Input label={t('company')} name="company" placeholder="Company Name" required />
+          <Input label={t('account_number')} name="accountNumber" placeholder="Account Number" required />
           <Select 
             label={t('currency')} 
-            options={[
-              { value: 'aaa', label: 'aaa' },
-            ]} 
+            name="currency"
+            options={currencies.map(c => ({ value: c.code, label: `${c.name} (${c.code})` }))} 
             required 
           />
-          <Input label={t('bank_name')} placeholder={t('bank_name')} required />
-          <Input label={t('branch')} placeholder={t('branch')} required />
-          <Input label={t('opening_balance')} type="number" placeholder="$" required />
-          <Input label={t('iban')} placeholder="33333" required />
-        </div>
-        <div className="flex justify-end gap-3 mt-6">
-          <Button variant="outline" onClick={() => setIsAddModalOpen(false)}>{t('cancel')}</Button>
-          <Button onClick={() => setIsAddModalOpen(false)}>
-            <Plus size={18} className="mr-2" /> {t('add_bank_account')}
-          </Button>
-        </div>
+          <Input label={t('bank_name')} name="bankName" placeholder="Bank Name" required />
+          <Input label={t('branch')} name="branch" placeholder="Branch" required />
+          <Input label={t('opening_balance')} name="currentBalance" type="number" placeholder="$" required />
+          <Input label={t('iban')} name="iban" placeholder="IBAN" required />
+          <div className="col-span-2 flex justify-end gap-3 mt-6">
+            <Button variant="outline" type="button" onClick={() => setIsAddModalOpen(false)}>{t('cancel')}</Button>
+            <Button type="submit" isLoading={accountingLoading}>{t('add_bank_account')}</Button>
+          </div>
+        </form>
       </Modal>
 
       {/* Edit Modal */}
       <Modal 
         isOpen={isEditModalOpen} 
         onClose={() => setIsEditModalOpen(false)}
-        title={<div className="flex items-center gap-2"><Edit2 size={20} className="text-primary" /> {t('edit_bank_account')}</div>}
+        title={t('edit_bank_account')}
       >
-        <div className="grid grid-cols-2 gap-4 mt-4">
-          <Select 
-            label={t('company')} 
-            defaultValue="aaa"
-            options={[
-              { value: 'aaa', label: 'aaa' },
-            ]} 
-            required 
-          />
-          <Input label={t('account_number')} defaultValue="Company x" required />
+        <form onSubmit={handleEdit} className="grid grid-cols-2 gap-4 mt-4">
+          <Input label={t('company')} name="company" defaultValue={selectedAccount?.company} required />
+          <Input label={t('account_number')} name="accountNumber" defaultValue={selectedAccount?.accountNumber} required />
           <Select 
             label={t('currency')} 
-            defaultValue="aaa"
-            options={[
-              { value: 'aaa', label: 'aaa' },
-            ]} 
+            name="currency"
+            defaultValue={selectedAccount?.currency}
+            options={currencies.map(c => ({ value: c.code, label: `${c.name} (${c.code})` }))} 
             required 
           />
-          <Input label={t('bank_name')} defaultValue="Company x" required />
-          <Input label={t('branch')} defaultValue="branch 1" required />
+          <Input label={t('bank_name')} name="bankName" defaultValue={selectedAccount?.bankName} required />
+          <Input label={t('branch')} name="branch" defaultValue={selectedAccount?.branch} required />
           <Select 
             label={t('status')} 
-            defaultValue="active"
+            name="status"
+            defaultValue={selectedAccount?.status}
             options={[
-              { value: 'active', label: t('active') },
-              { value: 'inactive', label: t('inactive') },
+              { value: 'Active', label: t('active') },
+              { value: 'Inactive', label: t('inactive') },
             ]} 
             required 
           />
-          <Input label={t('opening_balance')} type="number" defaultValue="233" required />
-          <Input label={t('iban')} defaultValue="33333" required />
-        </div>
-        <div className="flex justify-end gap-3 mt-6">
-          <Button variant="outline" onClick={() => setIsEditModalOpen(false)}>{t('cancel')}</Button>
-          <Button onClick={() => setIsEditModalOpen(false)}>{t('save')}</Button>
-        </div>
+          <Input label={t('current_balance')} name="currentBalance" type="number" defaultValue={selectedAccount?.currentBalance} required />
+          <Input label={t('iban')} name="iban" defaultValue={selectedAccount?.iban} required />
+          <div className="col-span-2 flex justify-end gap-3 mt-6">
+            <Button variant="outline" type="button" onClick={() => setIsEditModalOpen(false)}>{t('cancel')}</Button>
+            <Button type="submit" isLoading={accountingLoading}>{t('save')}</Button>
+          </div>
+        </form>
       </Modal>
+      
+      <ConfirmationModal 
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleDelete}
+        title={t('delete_bank_account')}
+        message={t('are_you_sure_delete_bank_account')}
+      />
     </div>
   );
 };

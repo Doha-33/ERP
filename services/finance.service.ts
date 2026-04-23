@@ -3,10 +3,31 @@ import {
   Account, JournalEntry, AccountReceivable, AccountPayable,
   APPayment, ARPayment, Tax,
   GeneralLedgerReport, BalanceSheetReport, 
-  TrialBalanceReport, ProfitLossReport 
+  TrialBalanceReport, ProfitLossReport,
+  Income, Expense, Budget, Currency, ExchangeRate, MonthlyClosing, BankAccount
 } from '../types';
 
 const financeService = {
+  // --- Bank Accounts ---
+  async getBankAccounts(): Promise<BankAccount[]> {
+    const response = await apiClient.get('/finance/bank-accounts/list');
+    return response.data.data;
+  },
+
+  async createBankAccount(data: any): Promise<BankAccount> {
+    const response = await apiClient.post('/finance/bank-accounts/create', data);
+    return response.data.data;
+  },
+
+  async updateBankAccount(id: string, data: any): Promise<BankAccount> {
+    const response = await apiClient.patch(`/finance/bank-accounts/update/${id}`, data);
+    return response.data.data;
+  },
+
+  async deleteBankAccount(id: string): Promise<void> {
+    await apiClient.delete(`/finance/bank-accounts/delete/${id}`);
+  },
+
   // --- Chart of Accounts ---
   async getAccounts(): Promise<Account[]> {
     const response = await apiClient.get('/finance/chart-of-accounts/list');
@@ -24,7 +45,7 @@ const financeService = {
   },
 
   async updateAccount(id: string, data: any): Promise<Account> {
-    const response = await apiClient.put(`/finance/chart-of-accounts/update/${id}`, data);
+    const response = await apiClient.patch(`/finance/chart-of-accounts/update/${id}`, data);
     return response.data.data;
   },
 
@@ -49,7 +70,7 @@ const financeService = {
   },
 
   async updateJournalEntry(id: string, data: any): Promise<JournalEntry> {
-    const response = await apiClient.put(`/finance/journal-entries/update/${id}`, data);
+    const response = await apiClient.patch(`/finance/journal-entries/update/${id}`, data);
     return response.data.data;
   },
 
@@ -74,7 +95,7 @@ const financeService = {
   },
 
   async updateAccountReceivable(id: string, data: any): Promise<AccountReceivable> {
-    const response = await apiClient.put(`/finance/accounts-receivable/update/${id}`, data);
+    const response = await apiClient.patch(`/finance/accounts-receivable/update/${id}`, data);
     return response.data.data;
   },
 
@@ -99,7 +120,7 @@ const financeService = {
   },
 
   async updateAccountPayable(id: string, data: any): Promise<AccountPayable> {
-    const response = await apiClient.put(`/finance/accounts-payable/update/${id}`, data);
+    const response = await apiClient.patch(`/finance/accounts-payable/update/${id}`, data);
     return response.data.data;
   },
 
@@ -149,12 +170,58 @@ const financeService = {
   },
 
   async updateTax(id: string, data: any): Promise<Tax> {
-    const response = await apiClient.put(`/finance/taxes/update/${id}`, data);
+    const response = await apiClient.patch(`/finance/taxes/update/${id}`, data);
     return response.data.data;
   },
 
   async deleteTax(id: string): Promise<void> {
     await apiClient.delete(`/finance/taxes/delete/${id}`);
+  },
+
+  // --- Currencies ---
+  async getCurrencies(): Promise<Currency[]> {
+    const response = await apiClient.get('/finance/currencies/list');
+    return response.data.data;
+  },
+
+  async createCurrency(data: any): Promise<Currency> {
+    const response = await apiClient.post('/finance/currencies/create', data);
+    return response.data.data;
+  },
+
+  async updateCurrency(id: string, data: any): Promise<Currency> {
+    const response = await apiClient.patch(`/finance/currencies/update/${id}`, data);
+    return response.data.data;
+  },
+
+  async deleteCurrency(id: string): Promise<void> {
+    await apiClient.delete(`/finance/currencies/delete/${id}`);
+  },
+
+  // --- Exchange Rates ---
+  async getExchangeRates(): Promise<ExchangeRate[]> {
+    const response = await apiClient.get('/finance/exchange-rates/list');
+    return response.data.data;
+  },
+
+  async createExchangeRate(data: any): Promise<ExchangeRate> {
+    const response = await apiClient.post('/finance/exchange-rates/create', data);
+    return response.data.data;
+  },
+
+  // --- Monthly Closing ---
+  async getClosings(): Promise<MonthlyClosing[]> {
+    const response = await apiClient.get('/finance/closing/list');
+    return response.data.data;
+  },
+
+  async closeMonth(data: { month: number; year: number }): Promise<MonthlyClosing> {
+    const response = await apiClient.post('/finance/closing/close', data);
+    return response.data.data;
+  },
+
+  async reopenMonth(data: { month: number; year: number }): Promise<void> {
+    await apiClient.post('/finance/closing/reopen', data);
   },
 
   // --- Reports ---
@@ -176,6 +243,81 @@ const financeService = {
   async getProfitLoss(params: { fromDate?: string; toDate?: string }): Promise<ProfitLossReport> {
     const response = await apiClient.get('/finance/reports/profit-loss', { params });
     return response.data.data;
+  },
+
+  // --- Income ---
+  async getIncomes(): Promise<Income[]> {
+    const response = await apiClient.get('/finance/income/list');
+    return response.data.data;
+  },
+
+  async getIncomeById(id: string): Promise<Income> {
+    const response = await apiClient.get(`/finance/income/${id}`);
+    return response.data.data;
+  },
+
+  async createIncome(data: any): Promise<Income> {
+    const response = await apiClient.post('/finance/income/create', data);
+    return response.data.data;
+  },
+
+  async updateIncome(id: string, data: any): Promise<Income> {
+    const response = await apiClient.patch(`/finance/income/update/${id}`, data);
+    return response.data.data;
+  },
+
+  async deleteIncome(id: string): Promise<void> {
+    await apiClient.delete(`/finance/income/delete/${id}`);
+  },
+
+  // --- Expenses ---
+  async getExpenses(): Promise<Expense[]> {
+    const response = await apiClient.get('/finance/expenses/list');
+    return response.data.data;
+  },
+
+  async getExpenseById(id: string): Promise<Expense> {
+    const response = await apiClient.get(`/finance/expenses/${id}`);
+    return response.data.data;
+  },
+
+  async createExpense(data: any): Promise<Expense> {
+    const response = await apiClient.post('/finance/expenses/create', data);
+    return response.data.data;
+  },
+
+  async updateExpense(id: string, data: any): Promise<Expense> {
+    const response = await apiClient.patch(`/finance/expenses/update/${id}`, data);
+    return response.data.data;
+  },
+
+  async deleteExpense(id: string): Promise<void> {
+    await apiClient.delete(`/finance/expenses/delete/${id}`);
+  },
+
+  // --- Budgets ---
+  async getBudgets(): Promise<Budget[]> {
+    const response = await apiClient.get('/finance/budgets/list');
+    return response.data.data;
+  },
+
+  async getBudgetById(id: string): Promise<Budget> {
+    const response = await apiClient.get(`/finance/budgets/${id}`);
+    return response.data.data;
+  },
+
+  async createBudget(data: any): Promise<Budget> {
+    const response = await apiClient.post('/finance/budgets/create', data);
+    return response.data.data;
+  },
+
+  async updateBudget(id: string, data: any): Promise<Budget> {
+    const response = await apiClient.patch(`/finance/budgets/update/${id}`, data);
+    return response.data.data;
+  },
+
+  async deleteBudget(id: string): Promise<void> {
+    await apiClient.delete(`/finance/budgets/delete/${id}`);
   }
 };
 

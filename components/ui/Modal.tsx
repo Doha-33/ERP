@@ -49,12 +49,12 @@ export const Modal: React.FC<ModalProps> = ({
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <div 
-        className={`bg-white dark:bg-dark-surface rounded-xl shadow-2xl w-full ${sizeClasses[size]} ${className} overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200`}
+        className={`bg-white rounded-xl shadow-2xl w-full ${sizeClasses[size]} ${className} overflow-hidden flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200`}
         role="dialog"
         aria-modal="true"
       >
         {/* Header */}
-        <div className="flex justify-between items-center p-6 border-b border-gray-100 dark:border-gray-700 bg-white dark:bg-dark-surface sticky top-0 z-10 shrink-0">
+        <div className="flex justify-between items-center p-6 sticky top-0 z-10 shrink-0">
           <div className="text-xl font-bold dark:text-white text-primary flex items-center gap-2">
              {title}
           </div>
@@ -70,7 +70,7 @@ export const Modal: React.FC<ModalProps> = ({
 
         {/* Footer */}
         {footer && (
-          <div className="p-6 border-t border-gray-100 dark:border-gray-700 bg-white dark:bg-dark-surface sticky bottom-0 z-10 shrink-0 flex justify-end gap-3">
+          <div className="p-6 sticky bottom-0 z-10 shrink-0 flex justify-end gap-3">
             {footer}
           </div>
         )}

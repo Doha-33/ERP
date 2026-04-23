@@ -7,25 +7,16 @@ import { Modal } from '../ui/Modal';
 import { Input, Button, Select, TextArea } from '../ui/Common';
 import { Tax } from '../../types';
 
-// Fix: Make isActive required by using .default() with proper typing
 const taxSchema = z.object({
   taxName: z.string().min(1, 'Tax name is required'),
   taxCode: z.string().min(1, 'Tax code is required'),
   taxType: z.enum(['VAT', 'WITHHOLDING', 'SALES_TAX']),
   rate: z.number().min(0, 'Rate must be positive'),
-  isActive: z.boolean().default(true), // This creates optional in schema but required in form data
+  isActive: z.boolean(),
   notes: z.string().optional(),
 });
 
-// Explicitly define the form data type to avoid inference issues
-type TaxFormData = {
-  taxName: string;
-  taxCode: string;
-  taxType: 'VAT' | 'WITHHOLDING' | 'SALES_TAX';
-  rate: number;
-  isActive: boolean;
-  notes?: string;
-};
+type TaxFormData = z.infer<typeof taxSchema>;
 
 interface TaxModalProps {
   isOpen: boolean;
@@ -43,8 +34,8 @@ export const TaxModal: React.FC<TaxModalProps> = ({
   isLoading
 }) => {
   const { t } = useTranslation();
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<TaxFormData>({
-    resolver: zodResolver(taxSchema) as any, // Type assertion to bypass complex type inference
+  const { register, handleSubmit, reset, formState: { errors }, watch, setValue } = useForm<TaxFormData>({
+    resolver: zodResolver(taxSchema) as any,
     defaultValues: {
       taxName: '',
       taxCode: '',
@@ -62,7 +53,7 @@ export const TaxModal: React.FC<TaxModalProps> = ({
         taxCode: initialData.taxCode,
         taxType: initialData.taxType as any,
         rate: initialData.rate,
-        isActive: initialData.isActive ?? true,
+        isActive: initialData.isActive,
         notes: initialData.notes || '',
       });
     } else {
@@ -77,24 +68,13 @@ export const TaxModal: React.FC<TaxModalProps> = ({
     }
   }, [initialData, reset]);
 
-  // Submit handler wrapper
-  const handleFormSubmit = async (data: TaxFormData) => {
-    // Ensure rate is a number and isActive is boolean
-    const submitData = {
-      ...data,
-      rate: typeof data.rate === 'string' ? parseFloat(data.rate) : data.rate,
-      isActive: data.isActive === true,
-    };
-    await onSubmit(submitData);
-  };
-
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
       title={initialData ? t('edit_tax') : t('add_tax')}
     >
-      <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4 pt-4">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-4">
         <Input
           label={t('tax_name')}
           {...register('taxName')}
@@ -117,7 +97,6 @@ export const TaxModal: React.FC<TaxModalProps> = ({
             ]}
             {...register('taxType')}
             error={errors.taxType?.message}
-            fullWidth
           />
           <Input
             label={t('rate')}
@@ -125,7 +104,6 @@ export const TaxModal: React.FC<TaxModalProps> = ({
             step="0.01"
             {...register('rate', { valueAsNumber: true })}
             error={errors.rate?.message}
-            fullWidth
           />
         </div>
         <div className="flex items-center gap-2">

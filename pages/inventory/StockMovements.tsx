@@ -14,20 +14,20 @@ export const StockMovements: React.FC = () => {
   const columns = [
     {
       header: t('date'),
-      accessor: 'date' as keyof StockMovement,
+      accessorKey: 'date' as keyof StockMovement,
     },
     {
       header: t('product_name'),
-      accessor: 'productName' as keyof StockMovement,
-      render: (m: StockMovement) => <span className="font-medium">{m.productName}</span>
+      accessorKey: 'productName' as keyof StockMovement,
+      render: (m: StockMovement) => <span className="font-medium">{m.productName || (m as any).name}</span>
     },
     {
       header: t('warehouse'),
-      accessor: 'warehouse' as keyof StockMovement,
+      accessorKey: 'warehouse' as keyof StockMovement,
     },
     {
       header: t('quantity'),
-      accessor: 'qty' as keyof StockMovement,
+      accessorKey: 'qty' as keyof StockMovement,
       render: (m: StockMovement) => (
         <div className="flex items-center gap-1 font-medium">
           {m.type === 'In' ? (
@@ -43,11 +43,11 @@ export const StockMovements: React.FC = () => {
     },
     {
       header: t('reference'),
-      accessor: 'reference' as keyof StockMovement,
+      accessorKey: 'reference' as keyof StockMovement,
     },
     {
       header: t('user'),
-      accessor: 'userName' as keyof StockMovement,
+      accessorKey: 'userName' as keyof StockMovement,
       render: (m: StockMovement) => (
         <div className="flex flex-col">
           <span className="text-sm font-medium">{m.userName}</span>

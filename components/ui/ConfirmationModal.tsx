@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Modal } from './Modal';
@@ -9,7 +8,7 @@ interface ConfirmationModalProps {
   onClose: () => void;
   onConfirm: () => void;
   title?: string;
-  message?: string;
+  message?: string | React.ReactNode;
 }
 
 export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
@@ -21,15 +20,23 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
 }) => {
   const { t } = useTranslation();
 
+  const handleConfirm = () => {
+    onConfirm();
+    onClose();
+  };
+
   const footer = (
-    <>
-      <Button variant="ghost" onClick={onClose} className="bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
+    <div className="flex justify-end gap-2">
+      <Button variant="ghost" onClick={onClose}>
         {t('cancel')}
       </Button>
-      <Button variant="danger" onClick={onConfirm}>
+      <Button 
+        className="bg-red-600 hover:bg-red-700 text-white"
+        onClick={handleConfirm}
+      >
         {t('delete')}
       </Button>
-    </>
+    </div>
   );
 
   return (

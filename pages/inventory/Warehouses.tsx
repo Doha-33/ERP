@@ -17,12 +17,12 @@ export const Warehouses: React.FC = () => {
   const columns = [
     {
       header: t('warehouse_name'),
-      accessor: 'warehouseName' as keyof Warehouse,
-      render: (wh: Warehouse) => <span className="font-medium">{wh.warehouseName}</span>
+      accessorKey: 'warehouseName' as keyof Warehouse,
+      render: (wh: Warehouse) => <span className="font-medium">{wh.warehouseName || (wh as any).name}</span>
     },
     {
       header: t('location'),
-      accessor: 'location' as keyof Warehouse,
+      accessorKey: 'location' as keyof Warehouse,
       render: (wh: Warehouse) => (
         <div className="flex items-center gap-1 text-gray-500">
           <MapPin size={14} />
@@ -32,7 +32,7 @@ export const Warehouses: React.FC = () => {
     },
     {
       header: t('manager'),
-      accessor: 'managerName' as keyof Warehouse,
+      accessorKey: 'managerName' as keyof Warehouse,
       render: (wh: Warehouse) => (
         <div className="flex items-center gap-1">
           <User size={14} className="text-gray-400" />
@@ -42,11 +42,11 @@ export const Warehouses: React.FC = () => {
     },
     {
       header: t('type'),
-      accessor: 'type' as keyof Warehouse,
+      accessorKey: 'type' as keyof Warehouse,
     },
     {
       header: t('status'),
-      accessor: 'state' as keyof Warehouse,
+      accessorKey: 'state' as keyof Warehouse,
       render: (wh: Warehouse) => (
         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
           wh.state === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
@@ -57,7 +57,7 @@ export const Warehouses: React.FC = () => {
     },
     {
       header: t('actions'),
-      accessor: 'id' as keyof Warehouse,
+      accessorKey: 'id' as keyof Warehouse,
       render: (wh: Warehouse) => (
         <div className="flex items-center gap-2">
           <button 

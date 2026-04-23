@@ -226,13 +226,13 @@ export const PayrollModal: React.FC<PayrollModalProps> = ({ isOpen, onClose, onS
                   <Select 
                      label={<span className="text-[#718096] font-bold flex items-center gap-1">Payroll Month <span className="text-red-500 font-bold">*</span></span>}
                      options={months}
-                     {...register('month', { valueAsNumber: true })} 
+                     {...register('payrollMonth', { valueAsNumber: true })} 
                      className="rounded-xl border-[#E2E8F0] py-3 text-sm font-medium"
                   />
                   <Select 
                      label={<span className="text-[#718096] font-bold flex items-center gap-1">Payroll Year <span className="text-red-500 font-bold">*</span></span>}
                      options={years.map(y => ({ value: y, label: String(y) }))}
-                     {...register('year', { valueAsNumber: true })} 
+                     {...register('payrollYear', { valueAsNumber: true })} 
                      className="rounded-xl border-[#E2E8F0] py-3 text-sm font-medium"
                   />
                </div>

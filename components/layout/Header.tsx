@@ -1,15 +1,14 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
-import { Menu, Search, Bell, Sun, Moon, Globe, ChevronDown, User, LogOut, Settings } from 'lucide-react';
+import { Menu, Globe, ChevronDown, User, LogOut } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
-import { Input } from '../ui/Common';
 
 export const Header: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { theme, toggleTheme, lang, toggleLang } = useTheme();
+  const { lang, toggleLang } = useTheme();
   const { user, logout } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
 
@@ -27,13 +26,6 @@ export const Header: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) =
       </div>
 
       <div className="flex items-center gap-2 md:gap-4">
-        <button 
-          onClick={toggleTheme}
-          className="p-2 text-gray-500 hover:text-primary hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors"
-        >
-          {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
-        </button>
-
         <button 
           onClick={toggleLang}
           className="p-2 text-gray-500 hover:text-primary hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors flex items-center gap-1 font-medium text-sm"

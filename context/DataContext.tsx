@@ -9,6 +9,7 @@ import { useOnboardingModule } from './hr/useOnboardingModule';
 import { useSalesModule } from './sales/useSalesModule';
 import { useInventoryModule } from './inventory/useInventoryModule';
 import { usePurchaseModule } from './purchase/usePurchaseModule';
+import { useAssetsModule } from './assets/useAssetsModule';
 import { useAuth } from './AuthContext';
 import { Employee } from '../types';
 
@@ -22,6 +23,7 @@ type OnboardingModule = ReturnType<typeof useOnboardingModule>;
 type SalesModule = ReturnType<typeof useSalesModule>;
 type InventoryModule = ReturnType<typeof useInventoryModule>;
 type PurchaseModule = ReturnType<typeof usePurchaseModule>;
+type AssetsModule = ReturnType<typeof useAssetsModule>;
 
 export interface DataContextType extends 
   UserModule, 
@@ -33,7 +35,8 @@ export interface DataContextType extends
   OnboardingModule, 
   SalesModule, 
   InventoryModule, 
-  PurchaseModule {
+  PurchaseModule,
+  AssetsModule {
   isDataLoading: boolean;
   fetchAllDataCentral: () => Promise<void>;
   currentUserEmployee: Employee | undefined;
@@ -54,6 +57,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const requestFetchRef = useRef<(() => Promise<void>) | null>(null);
   const inventoryFetchRef = useRef<(() => Promise<void>) | null>(null);
   const purchaseFetchRef = useRef<(() => Promise<void>) | null>(null);
+  const assetsFetchRef = useRef<(() => Promise<void>) | null>(null);
 
   const fetchAllDataCentral = useCallback(async () => {
     setIsDataLoading(true);
@@ -67,6 +71,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         requestFetchRef.current?.(),
         inventoryFetchRef.current?.(),
         purchaseFetchRef.current?.(),
+        assetsFetchRef.current?.(),
       ]);
     } catch (error) {
       console.error('Error fetching all data:', error);
@@ -85,6 +90,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const salesModule = useSalesModule(fetchAllDataCentral);
   const inventoryModule = useInventoryModule(fetchAllDataCentral);
   const purchaseModule = usePurchaseModule(fetchAllDataCentral);
+  const assetsModule = useAssetsModule(fetchAllDataCentral);
 
   useEffect(() => {
     salesFetchRef.current = salesModule.fetchSalesData;
@@ -95,6 +101,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     requestFetchRef.current = requestModule.fetchRequestData;
     inventoryFetchRef.current = inventoryModule.fetchInventoryData;
     purchaseFetchRef.current = purchaseModule.fetchPurchaseData;
+    assetsFetchRef.current = assetsModule.fetchAssetsData;
   }, [
     salesModule.fetchSalesData, 
     orgModule.fetchOrganizationData, 
@@ -103,7 +110,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     accountingModule.fetchAccountingData,
     requestModule.fetchRequestData,
     inventoryModule.fetchInventoryData,
-    purchaseModule.fetchPurchaseData
+    purchaseModule.fetchPurchaseData,
+    assetsModule.fetchAssetsData
   ]);
 
   useEffect(() => {
@@ -129,6 +137,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     ...salesModule,
     ...inventoryModule,
     ...purchaseModule,
+    ...assetsModule,
   };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

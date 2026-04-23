@@ -135,7 +135,7 @@ export const Dropdown: React.FC<DropdownProps> = ({
       </div>
       {isOpen && (
         <div
-          className={`absolute z-50 mt-2 w-48 rounded-xl bg-white dark:bg-dark-card border border-gray-100 dark:border-dark-border shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100 ${align === "right" ? "right-0" : "left-0"}`}
+          className={`absolute z-50 mt-2 w-48 rounded-xl bg-white shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-100 ${align === "right" ? "right-0" : "left-0"}`}
         >
           <div className="py-1">
             {items.map((item, idx) => (
@@ -148,8 +148,8 @@ export const Dropdown: React.FC<DropdownProps> = ({
                 className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors
                   ${
                     item.variant === "danger"
-                      ? "text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10"
-                      : "text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-dark-surface"
+                      ? "text-red-600 hover:bg-red-500"
+                      : "text-gray-700 dark:text-gray-200 hover:bg-gray-200"
                   }`}
               >
                 {item.icon && <span className="shrink-0">{item.icon}</span>}
@@ -355,27 +355,39 @@ interface TextAreaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement
   fullWidth?: boolean;
 }
 
-export const TextArea: React.FC<TextAreaProps> = React.forwardRef<HTMLTextAreaElement, TextAreaProps>(({ 
-  label, 
-  error, 
-  fullWidth = false, // Add this
-  className = '', 
-  ...props 
-}, ref) => (
-  <div className={`${fullWidth ? 'w-full' : 'w-auto'}`}>
-    {label && <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{label}</label>}
-    <textarea
-      ref={ref}
-      className={`${fullWidth ? 'w-full' : 'w-auto'} px-4 py-2.5 rounded-lg border bg-white dark:bg-dark-surface 
+export const TextArea: React.FC<TextAreaProps> = React.forwardRef<
+  HTMLTextAreaElement,
+  TextAreaProps
+>(
+  (
+    {
+      label,
+      error,
+      fullWidth = false, // Add this
+      className = "",
+      ...props
+    },
+    ref,
+  ) => (
+    <div className={`${fullWidth ? "w-full" : "w-auto"}`}>
+      {label && (
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+          {label}
+        </label>
+      )}
+      <textarea
+        ref={ref}
+        className={`${fullWidth ? "w-full" : "w-auto"} px-4 py-2.5 rounded-lg border bg-white dark:bg-dark-surface 
         border-gray-300 dark:border-dark-border text-gray-900 dark:text-white
         focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none
         disabled:opacity-50 disabled:cursor-not-allowed resize-none
         ${className}`}
-      {...props}
-    />
-    {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
-  </div>
-));
+        {...props}
+      />
+      {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
+    </div>
+  ),
+);
 
 // --- Select ---
 interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
@@ -386,55 +398,79 @@ interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
   fullWidth?: boolean;
 }
 
-export const Select: React.FC<SelectProps> = React.forwardRef<HTMLSelectElement, SelectProps>(({ 
-  label, 
-  error, 
-  options, 
-  placeholder, 
-  fullWidth = false, // Add this
-  className = '', 
-  ...props 
-}, ref) => (
-  <div className={`${fullWidth ? 'w-full' : 'w-auto'}`}>
-    {label && <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">{label}</label>}
-    <div className="relative">
-      <select
-        ref={ref}
-        className={`${fullWidth ? 'w-full' : 'w-auto'} px-4 py-2.5 rounded-lg border bg-white dark:bg-dark-surface 
+export const Select: React.FC<SelectProps> = React.forwardRef<
+  HTMLSelectElement,
+  SelectProps
+>(
+  (
+    {
+      label,
+      error,
+      options,
+      placeholder,
+      fullWidth = false, // Add this
+      className = "",
+      ...props
+    },
+    ref,
+  ) => (
+    <div className={`${fullWidth ? "w-full" : "w-auto"}`}>
+      {label && (
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+          {label}
+        </label>
+      )}
+      <div className="relative">
+        <select
+          ref={ref}
+          className={`${fullWidth ? "w-full" : "w-auto"} px-4 py-2.5 rounded-lg border bg-white dark:bg-dark-surface 
           border-gray-300 dark:border-dark-border text-gray-900 dark:text-white
           focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none appearance-none
           ${className}`}
-        {...props}
-      >
-        {placeholder && (
-          <option value="" disabled>
-            {placeholder}
-          </option>
-        )}
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>{opt.label}</option>
-        ))}
-      </select>
-      <div className="absolute right-3 rtl:left-3 rtl:right-auto top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-          <path fillRule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/>
-        </svg>
+          {...props}
+        >
+          {placeholder && (
+            <option value="" disabled>
+              {placeholder}
+            </option>
+          )}
+          {options.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+        <div className="absolute right-3 rtl:left-3 rtl:right-auto top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            fill="currentColor"
+            viewBox="0 0 16 16"
+          >
+            <path
+              fillRule="evenodd"
+              d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"
+            />
+          </svg>
+        </div>
       </div>
+      {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
     </div>
-    {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
-  </div>
-));
+  ),
+);
 
 // --- Badge ---
+// Common.tsx - تعديل Badge component
 export const Badge: React.FC<{
   status?: string;
   variant?: string;
   label?: string;
   children?: React.ReactNode;
-}> = ({ status, variant, label, children }) => {
+  className?: string; // أضيفي هذا السطر
+}> = ({ status, variant, label, children, className = "" }) => {
   const badgeStatus = status || variant || "default";
-  let styles =
-    "bg-gray-100 text-gray-700 dark:bg-dark-border dark:text-dark-text-muted";
+  let styles = "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300";
 
   if (
     [
@@ -482,13 +518,12 @@ export const Badge: React.FC<{
 
   return (
     <span
-      className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${styles}`}
+      className={`px-2.5 py-0.5 rounded-full text-xs font-medium inline-flex items-center gap-1 ${styles} ${className}`}
     >
       {children || label || badgeStatus}
     </span>
   );
 };
-
 // --- Switch ---
 export const Switch: React.FC<{
   checked: boolean;

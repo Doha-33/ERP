@@ -266,6 +266,30 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
           icon: CreditCard,
         },
         {
+          id: "accounting-budget",
+          label: "budget",
+          path: "/accounting/budget",
+          icon: BarChart3,
+        },
+        {
+          id: "accounting-currencies",
+          label: "currencies",
+          path: "/accounting/currencies",
+          icon: DollarSign,
+        },
+        {
+          id: "accounting-exchange-rates",
+          label: "exchange_rates",
+          path: "/accounting/exchange-rates",
+          icon: RefreshCcw,
+        },
+        {
+          id: "accounting-monthly-closing",
+          label: "monthly_closing",
+          path: "/accounting/monthly-closing",
+          icon: Lock,
+        },
+        {
           id: "accounting-coa",
           label: "chart_of_accounts",
           path: "/accounting/chart-of-accounts",
@@ -839,9 +863,7 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
         <div className="h-16 min-h-[4rem] flex items-center px-5 border-b border-gray-100 dark:border-gray-800 bg-inherit">
           {" "}
           <div className="flex items-center gap-2.5 font-bold text-xl">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white shadow-lg shadow-primary/30">
-              <span className="text-lg">E</span>
-            </div>
+              <img src="/images/logo.png" alt="Logo" className="w-10 h-6" />
             <span className="dark:text-white text-gray-800 tracking-tight bg-gradient-to-r from-gray-800 to-gray-600 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
               ERP System
             </span>

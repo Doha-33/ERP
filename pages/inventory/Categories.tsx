@@ -17,20 +17,20 @@ export const Categories: React.FC = () => {
   const columns = [
     {
       header: t('category_name'),
-      accessor: 'name' as keyof Category,
+      accessorKey: 'name' as keyof Category,
       render: (cat: Category) => <span className="font-medium">{cat.name}</span>
     },
     {
       header: t('description'),
-      accessor: 'description' as keyof Category,
+      accessorKey: 'description' as keyof Category,
     },
     {
       header: t('created_at'),
-      accessor: 'createdAt' as keyof Category,
+      accessorKey: 'createdAt' as keyof Category,
     },
     {
       header: t('status'),
-      accessor: 'state' as keyof Category,
+      accessorKey: 'state' as keyof Category,
       render: (cat: Category) => (
         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
           cat.state === 'Active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
@@ -41,7 +41,7 @@ export const Categories: React.FC = () => {
     },
     {
       header: t('actions'),
-      accessor: 'id' as keyof Category,
+      accessorKey: 'id' as keyof Category,
       render: (cat: Category) => (
         <div className="flex items-center gap-2">
           <button 

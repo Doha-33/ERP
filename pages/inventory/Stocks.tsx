@@ -14,41 +14,41 @@ export const Stocks: React.FC = () => {
   const columns = [
     {
       header: t('sku'),
-      accessor: 'sku' as keyof Stock,
+      accessorKey: 'sku' as keyof Stock,
     },
     {
       header: t('product_name'),
-      accessor: 'productName' as keyof Stock,
-      render: (stock: Stock) => <span className="font-medium">{stock.productName}</span>
+      accessorKey: 'productName' as keyof Stock,
+      render: (stock: Stock) => <span className="font-medium">{stock.productName || (stock as any).name}</span>
     },
     {
       header: t('warehouse'),
-      accessor: 'warehouse' as keyof Stock,
+      accessorKey: 'warehouse' as keyof Stock,
     },
     {
       header: t('in_stock'),
-      accessor: 'inStockQty' as keyof Stock,
+      accessorKey: 'inStockQty' as keyof Stock,
       render: (stock: Stock) => (
         <span className="font-medium">{stock.inStockQty} {stock.unit}</span>
       )
     },
     {
       header: t('reserved'),
-      accessor: 'reservedQty' as keyof Stock,
+      accessorKey: 'reservedQty' as keyof Stock,
       render: (stock: Stock) => (
         <span className="text-gray-500">{stock.reservedQty} {stock.unit}</span>
       )
     },
     {
       header: t('available'),
-      accessor: 'availableQty' as keyof Stock,
+      accessorKey: 'availableQty' as keyof Stock,
       render: (stock: Stock) => (
         <span className="font-bold text-primary">{stock.availableQty} {stock.unit}</span>
       )
     },
     {
       header: t('status'),
-      accessor: 'status' as keyof Stock,
+      accessorKey: 'status' as keyof Stock,
       render: (stock: Stock) => (
         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
           stock.status === 'In Stock' ? 'bg-green-100 text-green-700' :
@@ -61,7 +61,7 @@ export const Stocks: React.FC = () => {
     },
     {
       header: t('actions'),
-      accessor: 'id' as keyof Stock,
+      accessorKey: 'id' as keyof Stock,
       render: (stock: Stock) => (
         <div className="flex items-center gap-2">
           <button className="p-1 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title={t('view_details')}>

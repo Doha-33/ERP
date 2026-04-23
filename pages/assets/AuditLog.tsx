@@ -1,44 +1,166 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Search, Edit2, Trash2, User, Clock, FileText, History } from 'lucide-react';
-import { Card, Button, Input, Select, Badge, ExportDropdown } from '../../components/ui/Common';
+import { Plus, Search, Edit2, Trash2, History, Paperclip, Clock } from 'lucide-react';
+import { Button, Input, ExportDropdown, Badge } from '../../components/ui/Common';
 import { Table, Column } from '../../components/ui/Table';
-import { Modal } from '../../components/ui/Modal';
-
-interface AuditLog {
-  id: string;
-  assetId: string;
-  actionType: string;
-  byWho: string;
-  changeDescription: string;
-  date: string;
-}
+import { ConfirmationModal } from '../../components/ui/ConfirmationModal';
+import { AuditLogFormModal } from '../../components/assets/AuditLogFormModal';
+import { useData } from '../../context/DataContext';
+import { AuditLog as AuditLogType, Asset } from '../../types';
+import { toast } from 'sonner';
 
 export const AuditLog: React.FC = () => {
   const { t } = useTranslation();
+  const { auditLogs, assets, assetsLoading, addAuditLog, updateAuditLog, deleteAuditLog } = useData();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedAuditLog, setSelectedAuditLog] = useState<AuditLog | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [selectedAuditLog, setSelectedAuditLog] = useState<AuditLogType | null>(null);
+  const [auditLogIdToDelete, setAuditLogIdToDelete] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
-  const auditLogData: AuditLog[] = [
-    {
-      id: '1',
-      assetId: '122',
-      actionType: 'scrap',
-      byWho: 'Ahmed',
-      changeDescription: 'year',
-      date: '2/2/2020',
+  const filteredLogs = auditLogs.filter(log => {
+    const asset = log.assetId as any;
+    const assetName = asset?.assetName || '';
+    const assetCode = asset?.assetCode || '';
+    return assetName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           assetCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           log.actionType?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           log.byWho?.toLowerCase().includes(searchTerm.toLowerCase());
+  });
+
+  const handleSave = async (data: Partial<AuditLogType>) => {
+    try {
+      const processedData = {
+        ...data      };
+
+      if (selectedAuditLog) {
+        await updateAuditLog(selectedAuditLog._id || selectedAuditLog.id!, processedData);
+        toast.success(t('audit_log_updated_successfully'));
+      } else {
+        await addAuditLog(processedData);
+        toast.success(t('audit_log_added_successfully'));
+      }
+      setIsModalOpen(false);
+    } catch (error) {
+      console.error('Failed to save audit log:', error);
+      toast.error(t('failed_to_save_audit_log'));
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!auditLogIdToDelete) return;
+    try {
+      await deleteAuditLog(auditLogIdToDelete);
+      setIsDeleteModalOpen(false);
+      setAuditLogIdToDelete(null);
+      toast.success(t('audit_log_deleted_successfully'));
+    } catch (error) {
+      console.error('Failed to delete audit log:', error);
+      toast.error(t('failed_to_delete_audit_log'));
+    }
+  };
+
+  const getActionTypeBadge = (actionType: string) => {
+    const type = actionType?.toLowerCase();
+    
+    const typeMap: Record<string, { label: string; color: string }> = {
+      create: { label: t("action_create"), color: "green" },
+      update: { label: t("action_update"), color: "blue" },
+      delete: { label: t("action_delete"), color: "red" },
+      transfer: { label: t("action_transfer"), color: "purple" },
+      maintenance: { label: t("action_maintenance"), color: "orange" },
+      disposal: { label: t("action_disposal"), color: "red" },
+      allocation: { label: t("action_allocation"), color: "indigo" },
+      "status change": { label: t("action_status_change"), color: "amber" },
+    };
+
+    const { label, color } = typeMap[type] || { 
+      label: actionType || t("unknown"), 
+      color: "gray" 
+    };
+
+    const colorClasses = {
+      green: "bg-green-50 text-green-700 border-green-200",
+      blue: "bg-blue-50 text-blue-700 border-blue-200",
+      red: "bg-red-50 text-red-700 border-red-200",
+      purple: "bg-purple-50 text-purple-700 border-purple-200",
+      orange: "bg-orange-50 text-orange-700 border-orange-200",
+      indigo: "bg-indigo-50 text-indigo-700 border-indigo-200",
+      amber: "bg-amber-50 text-amber-700 border-amber-200",
+      gray: "bg-gray-50 text-gray-700 border-gray-200",
+    };
+
+    return (
+      <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${colorClasses[color as keyof typeof colorClasses]}`}>
+        <span>{label}</span>
+      </div>
+    );
+  };
+
+  const columns: Column<AuditLogType>[] = [
+    { header: t('audit_code'), accessorKey: 'auditCode' },
+    { 
+      header: t('asset'), 
+      render: (item) => {
+        const asset = item.assetId as any;
+        const foundAsset = typeof asset === 'object' ? asset : assets.find(a => (a._id || a.id) === asset);
+        const assetName = foundAsset?.assetName || foundAsset?.name;
+        const assetCode = foundAsset?.assetCode || foundAsset?.code;
+        
+        return (
+          <div className="flex flex-col">
+            <span className="font-medium text-sm text-gray-900">{assetName || t('unknown_asset')}</span>
+            <span className="text-xs text-gray-500 font-mono">{assetCode || t('no_code')}</span>
+          </div>
+        );
+      }
     },
-  ];
-
-  const columns: Column<AuditLog>[] = [
-    { header: t('asset_id'), accessorKey: 'assetId' },
-    { header: t('action_type'), accessorKey: 'actionType' },
-    { header: t('by_who'), accessorKey: 'byWho' },
-    { header: t('change_description'), accessorKey: 'changeDescription' },
-    { header: t('date'), accessorKey: 'date' },
+    { 
+      header: t('action_type'), 
+      accessorKey: 'actionType',
+      render: (item) => getActionTypeBadge(item.actionType)
+    },
+    { 
+      header: t('by_who'), 
+      accessorKey: 'byWho',
+      render: (item) => (
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center">
+            <span className="text-xs font-medium text-gray-600">
+              {item.byWho?.charAt(0).toUpperCase()}
+            </span>
+          </div>
+          <span className="text-sm">{item.byWho}</span>
+        </div>
+      )
+    },
+    { 
+      header: t('change_description'), 
+      accessorKey: 'changeDescription',
+      render: (item) => (
+        <div 
+          className="max-w-[250px] truncate cursor-help"
+          title={item.changeDescription}
+        >
+          {item.changeDescription?.length > 30 
+            ? `${item.changeDescription.substring(0, 30)}...` 
+            : item.changeDescription}
+        </div>
+      )
+    },
+    { 
+      header: t('date'), 
+      render: (item) => (
+        <div className="flex items-center gap-1">
+          <Clock size={12} className="text-gray-400" />
+          <span className="text-sm">
+            {item.date ? new Date(item.date).toLocaleDateString() : '-'}
+          </span>
+        </div>
+      )
+    },
     {
       header: t('actions'),
-      accessorKey: 'id',
       render: (item) => (
         <div className="flex items-center gap-2">
           <button
@@ -46,11 +168,17 @@ export const AuditLog: React.FC = () => {
               setSelectedAuditLog(item);
               setIsModalOpen(true);
             }}
-            className="p-1 hover:bg-gray-100 rounded text-blue-600"
+            className="p-1.5 text-gray-400 hover:text-primary transition-colors border border-gray-200 rounded-lg"
           >
             <Edit2 size={16} />
           </button>
-          <button className="p-1 hover:bg-gray-100 rounded text-red-600">
+          <button 
+            onClick={() => {
+              setAuditLogIdToDelete(item._id || item.id!);
+              setIsDeleteModalOpen(true);
+            }}
+            className="p-1.5 text-gray-400 hover:text-red-500 transition-colors border border-gray-200 rounded-lg"
+          >
             <Trash2 size={16} />
           </button>
         </div>
@@ -60,19 +188,20 @@ export const AuditLog: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('audit_log')}</h1>
-          <p className="text-gray-500 dark:text-gray-400">{t('manage_your_audit_log')}</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t('audit_log')}</h1>
+          <p className="text-gray-500">{t('manage_your_audit_log')}</p>
         </div>
         <div className="flex gap-3">
-          <ExportDropdown />
+          <ExportDropdown data={auditLogs} filename="audit-logs" />
           <Button
             variant="primary"
             onClick={() => {
               setSelectedAuditLog(null);
               setIsModalOpen(true);
             }}
+            className="bg-indigo-600 hover:bg-indigo-700"
           >
             <Plus size={18} />
             {t('add_audit_log')}
@@ -80,77 +209,40 @@ export const AuditLog: React.FC = () => {
         </div>
       </div>
 
-      <Card>
-        <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex flex-wrap gap-4 items-center justify-end">
-          <Select
-            options={[
-              { label: t('asset_id'), value: 'asset_id' },
-            ]}
-            className="w-48"
-          />
-        </div>
-        <div className="overflow-x-auto">
-          <Table 
-            columns={columns} 
-            data={auditLogData} 
-            keyExtractor={(item) => item.id}
-          />
-        </div>
-      </Card>
+      <div className="p-4 flex flex-wrap gap-4 items-center">
+        <Input 
+          placeholder={t('search_audit_log')} 
+          icon={<Search size={18} />} 
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="max-w-md"
+          fullWidth={false}
+        />
+      </div>
 
-      <Modal
+      <Table 
+        columns={columns} 
+        data={filteredLogs} 
+        keyExtractor={(item) => item._id || item.id!}
+        isLoading={assetsLoading}
+        selectable
+      />
+
+      <AuditLogFormModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={selectedAuditLog ? t('edit_audit_log') : t('add_audit_log')}
-        size="lg"
-      >
-        <form className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('asset_id')} *</label>
-              <Input defaultValue={selectedAuditLog?.assetId} required />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('action_type')} *</label>
-              <Select
-                options={[
-                  { label: 'aaaa', value: 'aaaa' },
-                ]}
-                defaultValue={selectedAuditLog?.actionType}
-                required
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('by_who')} *</label>
-              <Select
-                options={[
-                  { label: 'aaaa', value: 'aaaa' },
-                ]}
-                defaultValue={selectedAuditLog?.byWho}
-                required
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('date')} *</label>
-              <Input type="date" defaultValue={selectedAuditLog?.date} required />
-            </div>
-          </div>
+        selectedAuditLog={selectedAuditLog}
+        assets={assets}
+        onSave={handleSave}
+      />
 
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('change_description')} *</label>
-            <Input defaultValue={selectedAuditLog?.changeDescription} required />
-          </div>
-
-          <div className="flex justify-end gap-3 mt-6">
-            <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
-              {t('cancel')}
-            </Button>
-            <Button variant="primary" type="submit">
-              {selectedAuditLog ? t('save') : t('add_audit_log')}
-            </Button>
-          </div>
-        </form>
-      </Modal>
+      <ConfirmationModal 
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleDelete}
+        title={t('delete_audit_log')}
+        message={t('are_you_sure_delete_audit_log')}
+      />
     </div>
   );
 };

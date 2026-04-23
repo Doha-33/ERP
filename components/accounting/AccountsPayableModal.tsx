@@ -7,28 +7,16 @@ import { Modal } from '../ui/Modal';
 import { Input, Button, TextArea } from '../ui/Common';
 import { AccountPayable } from '../../types';
 
-// Define the schema with explicit types
 const apSchema = z.object({
   vendorName: z.string().min(1, 'Vendor name is required'),
   invoiceNumber: z.string().min(1, 'Invoice number is required'),
   invoiceDate: z.string().min(1, 'Invoice date is required'),
   dueDate: z.string().min(1, 'Due date is required'),
-  amount: z.number().min(0.01, 'Amount must be greater than 0'), // Changed from z.coerce.number()
+  amount: z.number().min(0.01, 'Amount must be greater than 0'),
   notes: z.string().optional(),
 });
 
-// Explicitly define the type
-type APFormData = {
-  vendorName: string;
-  invoiceNumber: string;
-  invoiceDate: string;
-  dueDate: string;
-  amount: number;
-  notes?: string;
-};
-
-// Or use z.infer with a type assertion
-// type APFormData = z.infer<typeof apSchema>;
+type APFormData = z.infer<typeof apSchema>;
 
 interface AccountsPayableModalProps {
   isOpen: boolean;
@@ -80,22 +68,13 @@ export const AccountsPayableModal: React.FC<AccountsPayableModalProps> = ({
     }
   }, [initialData, reset]);
 
-  const handleFormSubmit = async (data: APFormData) => {
-    // Ensure amount is a number (it should be already)
-    const submitData = {
-      ...data,
-      amount: typeof data.amount === 'string' ? parseFloat(data.amount) : data.amount,
-    };
-    await onSubmit(submitData);
-  };
-
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
       title={initialData ? t('edit_accounts_payable') : t('add_accounts_payable')}
     >
-      <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4 pt-4">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-4">
         <Input
           label={t('vendor_name')}
           {...register('vendorName')}
@@ -114,21 +93,19 @@ export const AccountsPayableModal: React.FC<AccountsPayableModalProps> = ({
             type="date"
             {...register('invoiceDate')}
             error={errors.invoiceDate?.message}
-            fullWidth
           />
           <Input
             label={t('due_date')}
             type="date"
             {...register('dueDate')}
             error={errors.dueDate?.message}
-            fullWidth
           />
         </div>
         <Input
           label={t('amount')}
           type="number"
           step="0.01"
-          {...register('amount', { valueAsNumber: true })} // Add valueAsNumber
+          {...register('amount', { valueAsNumber: true })}
           error={errors.amount?.message}
           fullWidth
         />

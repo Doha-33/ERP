@@ -1131,3 +1131,217 @@ export interface Tax {
   createdAt?: string;
   updatedAt?: string;
 }
+
+export interface Income {
+  id?: string;
+  _id?: string;
+  date: string;
+  amount: number;
+  source: string;
+  companyName: string;
+  paymentMethod: 'CASH' | 'BANK' | 'CARD' | 'ONLINE' | string;
+  note: string;
+  status: 'PENDING' | 'COMPLETED' | string;
+  isDeleted?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Expense {
+  id?: string;
+  _id?: string;
+  date: string;
+  amount: number;
+  vendorName: string;
+  category: string;
+  paymentMethod: 'CASH' | 'BANK' | 'CARD' | 'ONLINE' | string;
+  note: string;
+  status: 'PENDING' | 'COMPLETED' | string;
+  isDeleted?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface BankAccount {
+  id: string;
+  _id?: string;
+  bankName: string;
+  accountNumber: string;
+  iban: string;
+  currency: string;
+  branch: string;
+  currentBalance: number;
+  chartAccount?: string | any;
+  status: 'Active' | 'Inactive';
+  company?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Budget {
+  id?: string;
+  _id?: string;
+  name: string;
+  category: string;
+  period: 'MONTHLY' | 'QUARTERLY' | 'YEARLY' | string;
+  budgetedAmount: number;
+  spentAmount: number;
+  startDate: string;
+  endDate: string;
+  status: 'ACTIVE' | 'COMPLETED' | 'CLOSED' | string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Currency {
+  id?: string;
+  _id?: string;
+  code: string;
+  name: string;
+  symbol: string;
+  isBaseCurrency: boolean;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ExchangeRate {
+  id?: string;
+  _id?: string;
+  fromCurrency: string | Currency;
+  toCurrency: string | Currency;
+  rate: number;
+  date: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface MonthlyClosing {
+  id?: string;
+  _id?: string;
+  month: number;
+  year: number;
+  isClosed: boolean;
+  closedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Asset {
+  id?: string;
+  _id?: string;
+  assetCode?: string;
+  assetName: string;
+  model: string;
+  serialNumber: string;
+  brand: string;
+  warrantyPeriod: number;
+  warrantyEndDate: string;
+  warrantyNumber: string;
+  barcode: string;
+  category: 'ELECTRONICS' | 'FURNITURE' | 'VEHICLE' | 'IT Equipment'| string;
+  location: string;
+  cost: number;
+  purchaseDate: string;
+  assignedTo: string;
+  state: 'ACTIVE' | 'INACTIVE' | 'IN_MAINTENANCE' | 'LOST' | 'SCRAP' | string;
+  notes: string;
+  image?: string;
+  attachments?: string[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Maintenance {
+  id?: string;
+  _id?: string;
+  maintenanceCode?: string;
+  assetId: string | Asset;
+  maintenanceType: string;
+  scheduledDate: string;
+  technician: string;
+  state: string;
+  cost: number;
+  description: string;
+  attachments?: string[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Depreciation {
+  id?: string;
+  _id?: string;
+  depreciationCode?: string;
+  assetId: string | Asset;
+  purchaseCost: number;
+  usefulLife: string;
+  depreciationMethod: string;
+  accumulatedDepreciation: number;
+  currentValue: number;
+  accountingPeriod: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Allocation {
+  id?: string;
+  _id?: string;
+  allocationCode?: string;
+  assetId: string | Asset;
+  assignedTo: string;
+  location: string;
+  usagePurpose: string;
+  startDate: string;
+  endDate: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Tracking {
+  id?: string;
+  _id?: string;
+  trackingCode?: string;
+  assetId: string | Asset;
+  currentLocation: string;
+  movementHistory: string;
+  notes: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface AuditLog {
+  id?: string;
+  _id?: string;
+  auditCode?: string;
+  assetId: string | Asset;
+  actionType: string;
+  byWho: string;
+  changeDescription: string;
+  date: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Disposal {
+  id?: string;
+  _id?: string;
+  disposalCode?: string;
+  assetId: string | Asset;
+  assetName: string;
+  model: string;
+  serialNumber: string;
+  brand: string;
+  category: string;
+  currentValue: number;
+  purchaseCost: number;
+  purchaseDate: string;
+  disposalType: string;
+  disposalValue: number;
+  invoiceNumber: string;
+  paymentMethod: string;
+  notes: string;
+  attachments?: string[];
+  createdAt?: string;
+  updatedAt?: string;
+}

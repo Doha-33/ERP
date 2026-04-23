@@ -17,24 +17,24 @@ export const Units: React.FC = () => {
   const columns = [
     {
       header: t('unit_name'),
-      accessor: 'name' as keyof Unit,
+      accessorKey: 'name' as keyof Unit,
       render: (unit: Unit) => <span className="font-medium">{unit.name}</span>
     },
     {
       header: t('abbreviation'),
-      accessor: 'abbreviation' as keyof Unit,
+      accessorKey: 'abbreviation' as keyof Unit,
     },
     {
       header: t('conversion_factor'),
-      accessor: 'conversionFactor' as keyof Unit,
+      accessorKey: 'conversionFactor' as keyof Unit,
     },
     {
       header: t('created_at'),
-      accessor: 'createdAt' as keyof Unit,
+      accessorKey: 'createdAt' as keyof Unit,
     },
     {
       header: t('status'),
-      accessor: 'state' as keyof Unit,
+      accessorKey: 'state' as keyof Unit,
       render: (unit: Unit) => (
         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
           unit.state === 'Active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
@@ -45,7 +45,7 @@ export const Units: React.FC = () => {
     },
     {
       header: t('actions'),
-      accessor: 'id' as keyof Unit,
+      accessorKey: 'id' as keyof Unit,
       render: (unit: Unit) => (
         <div className="flex items-center gap-2">
           <button 

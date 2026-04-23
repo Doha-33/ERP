@@ -6,11 +6,10 @@ import { useTranslation } from 'react-i18next';
 import { Modal } from '../ui/Modal';
 import { Input, Button, Select, TextArea } from '../ui/Common';
 
-// Fix: Use z.number() instead of z.coerce.number()
 const paymentSchema = z.object({
   invoiceId: z.string().min(1, 'Invoice is required'),
   paymentDate: z.string().min(1, 'Payment date is required'),
-  amount: z.number().min(0.01, 'Amount must be greater than 0'), // Changed from z.coerce.number()
+  amount: z.number().min(0.01, 'Amount must be greater than 0'),
   paymentMethod: z.enum(['CASH', 'BANK_TRANSFER', 'CHECK', 'ONLINE']),
   referenceNumber: z.string().min(1, 'Reference number is required'),
   notes: z.string().optional(),
@@ -65,23 +64,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
     }
   }, [isOpen, reset]);
 
-  // Optional: Add a submit handler to ensure amount is a number
-  const handleFormSubmit = async (data: PaymentFormData) => {
-    // Ensure amount is a number (it should be already)
-    const submitData = {
-      ...data,
-      amount: typeof data.amount === 'string' ? parseFloat(data.amount) : data.amount,
-    };
-    await onSubmit(submitData);
-  };
-
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
       title={title}
     >
-      <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4 pt-4">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-4">
         <Select
           label={t('invoice')}
           options={[
@@ -101,15 +90,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             type="date"
             {...register('paymentDate')}
             error={errors.paymentDate?.message}
-            fullWidth
           />
           <Input
             label={t('amount')}
             type="number"
             step="0.01"
-            {...register('amount', { valueAsNumber: true })} // Add valueAsNumber
+            {...register('amount', { valueAsNumber: true })}
             error={errors.amount?.message}
-            fullWidth
           />
         </div>
         <div className="grid grid-cols-2 gap-4">
@@ -123,13 +110,11 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             ]}
             {...register('paymentMethod')}
             error={errors.paymentMethod?.message}
-            fullWidth
           />
           <Input
             label={t('reference_number')}
             {...register('referenceNumber')}
             error={errors.referenceNumber?.message}
-            fullWidth
           />
         </div>
         <TextArea
