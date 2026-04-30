@@ -1,78 +1,197 @@
-import React, { useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Plus, Search, Edit2, Trash2, DollarSign, FileText } from 'lucide-react';
-import { Card, Button, Input, Select, Badge, ExportDropdown, TextArea } from '../../components/ui/Common';
-import { Table } from '../../components/ui/Table';
-import { Modal } from '../../components/ui/Modal';
-
-interface VehicleExpense {
-  id: string;
-  vehicle: string;
-  type: string;
-  amount: string;
-  date: string;
-  description: string;
-  status: 'paid' | 'pending';
-}
+import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { Plus, Search, Edit2, Trash2, DollarSign, Wallet, Calendar, FileText } from "lucide-react";
+import {
+  Button,
+  Input,
+  ExportDropdown,
+  Badge,
+} from "../../components/ui/Common";
+import { Table, Column } from "../../components/ui/Table";
+import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
+import { ExpenseFormModal } from "../../components/fleet/ExpenseFormModal";
+import { fleetService } from "../../services/fleet.service";
+import { VehicleExpense as VehicleExpenseType, Vehicle } from "../../types";
+import { toast } from "sonner";
 
 export const VehicleExpenses: React.FC = () => {
   const { t } = useTranslation();
+  const [expenses, setExpenses] = useState<VehicleExpenseType[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedExpense, setSelectedExpense] = useState<VehicleExpense | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [selectedExpense, setSelectedExpense] = useState<VehicleExpenseType | null>(null);
+  const [expenseIdToDelete, setExpenseIdToDelete] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
-  const expenses: VehicleExpense[] = [
-    {
-      id: 'EXP-001',
-      vehicle: 'V-001 (Toyota Corolla)',
-      type: 'Insurance',
-      amount: '5,000 EGP',
-      date: '2025-01-01',
-      description: 'Annual insurance premium',
-      status: 'paid',
-    },
-    {
-      id: 'EXP-002',
-      vehicle: 'V-002 (Hyundai Elantra)',
-      type: 'Registration',
-      amount: '2,500 EGP',
-      date: '2025-01-05',
-      description: 'Vehicle registration renewal',
-      status: 'pending',
-    },
-  ];
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [expensesData, vehiclesData] = await Promise.all([
+        fleetService.getExpenses(),
+        fleetService.getVehicles(),
+      ]);
+      setExpenses(expensesData);
+      setVehicles(vehiclesData);
+    } catch (error) {
+      console.error("Failed to fetch data:", error);
+      toast.error(t("failed_to_fetch_expenses"));
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const columns = [
-    { header: t('expense_id'), accessorKey: 'id' as keyof VehicleExpense },
-    { header: t('vehicle'), accessorKey: 'vehicle' as keyof VehicleExpense },
-    { header: t('type'), accessorKey: 'type' as keyof VehicleExpense },
-    { header: t('amount'), accessorKey: 'amount' as keyof VehicleExpense },
-    { header: t('date'), accessorKey: 'date' as keyof VehicleExpense },
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleSave = async (data: Partial<VehicleExpenseType>) => {
+    try {
+      if (selectedExpense) {
+        await fleetService.updateExpense(selectedExpense._id, data);
+        toast.success(t("expense_updated_successfully"));
+      } else {
+        await fleetService.createExpense(data);
+        toast.success(t("expense_created_successfully"));
+      }
+      setIsModalOpen(false);
+      await fetchData();
+    } catch (error) {
+      console.error("Failed to save expense:", error);
+      toast.error(t("failed_to_save_expense"));
+      throw error;
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!expenseIdToDelete) return;
+    try {
+      await fleetService.deleteExpense(expenseIdToDelete);
+      setIsDeleteModalOpen(false);
+      setExpenseIdToDelete(null);
+      toast.success(t("expense_deleted_successfully"));
+      await fetchData();
+    } catch (error) {
+      console.error("Failed to delete expense:", error);
+      toast.error(t("failed_to_delete_expense"));
+    }
+  };
+
+  // Get status badge
+  const getStatusBadge = (status: string) => {
+    const statusMap: Record<string, { variant: "success" | "warning" | "neutral"; label: string; icon: any }> = {
+      Paid: { variant: "success", label: t("paid"), icon: Wallet },
+      Pending: { variant: "warning", label: t("pending"), icon: DollarSign },
+    };
+    const config = statusMap[status] || { variant: "neutral", label: status, icon: null };
+    const Icon = config.icon;
+    return (
+      <Badge variant={config.variant} className="flex items-center gap-1">
+        {Icon && <Icon size={12} />}
+        {config.label}
+      </Badge>
+    );
+  };
+
+  const filteredExpenses = expenses.filter((e) => {
+    const matchesSearch =
+      e.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      e.description.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === "all" || e.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  const columns: Column<VehicleExpenseType>[] = [
     {
-      header: t('status'),
-      accessorKey: 'status' as keyof VehicleExpense,
-      render: (item: VehicleExpense) => (
-        <Badge
-          variant={item.status === 'paid' ? 'success' : 'warning'}
-        >
-          {t(item.status)}
-        </Badge>
+      header: t("date"),
+      accessorKey: "date",
+      render: (item) => (
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+            <Calendar size={14} className="text-green-600" />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-sm font-medium text-gray-900">
+              {new Date(item.date).toLocaleDateString()}
+            </span>
+          </div>
+        </div>
       ),
     },
     {
-      header: t('actions'),
-      accessorKey: 'id' as keyof VehicleExpense,
-      render: (item: VehicleExpense) => (
+      header: t("vehicle"),
+      render: (item) => {
+        const vehicle = typeof item.vehicleId === "object" ? item.vehicleId : null;
+        return vehicle ? (
+          <div className="flex flex-col">
+            <span className="text-sm font-medium">{vehicle.plateNumber}</span>
+            <span className="text-xs text-gray-500">{vehicle.model}</span>
+          </div>
+        ) : (
+          <span className="text-sm text-gray-400">{t("unknown")}</span>
+        );
+      },
+    },
+    {
+      header: t("type"),
+      accessorKey: "type",
+      render: (item) => (
+        <div className="flex items-center gap-1.5">
+          <FileText size={14} className="text-gray-400" />
+          <span className="text-sm font-medium">{item.type}</span>
+        </div>
+      ),
+    },
+    {
+      header: t("amount"),
+      accessorKey: "amount",
+      render: (item) => (
+        <div className="flex items-center gap-1.5">
+          <DollarSign size={14} className="text-gray-400" />
+          <span className="text-sm font-semibold text-gray-900">
+            {item.amount.toLocaleString()} EGP
+          </span>
+        </div>
+      ),
+    },
+    {
+      header: t("description"),
+      accessorKey: "description",
+      render: (item) => (
+        <div className="max-w-xs">
+          <p className="text-sm text-gray-600 truncate">
+            {item.description || "-"}
+          </p>
+        </div>
+      ),
+    },
+    {
+      header: t("status"),
+      accessorKey: "status",
+      render: (item) => getStatusBadge(item.status),
+    },
+    {
+      header: t("actions"),
+      render: (item) => (
         <div className="flex items-center gap-2">
           <button
             onClick={() => {
               setSelectedExpense(item);
               setIsModalOpen(true);
             }}
-            className="p-1 hover:bg-gray-100 rounded text-blue-600"
+            className="p-1.5 text-gray-400 hover:text-indigo-600 transition-colors border border-gray-200 rounded-lg"
           >
             <Edit2 size={16} />
           </button>
-          <button className="p-1 hover:bg-gray-100 rounded text-red-600">
+          <button
+            onClick={() => {
+              setExpenseIdToDelete(item._id);
+              setIsDeleteModalOpen(true);
+            }}
+            className="p-1.5 text-gray-400 hover:text-red-500 transition-colors border border-gray-200 rounded-lg"
+          >
             <Trash2 size={16} />
           </button>
         </div>
@@ -80,121 +199,87 @@ export const VehicleExpenses: React.FC = () => {
     },
   ];
 
+  const statusOptions = [
+    { value: "all", label: t("all_statuses") },
+    { value: "Paid", label: t("paid") },
+    { value: "Pending", label: t("pending") },
+  ];
+
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('vehicle_expenses')}</h1>
-          <p className="text-gray-500">{t('manage_vehicle_expenses')}</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            {t("vehicle_expenses")}
+          </h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">
+            {t("manage_vehicle_expenses")}
+          </p>
         </div>
         <div className="flex gap-3">
-          <ExportDropdown />
+          <ExportDropdown data={expenses} filename="vehicle-expenses" />
           <Button
             variant="primary"
             onClick={() => {
               setSelectedExpense(null);
               setIsModalOpen(true);
             }}
+            className="bg-indigo-600 hover:bg-indigo-700"
           >
             <Plus size={18} />
-            {t('add_vehicle_expense')}
+            {t("add_vehicle_expense")}
           </Button>
         </div>
       </div>
 
-      <Card>
-        <div className="p-4 border-b border-gray-100 flex flex-wrap gap-4 items-center justify-between">
-          <div className="flex flex-wrap gap-4 items-center">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <Input placeholder={t('search_placeholder')} className="pl-10 w-64" />
-            </div>
-            <Select
-              options={[
-                { label: t('all_statuses'), value: 'all' },
-                { label: t('paid'), value: 'paid' },
-                { label: t('pending'), value: 'pending' },
-              ]}
-              className="w-40"
-            />
-          </div>
-        </div>
-        <Table 
-          columns={columns} 
-          data={expenses} 
-          keyExtractor={(item) => item.id}
+      <div className="flex flex-wrap gap-4 items-center">
+        <Input
+          placeholder={t("search_expense_placeholder")}
+          icon={<Search size={18} />}
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="max-w-md"
+          fullWidth={false}
         />
-      </Card>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-800 dark:text-white"
+        >
+          {statusOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </div>
 
-      <Modal
+      <Table
+        columns={columns}
+        data={filteredExpenses}
+        keyExtractor={(item) => item._id}
+        isLoading={loading}
+        selectable
+      />
+
+      <ExpenseFormModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title={selectedExpense ? t('edit_vehicle_expense') : t('add_vehicle_expense')}
-      >
-        <form className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">{t('vehicle')} *</label>
-              <Select
-                options={[
-                  { label: 'V-001 (Toyota Corolla)', value: 'V-001' },
-                  { label: 'V-002 (Hyundai Elantra)', value: 'V-002' },
-                ]}
-                defaultValue={selectedExpense?.vehicle}
-                required
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">{t('type')} *</label>
-              <Select
-                options={[
-                  { label: 'Insurance', value: 'insurance' },
-                  { label: 'Registration', value: 'registration' },
-                  { label: 'Taxes', value: 'taxes' },
-                  { label: 'Other', value: 'other' },
-                ]}
-                defaultValue={selectedExpense?.type}
-                required
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">{t('amount')} *</label>
-              <Input defaultValue={selectedExpense?.amount} required />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">{t('date')} *</label>
-              <Input type="date" defaultValue={selectedExpense?.date} required />
-            </div>
-            <div className="col-span-2 space-y-1">
-              <label className="text-sm font-medium text-gray-700">{t('description')}</label>
-              <TextArea defaultValue={selectedExpense?.description} />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">{t('status')} *</label>
-              <Select
-                options={[
-                  { label: t('paid'), value: 'paid' },
-                  { label: t('pending'), value: 'pending' },
-                ]}
-                defaultValue={selectedExpense?.status}
-                required
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">{t('upload_attachment')}</label>
-              <Input type="file" />
-            </div>
-          </div>
-          <div className="flex justify-end gap-3 mt-6">
-            <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
-              {t('cancel')}
-            </Button>
-            <Button variant="primary" type="submit">
-              {selectedExpense ? t('save') : t('add_vehicle_expense')}
-            </Button>
-          </div>
-        </form>
-      </Modal>
+        onClose={() => {
+          setIsModalOpen(false);
+          setSelectedExpense(null);
+        }}
+        selectedExpense={selectedExpense}
+        vehicles={vehicles}
+        onSave={handleSave}
+      />
+
+      <ConfirmationModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleDelete}
+        title={t("delete_expense")}
+        message={t("are_you_sure_delete_expense")}
+      />
     </div>
   );
 };

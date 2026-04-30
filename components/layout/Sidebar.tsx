@@ -102,11 +102,6 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
     );
   };
 
-  const handleLogout = () => {
-    logout();
-    navigate("/signin");
-  };
-
   const ChevronIcon = isRTL ? ChevronLeft : ChevronRight;
 
   const navGroups = [
@@ -282,12 +277,6 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
           label: "exchange_rates",
           path: "/accounting/exchange-rates",
           icon: RefreshCcw,
-        },
-        {
-          id: "accounting-monthly-closing",
-          label: "monthly_closing",
-          path: "/accounting/monthly-closing",
-          icon: Lock,
         },
         {
           id: "accounting-coa",

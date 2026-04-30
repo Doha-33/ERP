@@ -70,7 +70,7 @@ export const AllocationFormModal: React.FC<AllocationFormModalProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
           {/* Asset Dropdown */}
           <div className="space-y-1">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label className="text-sm font-medium text-gray-700">
               {t("asset")} <span className="text-red-500">*</span>
             </label>
             <Select
@@ -89,7 +89,7 @@ export const AllocationFormModal: React.FC<AllocationFormModalProps> = ({
 
           {/* Assigned To */}
           <div className="space-y-1">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label className="text-sm font-medium text-gray-700">
               {t("assigned_to")} <span className="text-red-500">*</span>
             </label>
             <Input
@@ -103,7 +103,7 @@ export const AllocationFormModal: React.FC<AllocationFormModalProps> = ({
 
           {/* Location */}
           <div className="space-y-1">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label className="text-sm font-medium text-gray-700">
               {t("location")} <span className="text-red-500">*</span>
             </label>
             <Input

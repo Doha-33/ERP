@@ -1,80 +1,201 @@
-import React, { useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Plus, Search, Edit2, Trash2, User } from 'lucide-react';
-import { Card, Button, Input, Select, Badge, ExportDropdown } from '../../components/ui/Common';
-import { Table } from '../../components/ui/Table';
-import { Modal } from '../../components/ui/Modal';
-
-interface Driver {
-  id: string;
-  name: string;
-  licenseNumber: string;
-  licenseExpiry: string;
-  phone: string;
-  status: 'active' | 'on_trip' | 'inactive';
-  assignedVehicle: string;
-}
+import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { Plus, Search, Edit2, Trash2, User, Phone, Award } from "lucide-react";
+import {
+  Button,
+  Input,
+  ExportDropdown,
+  Badge,
+} from "../../components/ui/Common";
+import { Table, Column } from "../../components/ui/Table";
+import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
+import { DriverFormModal } from "../../components/fleet/DriverModal";
+import { fleetService } from "../../services/fleet.service";
+import { Driver, Vehicle } from "../../types";
+import { toast } from "sonner";
 
 export const Drivers: React.FC = () => {
   const { t } = useTranslation();
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
+  const [driverIdToDelete, setDriverIdToDelete] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
-  const drivers: Driver[] = [
-    {
-      id: 'D-001',
-      name: 'Ahmed Mohamed',
-      licenseNumber: 'L-123456',
-      licenseExpiry: '2026-05-20',
-      phone: '01012345678',
-      status: 'active',
-      assignedVehicle: 'V-001',
-    },
-    {
-      id: 'D-002',
-      name: 'Sayed Ali',
-      licenseNumber: 'L-789012',
-      licenseExpiry: '2025-11-15',
-      phone: '01198765432',
-      status: 'on_trip',
-      assignedVehicle: 'V-002',
-    },
-  ];
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [driversData, vehiclesData] = await Promise.all([
+        fleetService.getDrivers(),
+        fleetService.getVehicles(),
+      ]);
+      setDrivers(driversData);
+      setVehicles(vehiclesData);
+    } catch (error) {
+      console.error("Failed to fetch data:", error);
+      toast.error(t("failed_to_fetch_data"));
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const columns = [
-    { header: t('driver_name'), accessorKey: 'name' as keyof Driver },
-    { header: t('license_number'), accessorKey: 'licenseNumber' as keyof Driver },
-    { header: t('license_expiry'), accessorKey: 'licenseExpiry' as keyof Driver },
-    { header: t('phone'), accessorKey: 'phone' as keyof Driver },
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleSave = async (data: Partial<Driver>) => {
+    try {
+      if (selectedDriver) {
+        await fleetService.updateDriver(selectedDriver._id, data);
+        toast.success(t("driver_updated_successfully"));
+      } else {
+        await fleetService.createDriver(data);
+        toast.success(t("driver_created_successfully"));
+      }
+      setIsModalOpen(false);
+      await fetchData();
+    } catch (error) {
+      console.error("Failed to save driver:", error);
+      toast.error(t("failed_to_save_driver"));
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!driverIdToDelete) return;
+    try {
+      await fleetService.deleteDriver(driverIdToDelete);
+      setIsDeleteModalOpen(false);
+      setDriverIdToDelete(null);
+      toast.success(t("driver_deleted_successfully"));
+      await fetchData();
+    } catch (error) {
+      console.error("Failed to delete driver:", error);
+      toast.error(t("failed_to_delete_driver"));
+    }
+  };
+
+  // Get status badge
+  const getStatusBadge = (status: string) => {
+    const statusMap: Record<string, { variant: "success" | "info" | "danger" | "neutral"; label: string }> = {
+      Active: { variant: "success", label: t("active") },
+      "On Trip": { variant: "info", label: t("on_trip") },
+      Inactive: { variant: "danger", label: t("inactive") },
+    };
+    const config = statusMap[status] || { variant: "neutral", label: status };
+    return <Badge variant={config.variant}>{config.label}</Badge>;
+  };
+
+  // Check license expiry status
+  const getLicenseExpiryBadge = (expiryDate: string) => {
+    const today = new Date();
+    const expiry = new Date(expiryDate);
+    const daysLeft = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (daysLeft < 0) {
+      return <Badge variant="danger">{t("expired")}</Badge>;
+    } else if (daysLeft < 30) {
+      return <Badge variant="warning">{t("expiring_soon", { days: daysLeft })}</Badge>;
+    }
+    return <Badge variant="success">{t("valid")}</Badge>;
+  };
+
+  const filteredDrivers = drivers.filter((d) => {
+    const matchesSearch =
+      d.driverName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      d.driverCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      d.licenseNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      d.phone.includes(searchTerm);
+    const matchesStatus = statusFilter === "all" || d.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  const columns: Column<Driver>[] = [
     {
-      header: t('status'),
-      accessorKey: 'status' as keyof Driver,
-      render: (item: Driver) => (
-        <Badge
-          variant={
-            item.status === 'active' ? 'success' : item.status === 'on_trip' ? 'info' : 'neutral'
-          }
-        >
-          {t(item.status)}
-        </Badge>
+      header: t("driver_code"),
+      accessorKey: "driverCode",
+      render: (item) => (
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
+            <User size={14} className="text-indigo-600" />
+          </div>
+          <div className="flex flex-col">
+            <span className="font-medium text-sm text-gray-900">{item.driverCode}</span>
+            <span className="text-xs text-gray-500">{item.driverName}</span>
+          </div>
+        </div>
       ),
     },
-    { header: t('assigned_vehicle'), accessorKey: 'assignedVehicle' as keyof Driver },
+    
     {
-      header: t('actions'),
-      accessorKey: 'id' as keyof Driver,
-      render: (item: Driver) => (
+      header: t("license_info"),
+      render: (item) => (
+        <div className="flex flex-col">
+          <div className="flex items-center gap-1.5">
+            <Award size={14} className="text-gray-400" />
+            <span className="text-sm">{item.licenseNumber}</span>
+          </div>
+          <div className="flex items-center gap-1.5 mt-1">
+            <span className="text-xs text-gray-500">
+              {new Date(item.licenseExpiry).toLocaleDateString()}
+            </span>
+            {getLicenseExpiryBadge(item.licenseExpiry)}
+          </div>
+        </div>
+      ),
+    },
+    {
+      header: t("phone"),
+      accessorKey: "phone",
+      render: (item) => (
+        <div className="flex items-center gap-1.5">
+          <Phone size={14} className="text-gray-400" />
+          <span className="text-sm">{item.phone}</span>
+        </div>
+      ),
+    },
+    {
+      header: t("assigned_vehicle"),
+      render: (item) => {
+        const vehicle = typeof item.assignedVehicleId === "object" ? item.assignedVehicleId : null;
+        return vehicle ? (
+          <div className="flex flex-col">
+            <span className="text-sm font-medium">{vehicle.plateNumber}</span>
+            <span className="text-xs text-gray-500">{vehicle.model}</span>
+          </div>
+        ) : (
+          <span className="text-sm text-gray-400">{t("none")}</span>
+        );
+      },
+    },
+    {
+      header: t("status"),
+      accessorKey: "status",
+      render: (item) => getStatusBadge(item.status),
+    },
+    {
+      header: t("actions"),
+      render: (item) => (
         <div className="flex items-center gap-2">
           <button
             onClick={() => {
               setSelectedDriver(item);
               setIsModalOpen(true);
             }}
-            className="p-1 hover:bg-gray-100 rounded text-blue-600"
+            className="p-1.5 text-gray-400 hover:text-indigo-600 transition-colors border border-gray-200 rounded-lg"
           >
             <Edit2 size={16} />
           </button>
-          <button className="p-1 hover:bg-gray-100 rounded text-red-600">
+          <button
+            onClick={() => {
+              setDriverIdToDelete(item._id);
+              setIsDeleteModalOpen(true);
+            }}
+            className="p-1.5 text-gray-400 hover:text-red-500 transition-colors border border-gray-200 rounded-lg"
+          >
             <Trash2 size={16} />
           </button>
         </div>
@@ -82,109 +203,85 @@ export const Drivers: React.FC = () => {
     },
   ];
 
+  const statusOptions = [
+    { value: "all", label: t("all_statuses") },
+    { value: "Active", label: t("active") },
+    { value: "On Trip", label: t("on_trip") },
+    { value: "Inactive", label: t("inactive") },
+  ];
+
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('drivers')}</h1>
-          <p className="text-gray-500">{t('manage_your_drivers')}</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            {t("drivers")}
+          </h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">
+            {t("manage_your_drivers")}
+          </p>
         </div>
         <div className="flex gap-3">
-          <ExportDropdown />
+          <ExportDropdown data={drivers} filename="drivers" />
           <Button
             variant="primary"
             onClick={() => {
               setSelectedDriver(null);
               setIsModalOpen(true);
             }}
+            className="bg-indigo-600 hover:bg-indigo-700"
           >
             <Plus size={18} />
-            {t('add_driver')}
+            {t("add_driver")}
           </Button>
         </div>
       </div>
 
-      <Card>
-        <div className="p-4 border-b border-gray-100 flex flex-wrap gap-4 items-center justify-between">
-          <div className="flex flex-wrap gap-4 items-center">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <Input placeholder={t('search_placeholder')} className="pl-10 w-64" />
-            </div>
-            <Select
-              options={[
-                { label: t('all_statuses'), value: 'all' },
-                { label: t('active'), value: 'active' },
-                { label: t('on_trip'), value: 'on_trip' },
-                { label: t('inactive'), value: 'inactive' },
-              ]}
-              className="w-40"
-            />
-          </div>
-        </div>
-        <Table 
-          columns={columns} 
-          data={drivers} 
-          keyExtractor={(item) => item.id}
+      <div className="flex flex-wrap gap-4 items-center">
+        <Input
+          placeholder={t("search_driver_placeholder")}
+          icon={<Search size={18} />}
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="max-w-md"
+          fullWidth={false}
         />
-      </Card>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-800 dark:text-white"
+        >
+          {statusOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </div>
 
-      <Modal
+      <Table
+        columns={columns}
+        data={filteredDrivers}
+        keyExtractor={(item) => item._id}
+        isLoading={loading}
+        selectable
+      />
+
+      <DriverFormModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={selectedDriver ? t('edit_driver') : t('add_driver')}
-      >
-        <form className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">{t('driver_name')} *</label>
-              <Input defaultValue={selectedDriver?.name} required />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">{t('license_number')} *</label>
-              <Input defaultValue={selectedDriver?.licenseNumber} required />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">{t('license_expiry')} *</label>
-              <Input type="date" defaultValue={selectedDriver?.licenseExpiry} required />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">{t('phone')} *</label>
-              <Input defaultValue={selectedDriver?.phone} required />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">{t('assigned_vehicle')}</label>
-              <Select
-                options={[
-                  { label: 'V-001 (Toyota Corolla)', value: 'V-001' },
-                  { label: 'V-002 (Hyundai Elantra)', value: 'V-002' },
-                ]}
-                defaultValue={selectedDriver?.assignedVehicle}
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">{t('status')} *</label>
-              <Select
-                options={[
-                  { label: t('active'), value: 'active' },
-                  { label: t('on_trip'), value: 'on_trip' },
-                  { label: t('inactive'), value: 'inactive' },
-                ]}
-                defaultValue={selectedDriver?.status}
-                required
-              />
-            </div>
-          </div>
-          <div className="flex justify-end gap-3 mt-6">
-            <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
-              {t('cancel')}
-            </Button>
-            <Button variant="primary" type="submit">
-              {selectedDriver ? t('save') : t('add_driver')}
-            </Button>
-          </div>
-        </form>
-      </Modal>
+        selectedDriver={selectedDriver}
+        vehicles={vehicles}
+        onSave={handleSave}
+      />
+
+      <ConfirmationModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleDelete}
+        title={t("delete_driver")}
+        message={t("are_you_sure_delete_driver")}
+      />
     </div>
   );
 };

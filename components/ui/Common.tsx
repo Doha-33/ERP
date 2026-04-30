@@ -18,7 +18,7 @@ export const Card: React.FC<{
 }> = ({ children, className = "", onClick }) => (
   <div
     onClick={onClick}
-    className={`bg-white dark:bg-dark-surface rounded-xl shadow-sm border border-gray-100 dark:border-dark-border p-6 ${className}`}
+    className={`bg-white rounded-xl shadow-sm border border-gray-100 p-6 ${className}`}
   >
     {children}
   </div>
@@ -52,15 +52,15 @@ export const Button: React.FC<ButtonProps> = ({
 
   const variants = {
     primary:
-      "bg-primary hover:bg-primary-dark text-white shadow-lg shadow-primary/30",
+      "bg-primary text-white shadow-lg shadow-primary/30",
     secondary:
-      "bg-gray-100 hover:bg-gray-200 text-gray-900 dark:bg-gray-800 dark:text-gray-100 dark:hover:bg-gray-700",
+      "bg-gray-100 hover:bg-gray-200 text-gray-900",
     outline:
-      "border border-gray-300 dark:border-dark-border-strong text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-dark-bg/50",
+      "border border-gray-300 text-gray-700 hover:bg-gray-50",
     ghost:
-      "text-gray-500 hover:text-primary dark:text-gray-400 dark:hover:text-white",
+      "text-gray-500 hover:text-primary",
     danger:
-      "bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-200 dark:shadow-none dark:bg-red-500/20 dark:text-red-200 dark:hover:bg-red-500/30",
+      "bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-200",
   };
 
   return (
@@ -149,7 +149,7 @@ export const Dropdown: React.FC<DropdownProps> = ({
                   ${
                     item.variant === "danger"
                       ? "text-red-600 hover:bg-red-500"
-                      : "text-gray-700 dark:text-gray-200 hover:bg-gray-200"
+                      : "text-gray-700 hover:bg-gray-200"
                   }`}
               >
                 {item.icon && <span className="shrink-0">{item.icon}</span>}
@@ -286,7 +286,7 @@ export const ExportDropdown: React.FC<{ data?: any[]; filename?: string }> = ({
       trigger={
         <Button
           variant="outline"
-          className="text-primary border-primary bg-blue-50 hover:bg-blue-100 dark:bg-transparent dark:text-primary dark:hover:bg-primary/10"
+          className="text-primary border-primary bg-blue-50 hover:bg-blue-100"
         >
           {t("export")} <ChevronDown size={16} />
         </Button>
@@ -322,15 +322,15 @@ export const Input: React.FC<InputProps> = React.forwardRef<
     return (
       <div className={`${fullWidth ? "w-full" : "w-auto"}`}>
         {label && (
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">
             {label}
           </label>
         )}
         <div className="relative">
           <input
             ref={ref}
-            className={`${fullWidth ? "w-full" : "w-auto"} px-4 py-2.5 rounded-lg border bg-white dark:bg-dark-surface 
-            border-gray-300 dark:border-dark-border text-gray-900 dark:text-white
+            className={`${fullWidth ? "w-full" : "w-auto"} px-4 py-2.5 rounded-lg border bg-white 
+            border-gray-300 text-gray-900 
             focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none
             disabled:opacity-50 disabled:cursor-not-allowed
             ${icon ? "pl-10 rtl:pr-10 rtl:pl-4" : ""} ${className}`}
@@ -371,14 +371,14 @@ export const TextArea: React.FC<TextAreaProps> = React.forwardRef<
   ) => (
     <div className={`${fullWidth ? "w-full" : "w-auto"}`}>
       {label && (
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+        <label className="block text-sm font-medium text-gray-700">
           {label}
         </label>
       )}
       <textarea
         ref={ref}
-        className={`${fullWidth ? "w-full" : "w-auto"} px-4 py-2.5 rounded-lg border bg-white dark:bg-dark-surface 
-        border-gray-300 dark:border-dark-border text-gray-900 dark:text-white
+        className={`${fullWidth ? "w-full" : "w-auto"} px-4 py-2.5 rounded-lg border bg-white 
+        border-gray-300 text-gray-900 
         focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none
         disabled:opacity-50 disabled:cursor-not-allowed resize-none
         ${className}`}
@@ -416,15 +416,15 @@ export const Select: React.FC<SelectProps> = React.forwardRef<
   ) => (
     <div className={`${fullWidth ? "w-full" : "w-auto"}`}>
       {label && (
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+        <label className="block text-sm font-medium text-gray-700 mb-1.5">
           {label}
         </label>
       )}
       <div className="relative">
         <select
           ref={ref}
-          className={`${fullWidth ? "w-full" : "w-auto"} px-4 py-2.5 rounded-lg border bg-white dark:bg-dark-surface 
-          border-gray-300 dark:border-dark-border text-gray-900 dark:text-white
+          className={`${fullWidth ? "w-full" : "w-auto"} px-4 py-2.5 rounded-lg border bg-white 
+          border-gray-300 text-gray-900
           focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none appearance-none
           ${className}`}
           {...props}
@@ -470,7 +470,7 @@ export const Badge: React.FC<{
   className?: string; // أضيفي هذا السطر
 }> = ({ status, variant, label, children, className = "" }) => {
   const badgeStatus = status || variant || "default";
-  let styles = "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300";
+  let styles = "bg-gray-100 text-gray-700";
 
   if (
     [
@@ -484,7 +484,7 @@ export const Badge: React.FC<{
     ].includes(badgeStatus)
   ) {
     styles =
-      "bg-success-bg text-success-text dark:bg-success-bg/10 dark:text-success-text";
+      "bg-success-bg text-success-text";
   } else if (
     [
       "Pending",
@@ -496,7 +496,7 @@ export const Badge: React.FC<{
     ].includes(badgeStatus)
   ) {
     styles =
-      "bg-warning-bg text-warning-text dark:bg-warning-bg/10 dark:text-warning-text";
+      "bg-warning-bg text-warning-text";
   } else if (
     [
       "Canceled",
@@ -513,7 +513,7 @@ export const Badge: React.FC<{
     ].includes(badgeStatus)
   ) {
     styles =
-      "bg-danger-bg text-danger-text dark:bg-danger-bg/10 dark:text-danger-text";
+      "bg-danger-bg text-danger-text";
   }
 
   return (
@@ -532,7 +532,7 @@ export const Switch: React.FC<{
   <button
     type="button"
     onClick={() => onChange(!checked)}
-    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${checked ? "bg-primary" : "bg-gray-200 dark:bg-gray-700"}`}
+    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${checked ? "bg-primary" : "bg-gray-200"}`}
   >
     <span
       className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${checked ? "translate-x-5 rtl:-translate-x-5" : "translate-x-0"}`}
@@ -558,25 +558,30 @@ export const StatCard: React.FC<StatCardProps> = ({
 }) => {
   const colors = {
     blue: {
-      bg: "bg-blue-50 dark:bg-blue-900/10",
-      text: "text-blue-600 dark:text-blue-400",
+      bg: "bg-blue-50",
+      text: "text-blue-600",
       iconBg: "bg-blue-600",
     },
     green: {
-      bg: "bg-green-50 dark:bg-green-900/10",
-      text: "text-green-600 dark:text-green-400",
+      bg: "bg-green-50",
+      text: "text-green-600",
       iconBg: "bg-green-600",
     },
     orange: {
-      bg: "bg-orange-50 dark:bg-orange-900/10",
-      text: "text-orange-600 dark:text-orange-400",
+      bg: "bg-orange-50",
+      text: "text-orange-600",
       iconBg: "bg-orange-600",
+    },
+    red: {
+      bg: "bg-red-50",
+      text: "text-red-600",
+      iconBg: "bg-red-600",
     },
   };
 
   return (
     <div
-      className={`p-4 rounded-xl ${colors[color].bg} border border-gray-100 dark:border-dark-border flex justify-between items-center`}
+      className={`p-4 rounded-xl ${colors[color].bg} border border-gray-100 flex justify-between items-center`}
     >
       <div>
         <p className={`text-sm font-medium mb-1 ${colors[color].text}`}>
@@ -657,7 +662,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
   return (
     <div className="space-y-3">
       <div className="flex justify-between">
-        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+        <p className="text-sm font-medium text-gray-700">
           {label}
         </p>
         <span className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">
@@ -666,7 +671,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       </div>
       <div
         onClick={() => inputRef.current?.click()}
-        className="border-2 border-dashed border-gray-300 dark:border-dark-border rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-bg/50 transition-all relative min-h-[140px] group"
+        className="border-2 border-dashed border-gray-300 rounded-2xl p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 transition-all relative min-h-[140px] group"
       >
         <input
           type="file"
@@ -687,11 +692,11 @@ export const FileUpload: React.FC<FileUploadProps> = ({
                 />
               </div>
             ) : (
-              <div className="w-14 h-14 bg-gray-100 dark:bg-dark-surface rounded-2xl flex items-center justify-center mb-3">
+              <div className="w-14 h-14 bg-gray-100 rounded-2xl flex items-center justify-center mb-3">
                 <FileText className="text-primary" size={28} />
               </div>
             )}
-            <p className="text-xs font-bold text-gray-700 dark:text-gray-200 text-center break-all px-4 line-clamp-1">
+            <p className="text-xs font-bold text-gray-700 text-center break-all px-4 line-clamp-1">
               {file.name}
             </p>
 
@@ -704,10 +709,10 @@ export const FileUpload: React.FC<FileUploadProps> = ({
           </div>
         ) : (
           <>
-            <div className="w-12 h-12 rounded-2xl bg-gray-50 dark:bg-dark-surface flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+            <div className="w-12 h-12 rounded-2xl bg-gray-50 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
               <Upload size={24} className="text-primary" />
             </div>
-            <p className="text-xs font-bold text-gray-600 dark:text-gray-400 text-center">
+            <p className="text-xs font-bold text-gray-600 text-center">
               Click or drag to upload
             </p>
             <p className="text-[10px] text-gray-400 mt-1.5 text-center font-medium uppercase tracking-widest">

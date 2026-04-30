@@ -1,83 +1,179 @@
-import React, { useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Plus, Search, Edit2, Trash2, Truck } from 'lucide-react';
-import { Card, Button, Input, Select, Badge, ExportDropdown } from '../../components/ui/Common';
-import { Table } from '../../components/ui/Table';
-import { Modal } from '../../components/ui/Modal';
-
-interface Vehicle {
-  id: string;
-  plateNumber: string;
-  model: string;
-  type: string;
-  status: 'active' | 'maintenance' | 'out_of_service';
-  fuelType: string;
-  mileage: string;
-  lastMaintenance: string;
-}
+import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { Plus, Search, Edit2, Trash2, Car, Fuel, Gauge } from "lucide-react";
+import {
+  Button,
+  Input,
+  ExportDropdown,
+  Badge,
+} from "../../components/ui/Common";
+import { Table, Column } from "../../components/ui/Table";
+import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
+import { VehicleFormModal } from "../../components/fleet/VehicleModal";
+import { fleetService } from "../../services/fleet.service";
+import { Vehicle } from "../../types";
+import { toast } from "sonner";
 
 export const Vehicles: React.FC = () => {
   const { t } = useTranslation();
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
+  const [vehicleIdToDelete, setVehicleIdToDelete] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
-  const vehicles: Vehicle[] = [
-    {
-      id: 'V-001',
-      plateNumber: 'ABC-123',
-      model: 'Toyota Corolla 2023',
-      type: 'Sedan',
-      status: 'active',
-      fuelType: 'Gasoline',
-      mileage: '15,000 km',
-      lastMaintenance: '2024-12-15',
-    },
-    {
-      id: 'V-002',
-      plateNumber: 'XYZ-789',
-      model: 'Hyundai Elantra 2022',
-      type: 'Sedan',
-      status: 'maintenance',
-      fuelType: 'Gasoline',
-      mileage: '45,000 km',
-      lastMaintenance: '2025-01-10',
-    },
-  ];
+  const fetchVehicles = async () => {
+    try {
+      setLoading(true);
+      const data = await fleetService.getVehicles();
+      setVehicles(data);
+    } catch (error) {
+      console.error("Failed to fetch vehicles:", error);
+      toast.error(t("failed_to_fetch_vehicles"));
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const columns = [
-    { header: t('plate_number'), accessorKey: 'plateNumber' as keyof Vehicle },
-    { header: t('model'), accessorKey: 'model' as keyof Vehicle },
-    { header: t('type'), accessorKey: 'type' as keyof Vehicle },
+  useEffect(() => {
+    fetchVehicles();
+  }, []);
+
+  const handleSave = async (data: Partial<Vehicle>) => {
+    try {
+      if (selectedVehicle) {
+        await fleetService.updateVehicle(selectedVehicle._id, data);
+        toast.success(t("vehicle_updated_successfully"));
+      } else {
+        await fleetService.createVehicle(data);
+        toast.success(t("vehicle_created_successfully"));
+      }
+      setIsModalOpen(false);
+      await fetchVehicles();
+    } catch (error) {
+      console.error("Failed to save vehicle:", error);
+      toast.error(t("failed_to_save_vehicle"));
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!vehicleIdToDelete) return;
+    try {
+      await fleetService.deleteVehicle(vehicleIdToDelete);
+      setIsDeleteModalOpen(false);
+      setVehicleIdToDelete(null);
+      toast.success(t("vehicle_deleted_successfully"));
+      await fetchVehicles();
+    } catch (error) {
+      console.error("Failed to delete vehicle:", error);
+      toast.error(t("failed_to_delete_vehicle"));
+    }
+  };
+
+  // Get status badge
+  const getStatusBadge = (status: string) => {
+    const statusMap: Record<string, { variant: "success" | "warning" | "danger" | "info" | "neutral"; label: string }> = {
+      Active: { variant: "success", label: t("active") },
+      "In Maintenance": { variant: "warning", label: t("in_maintenance") },
+      Inactive: { variant: "danger", label: t("inactive") },
+    };
+    const config = statusMap[status] || { variant: "neutral", label: status };
+    return <Badge variant={config.variant}>{config.label}</Badge>;
+  };
+
+  // Get fuel type badge
+  const getFuelTypeBadge = (fuelType: string) => {
+    const fuelMap: Record<string, { color: string; icon: any }> = {
+      Petrol: { color: "blue", icon: Fuel },
+      Diesel: { color: "amber", icon: Fuel },
+      Electric: { color: "green", icon: Fuel },
+      Gasoline: { color: "purple", icon: Fuel },
+    };
+    const config = fuelMap[fuelType] || { color: "gray", icon: Fuel };
+    const Icon = config.icon;
+    const colorClasses = {
+      blue: "bg-blue-50 text-blue-700 border-blue-200",
+      amber: "bg-amber-50 text-amber-700 border-amber-200",
+      green: "bg-green-50 text-green-700 border-green-200",
+      purple: "bg-purple-50 text-purple-700 border-purple-200",
+      gray: "bg-gray-50 text-gray-700 border-gray-200",
+    };
+    return (
+      <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${colorClasses[config.color as keyof typeof colorClasses]}`}>
+        <Icon size={12} />
+        <span>{fuelType}</span>
+      </div>
+    );
+  };
+
+  const filteredVehicles = vehicles.filter((v) => {
+    const matchesSearch =
+      v.plateNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      v.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      v.vehicleCode.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === "all" || v.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  const columns: Column<Vehicle>[] = [
     {
-      header: t('status'),
-      accessorKey: 'status' as keyof Vehicle,
-      render: (item: Vehicle) => (
-        <Badge
-          variant={
-            item.status === 'active' ? 'success' : item.status === 'maintenance' ? 'warning' : 'neutral'
-          }
-        >
-          {t(item.status)}
-        </Badge>
+      header: t("vehicle_code"),
+      accessorKey: "vehicleCode",
+      render: (item) => (
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
+            <Car size={14} className="text-indigo-600" />
+          </div>
+          <span className="font-medium text-sm text-gray-900">{item.vehicleCode}</span>
+        </div>
       ),
     },
-    { header: t('fuel_type'), accessorKey: 'fuelType' as keyof Vehicle },
-    { header: t('mileage'), accessorKey: 'mileage' as keyof Vehicle },
+    { header: t("plate_number"), accessorKey: "plateNumber" },
+    { header: t("model"), accessorKey: "model" },
+    { header: t("type"), accessorKey: "type" },
     {
-      header: t('actions'),
-      accessorKey: 'id' as keyof Vehicle,
-      render: (item: Vehicle) => (
+      header: t("fuel_type"),
+      accessorKey: "fuelType",
+      render: (item) => getFuelTypeBadge(item.fuelType),
+    },
+    {
+      header: t("mileage"),
+      accessorKey: "mileage",
+      render: (item) => (
+        <div className="flex items-center gap-1.5">
+          <Gauge size={14} className="text-gray-400" />
+          <span className="text-sm">{item.mileage.toLocaleString()} km</span>
+        </div>
+      ),
+    },
+    {
+      header: t("status"),
+      accessorKey: "status",
+      render: (item) => getStatusBadge(item.status),
+    },
+    {
+      header: t("actions"),
+      render: (item) => (
         <div className="flex items-center gap-2">
           <button
             onClick={() => {
               setSelectedVehicle(item);
               setIsModalOpen(true);
             }}
-            className="p-1 hover:bg-gray-100 rounded text-blue-600"
+            className="p-1.5 text-gray-400 hover:text-indigo-600 transition-colors border border-gray-200 rounded-lg"
           >
             <Edit2 size={16} />
           </button>
-          <button className="p-1 hover:bg-gray-100 rounded text-red-600">
+          <button
+            onClick={() => {
+              setVehicleIdToDelete(item._id);
+              setIsDeleteModalOpen(true);
+            }}
+            className="p-1.5 text-gray-400 hover:text-red-500 transition-colors border border-gray-200 rounded-lg"
+          >
             <Trash2 size={16} />
           </button>
         </div>
@@ -85,111 +181,84 @@ export const Vehicles: React.FC = () => {
     },
   ];
 
+  const statusOptions = [
+    { value: "all", label: t("all_statuses") },
+    { value: "Active", label: t("active") },
+    { value: "In Maintenance", label: t("in_maintenance") },
+    { value: "Inactive", label: t("inactive") },
+  ];
+
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('vehicles')}</h1>
-          <p className="text-gray-500">{t('manage_your_vehicles')}</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            {t("vehicles")}
+          </h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">
+            {t("manage_your_vehicles")}
+          </p>
         </div>
         <div className="flex gap-3">
-          <ExportDropdown />
+          <ExportDropdown data={vehicles} filename="vehicles" />
           <Button
             variant="primary"
             onClick={() => {
               setSelectedVehicle(null);
               setIsModalOpen(true);
             }}
+            className="bg-indigo-600 hover:bg-indigo-700"
           >
             <Plus size={18} />
-            {t('add_vehicle')}
+            {t("add_vehicle")}
           </Button>
         </div>
       </div>
 
-      <Card>
-        <div className="p-4 border-b border-gray-100 flex flex-wrap gap-4 items-center justify-between">
-          <div className="flex flex-wrap gap-4 items-center">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <Input placeholder={t('search_placeholder')} className="pl-10 w-64" />
-            </div>
-            <Select
-              options={[
-                { label: t('all_statuses'), value: 'all' },
-                { label: t('active'), value: 'active' },
-                { label: t('maintenance'), value: 'maintenance' },
-                { label: t('out_of_service'), value: 'out_of_service' },
-              ]}
-              className="w-40"
-            />
-          </div>
-        </div>
-        <Table 
-          columns={columns} 
-          data={vehicles} 
-          keyExtractor={(item) => item.id}
+      <div className="flex flex-wrap gap-4 items-center">
+        <Input
+          placeholder={t("search_placeholder")}
+          icon={<Search size={18} />}
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="max-w-md"
+          fullWidth={false}
         />
-      </Card>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-800 dark:text-white"
+        >
+          {statusOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </div>
 
-      <Modal
+      <Table
+        columns={columns}
+        data={filteredVehicles}
+        keyExtractor={(item) => item._id}
+        isLoading={loading}
+        selectable
+      />
+
+      <VehicleFormModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        title={selectedVehicle ? t('edit_vehicle') : t('add_vehicle')}
-      >
-        <form className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">{t('plate_number')} *</label>
-              <Input defaultValue={selectedVehicle?.plateNumber} required />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">{t('model')} *</label>
-              <Input defaultValue={selectedVehicle?.model} required />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">{t('type')} *</label>
-              <Input defaultValue={selectedVehicle?.type} required />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">{t('fuel_type')} *</label>
-              <Select
-                options={[
-                  { label: 'Gasoline', value: 'gasoline' },
-                  { label: 'Diesel', value: 'diesel' },
-                  { label: 'Electric', value: 'electric' },
-                ]}
-                defaultValue={selectedVehicle?.fuelType}
-                required
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">{t('mileage')} *</label>
-              <Input defaultValue={selectedVehicle?.mileage} required />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">{t('status')} *</label>
-              <Select
-                options={[
-                  { label: t('active'), value: 'active' },
-                  { label: t('maintenance'), value: 'maintenance' },
-                  { label: t('out_of_service'), value: 'out_of_service' },
-                ]}
-                defaultValue={selectedVehicle?.status}
-                required
-              />
-            </div>
-          </div>
-          <div className="flex justify-end gap-3 mt-6">
-            <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
-              {t('cancel')}
-            </Button>
-            <Button variant="primary" type="submit">
-              {selectedVehicle ? t('save') : t('add_vehicle')}
-            </Button>
-          </div>
-        </form>
-      </Modal>
+        selectedVehicle={selectedVehicle}
+        onSave={handleSave}
+      />
+
+      <ConfirmationModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleDelete}
+        title={t("delete_vehicle")}
+        message={t("are_you_sure_delete_vehicle")}
+      />
     </div>
   );
 };

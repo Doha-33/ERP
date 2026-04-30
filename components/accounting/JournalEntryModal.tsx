@@ -179,7 +179,7 @@ export const JournalEntryModal: React.FC<JournalEntryModalProps> = ({
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b dark:border-gray-700">
+                <tr className="border-b">
                   <th className="text-left py-2 px-1 w-1/3">{t('account')}</th>
                   <th className="text-left py-2 px-1 w-1/4">{t('description')}</th>
                   <th className="text-right py-2 px-1 w-1/6">{t('debit')}</th>
@@ -189,7 +189,7 @@ export const JournalEntryModal: React.FC<JournalEntryModalProps> = ({
               </thead>
               <tbody>
                 {fields.map((field, index) => (
-                  <tr key={field.id} className="border-b dark:border-gray-700 last:border-0 uppercase">
+                  <tr key={field.id} className="border-b last:border-0 uppercase">
                     <td className="py-2 px-1">
                       <Select
                         options={accountOptions}
@@ -235,7 +235,7 @@ export const JournalEntryModal: React.FC<JournalEntryModalProps> = ({
                 ))}
               </tbody>
               <tfoot>
-                <tr className="bg-gray-50 dark:bg-gray-800/50 font-bold">
+                <tr className="bg-gray-50 font-bold">
                   <td colSpan={2} className="py-2 px-1 text-right">{t('total')}</td>
                   <td className="py-2 px-1 text-right">{totalDebit.toLocaleString()}</td>
                   <td className="py-2 px-1 text-right">{totalCredit.toLocaleString()}</td>

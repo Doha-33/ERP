@@ -141,7 +141,7 @@ export const AccountModal: React.FC<AccountModalProps> = ({
             {...register('isActive')}
             className="rounded border-gray-300 text-primary focus:ring-primary h-4 w-4"
           />
-          <label htmlFor="isActive" className="text-sm text-gray-700 dark:text-gray-300">
+          <label htmlFor="isActive" className="text-sm text-gray-700">
             {t('active')}
           </label>
         </div>

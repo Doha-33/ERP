@@ -1139,9 +1139,12 @@ export interface Income {
   amount: number;
   source: string;
   companyName: string;
-  paymentMethod: 'CASH' | 'BANK' | 'CARD' | 'ONLINE' | string;
+  paymentMethod: 'Cash' | 'Bank Transfer' | 'Online' | string;
   note: string;
-  status: 'PENDING' | 'COMPLETED' | string;
+  incomeId: string;
+  vatPercent: number;
+  vatAmount: number;
+  status: 'Paid' | 'Unpaid' | 'partial' | string;
   isDeleted?: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -1150,10 +1153,14 @@ export interface Income {
 export interface Expense {
   id?: string;
   _id?: string;
+  expenseId: string;
   date: string;
   amount: number;
   vendorName: string;
   category: string;
+  payee: string;
+  vatPercent: number;
+  vatAmount: number;
   paymentMethod: 'CASH' | 'BANK' | 'CARD' | 'ONLINE' | string;
   note: string;
   status: 'PENDING' | 'COMPLETED' | string;
@@ -1344,4 +1351,130 @@ export interface Disposal {
   attachments?: string[];
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface Vehicle {
+  _id: string;
+  vehicleCode: string;
+  plateNumber: string;
+  model: string;
+  type: string;
+  fuelType: string;
+  mileage: number;
+  status: 'Active' | 'In Maintenance' | 'Inactive' | string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Driver {
+  _id: string;
+  driverCode: string;
+  driverName: string;
+  licenseNumber: string;
+  licenseExpiry: string;
+  phone: string;
+  assignedVehicleId: string | Vehicle;
+  status: 'Active' | 'On Trip' | 'Inactive' | string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Trip {
+  _id: string;
+  tripCode: string;
+  vehicleId: string | Vehicle;
+  driverId: string | Driver;
+  startLocation: string;
+  endLocation: string;
+  startTime: string;
+  endTime?: string | null;
+  fuelUsed: number;
+  distance: number;
+  status: 'Ongoing' | 'Completed' | 'Cancelled' | string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+
+export interface CostCenter {
+  _id: string;
+  name: string;
+  code: string;
+  description: string;
+  status: 'Active' | 'Inactive' | string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VehicleBooking {
+  _id: string;
+  vehicleId: string | Vehicle;
+  requestedBy: string;
+  startDate: string;
+  endDate: string;
+  purpose: string;
+  status: 'Pending' | 'Approved' | 'Rejected' | 'Completed' | string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VehicleExpense {
+  _id: string;
+  vehicleId: string | Vehicle;
+  type: string;
+  amount: number;
+  date: string;
+  description: string;
+  status: 'Paid' | 'Pending' | string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Accident {
+  _id: string;
+  vehicleId: string | Vehicle;
+  driverId: string | Driver;
+  date: string;
+  location: string;
+  damageLevel: 'Low' | 'Medium' | 'High' | string;
+  actualCost: number;
+  insuranceProvider: string;
+  status: 'Open' | 'Closed' | string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MaintenanceRecord {
+  _id: string;
+  vehicleId: string | Vehicle;
+  type: string;
+  date: string;
+  cost: number;
+  odometer: number;
+  provider: string;
+  status: 'Scheduled' | 'Completed' | 'Cancelled' | string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FuelLog {
+  _id: string;
+  vehicleId: string | Vehicle;
+  driverId: string | Driver;
+  date: string;
+  quantity: number;
+  cost: number;
+  odometer: number;
+  station: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FleetKPIs {
+  totalVehicles: number;
+  activeVehicles: number;
+  totalTrips: number;
+  totalFuelCost: number;
+  averageFuelConsumption: number;
+  maintenanceCosts: number;
 }

@@ -113,7 +113,7 @@ export const TaxModal: React.FC<TaxModalProps> = ({
                 {...register('isActive')}
                 className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary/20"
             />
-            <label htmlFor="isActive" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label htmlFor="isActive" className="text-sm font-medium text-gray-700">
                 {t('active')}
             </label>
         </div>

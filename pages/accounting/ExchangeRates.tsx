@@ -74,8 +74,7 @@ export const ExchangeRates: React.FC = () => {
         </div>
       </div>
 
-      <Card>
-        <div className="flex flex-col md:flex-row justify-between gap-4 mb-4">
+      <div className="p-4 flex flex-wrap gap-4 items-center bg-white rounded-lg border border-gray-100">
           <Input 
             placeholder={t('search_currencies')} 
             icon={<Search size={18} />} 
@@ -90,7 +89,6 @@ export const ExchangeRates: React.FC = () => {
           keyExtractor={(item) => item._id || ''} 
           isLoading={accountingLoading}
         />
-      </Card>
 
       <Modal 
         isOpen={isAddModalOpen} 

@@ -1,101 +1,225 @@
-import React, { useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Plus, Search, Edit2, Trash2 } from 'lucide-react';
-import { Card, Button, Input, Select, Badge, ExportDropdown, TextArea } from '../../components/ui/Common';
-import { Table } from '../../components/ui/Table';
-import { Modal } from '../../components/ui/Modal';
-
-interface Accident {
-  id: string;
-  vehicle: string;
-  driver: string;
-  date: string;
-  location: string;
-  damageLevel: 'high' | 'medium' | 'low';
-  actualCost: string;
-  insuranceCompany: string;
-  status: 'open' | 'under_review' | 'closed';
-}
+import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { Plus, Search, Edit2, Trash2, MapPin, DollarSign, Shield, Calendar } from "lucide-react";
+import {
+  Button,
+  Input,
+  ExportDropdown,
+  Badge,
+} from "../../components/ui/Common";
+import { Table, Column } from "../../components/ui/Table";
+import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
+import { AccidentFormModal } from "../../components/fleet/AccidentFormModal";
+import { fleetService } from "../../services/fleet.service";
+import { Accident, Vehicle, Driver } from "../../types";
+import { toast } from "sonner";
 
 export const Accidents: React.FC = () => {
   const { t } = useTranslation();
+  const [accidents, setAccidents] = useState<Accident[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedAccident, setSelectedAccident] = useState<Accident | null>(null);
+  const [accidentIdToDelete, setAccidentIdToDelete] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
-  const accidents: Accident[] = [
-    {
-      id: 'ACC-001',
-      vehicle: 'V-001 (Toyota Corolla)',
-      driver: 'Ahmed Mohamed',
-      date: '2025-01-10',
-      location: 'Cairo-Alex Road',
-      damageLevel: 'medium',
-      actualCost: '15,000 EGP',
-      insuranceCompany: 'Misr Insurance',
-      status: 'under_review',
-    },
-    {
-      id: 'ACC-002',
-      vehicle: 'V-002 (Hyundai Elantra)',
-      driver: 'Sayed Ali',
-      date: '2025-01-12',
-      location: 'Nasr City',
-      damageLevel: 'high',
-      actualCost: '45,000 EGP',
-      insuranceCompany: 'AXA Insurance',
-      status: 'open',
-    },
-  ];
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [accidentsData, vehiclesData, driversData] = await Promise.all([
+        fleetService.getAccidents(),
+        fleetService.getVehicles(),
+        fleetService.getDrivers(),
+      ]);
+      setAccidents(accidentsData);
+      setVehicles(vehiclesData);
+      setDrivers(driversData);
+    } catch (error) {
+      console.error("Failed to fetch data:", error);
+      toast.error(t("failed_to_fetch_data"));
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const columns = [
-    { header: t('accident_id'), accessorKey: 'id' as keyof Accident },
-    { header: t('vehicle'), accessorKey: 'vehicle' as keyof Accident },
-    { header: t('driver'), accessorKey: 'driver' as keyof Accident },
-    { header: t('date'), accessorKey: 'date' as keyof Accident },
-    { header: t('location'), accessorKey: 'location' as keyof Accident },
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleSave = async (data: Partial<Accident>) => {
+    try {
+      if (selectedAccident) {
+        await fleetService.updateAccident(selectedAccident._id, data);
+        toast.success(t("accident_updated_successfully"));
+      } else {
+        await fleetService.createAccident(data);
+        toast.success(t("accident_created_successfully"));
+      }
+      setIsModalOpen(false);
+      await fetchData();
+    } catch (error) {
+      console.error("Failed to save accident:", error);
+      toast.error(t("failed_to_save_accident"));
+      throw error;
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!accidentIdToDelete) return;
+    try {
+      await fleetService.deleteAccident(accidentIdToDelete);
+      setIsDeleteModalOpen(false);
+      setAccidentIdToDelete(null);
+      toast.success(t("accident_deleted_successfully"));
+      await fetchData();
+    } catch (error) {
+      console.error("Failed to delete accident:", error);
+      toast.error(t("failed_to_delete_accident"));
+    }
+  };
+
+  // Get damage level badge
+  const getDamageLevelBadge = (level: string) => {
+    const levelMap: Record<string, { variant: "danger" | "warning" | "neutral" | "info"; label: string }> = {
+      High: { variant: "danger", label: t("high") },
+      Medium: { variant: "warning", label: t("medium") },
+      Low: { variant: "info", label: t("low") },
+    };
+    const config = levelMap[level] || { variant: "neutral", label: level };
+    return <Badge variant={config.variant}>{config.label}</Badge>;
+  };
+
+  // Get status badge
+  const getStatusBadge = (status: string) => {
+    const statusMap: Record<string, { variant: "danger" | "success" | "warning"; label: string }> = {
+      Open: { variant: "danger", label: t("open") },
+      Closed: { variant: "success", label: t("closed") },
+      "Under Review": { variant: "warning", label: t("under_review") },
+    };
+    const config = statusMap[status] || { variant: "warning", label: status };
+    return <Badge variant={config.variant}>{config.label}</Badge>;
+  };
+
+  const filteredAccidents = accidents.filter((a) => {
+    const matchesSearch =
+      a.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      a.insuranceProvider.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === "all" || a.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  const columns: Column<Accident>[] = [
     {
-      header: t('damage_level'),
-      accessorKey: 'damageLevel' as keyof Accident,
-      render: (item: Accident) => (
-        <Badge
-          variant={
-            item.damageLevel === 'high' ? 'danger' : item.damageLevel === 'medium' ? 'warning' : 'neutral'
-          }
-        >
-          {t(item.damageLevel)}
-        </Badge>
+      header: t("date"),
+      accessorKey: "date",
+      render: (item) => (
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
+            <Calendar size={14} className="text-red-600" />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-sm font-medium text-gray-900">
+              {new Date(item.date).toLocaleDateString()}
+            </span>
+            <span className="text-xs text-gray-500">
+              {new Date(item.date).toLocaleTimeString()}
+            </span>
+          </div>
+        </div>
       ),
     },
-    { header: t('actual_cost'), accessorKey: 'actualCost' as keyof Accident },
-    { header: t('insurance_company'), accessorKey: 'insuranceCompany' as keyof Accident },
     {
-      header: t('status'),
-      accessorKey: 'status' as keyof Accident,
-      render: (item: Accident) => (
-        <Badge
-          variant={
-            item.status === 'open' ? 'danger' : item.status === 'under_review' ? 'warning' : 'success'
-          }
-        >
-          {t(item.status)}
-        </Badge>
+      header: t("vehicle"),
+      render: (item) => {
+        const vehicle = typeof item.vehicleId === "object" ? item.vehicleId : null;
+        return vehicle ? (
+          <div className="flex flex-col">
+            <span className="text-sm font-medium">{vehicle.plateNumber}</span>
+            <span className="text-xs text-gray-500">{vehicle.model}</span>
+          </div>
+        ) : (
+          <span className="text-sm text-gray-400">{t("unknown")}</span>
+        );
+      },
+    },
+    {
+      header: t("driver"),
+      render: (item) => {
+        const driver = typeof item.driverId === "object" ? item.driverId : null;
+        return driver ? (
+          <div className="flex flex-col">
+            <span className="text-sm font-medium">{driver.driverName}</span>
+            <span className="text-xs text-gray-500">{driver.driverCode}</span>
+          </div>
+        ) : (
+          <span className="text-sm text-gray-400">{t("unknown")}</span>
+        );
+      },
+    },
+    {
+      header: t("location"),
+      accessorKey: "location",
+      render: (item) => (
+        <div className="flex items-center gap-1.5">
+          <MapPin size={14} className="text-gray-400" />
+          <span className="text-sm">{item.location}</span>
+        </div>
       ),
     },
     {
-      header: t('actions'),
-      accessorKey: 'id' as keyof Accident,
-      render: (item: Accident) => (
+      header: t("damage_level"),
+      accessorKey: "damageLevel",
+      render: (item) => getDamageLevelBadge(item.damageLevel),
+    },
+    {
+      header: t("actual_cost"),
+      accessorKey: "actualCost",
+      render: (item) => (
+        <div className="flex items-center gap-1.5">
+          <DollarSign size={14} className="text-gray-400" />
+          <span className="text-sm font-medium">{item.actualCost.toLocaleString()} EGP</span>
+        </div>
+      ),
+    },
+    {
+      header: t("insurance_provider"),
+      accessorKey: "insuranceProvider",
+      render: (item) => (
+        <div className="flex items-center gap-1.5">
+          <Shield size={14} className="text-gray-400" />
+          <span className="text-sm">{item.insuranceProvider}</span>
+        </div>
+      ),
+    },
+    {
+      header: t("status"),
+      accessorKey: "status",
+      render: (item) => getStatusBadge(item.status),
+    },
+    {
+      header: t("actions"),
+      render: (item) => (
         <div className="flex items-center gap-2">
           <button
             onClick={() => {
               setSelectedAccident(item);
               setIsModalOpen(true);
             }}
-            className="p-1 hover:bg-gray-100 rounded text-blue-600"
+            className="p-1.5 text-gray-400 hover:text-indigo-600 transition-colors border border-gray-200 rounded-lg"
           >
             <Edit2 size={16} />
           </button>
-          <button className="p-1 hover:bg-gray-100 rounded text-red-600">
+          <button
+            onClick={() => {
+              setAccidentIdToDelete(item._id);
+              setIsDeleteModalOpen(true);
+            }}
+            className="p-1.5 text-gray-400 hover:text-red-500 transition-colors border border-gray-200 rounded-lg"
+          >
             <Trash2 size={16} />
           </button>
         </div>
@@ -103,133 +227,89 @@ export const Accidents: React.FC = () => {
     },
   ];
 
+  const statusOptions = [
+    { value: "all", label: t("all_statuses") },
+    { value: "Under Review", label: t("under_review") },
+    { value: "Open", label: t("open") },
+    { value: "Closed", label: t("closed") },
+  ];
+
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('accidents')}</h1>
-          <p className="text-gray-500">{t('manage_your_accidents')}</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            {t("accidents")}
+          </h1>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">
+            {t("manage_your_accidents")}
+          </p>
         </div>
         <div className="flex gap-3">
-          <ExportDropdown />
+          <ExportDropdown data={accidents} filename="accidents" />
           <Button
             variant="primary"
             onClick={() => {
               setSelectedAccident(null);
               setIsModalOpen(true);
             }}
+            className="bg-indigo-600 hover:bg-indigo-700"
           >
             <Plus size={18} />
-            {t('add_accident')}
+            {t("add_accident")}
           </Button>
         </div>
       </div>
 
-      <Card>
-        <div className="p-4 border-b border-gray-100 flex flex-wrap gap-4 items-center justify-between">
-          <div className="flex flex-wrap gap-4 items-center">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <Input placeholder={t('search_placeholder')} className="pl-10 w-64" />
-            </div>
-            <Select
-              options={[
-                { label: t('all_statuses'), value: 'all' },
-                { label: t('open'), value: 'open' },
-                { label: t('under_review'), value: 'under_review' },
-                { label: t('closed'), value: 'closed' },
-              ]}
-              className="w-40"
-            />
-          </div>
-        </div>
-        <Table 
-          columns={columns} 
-          data={accidents} 
-          keyExtractor={(item) => item.id}
+      <div className="flex flex-wrap gap-4 items-center">
+        <Input
+          placeholder={t("search_accident_placeholder")}
+          icon={<Search size={18} />}
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="max-w-md"
+          fullWidth={false}
         />
-      </Card>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-800 dark:text-white"
+        >
+          {statusOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </div>
 
-      <Modal
+      <Table
+        columns={columns}
+        data={filteredAccidents}
+        keyExtractor={(item) => item._id}
+        isLoading={loading}
+        selectable
+      />
+
+      <AccidentFormModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title={selectedAccident ? t('edit_accident') : t('add_accident')}
-      >
-        <form className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">{t('vehicle')} *</label>
-              <Select
-                options={[
-                  { label: 'V-001 (Toyota Corolla)', value: 'V-001' },
-                  { label: 'V-002 (Hyundai Elantra)', value: 'V-002' },
-                ]}
-                defaultValue={selectedAccident?.vehicle}
-                required
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">{t('driver')} *</label>
-              <Select
-                options={[
-                  { label: 'Ahmed Mohamed', value: 'D-001' },
-                  { label: 'Sayed Ali', value: 'D-002' },
-                ]}
-                defaultValue={selectedAccident?.driver}
-                required
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">{t('date')} *</label>
-              <Input type="date" defaultValue={selectedAccident?.date} required />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">{t('location')} *</label>
-              <Input defaultValue={selectedAccident?.location} required />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">{t('damage_level')} *</label>
-              <Select
-                options={[
-                  { label: t('low'), value: 'low' },
-                  { label: t('medium'), value: 'medium' },
-                  { label: t('high'), value: 'high' },
-                ]}
-                defaultValue={selectedAccident?.damageLevel}
-                required
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">{t('actual_cost')} *</label>
-              <Input defaultValue={selectedAccident?.actualCost} required />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">{t('insurance_company')} *</label>
-              <Input defaultValue={selectedAccident?.insuranceCompany} required />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">{t('status')} *</label>
-              <Select
-                options={[
-                  { label: t('open'), value: 'open' },
-                  { label: t('under_review'), value: 'under_review' },
-                  { label: t('closed'), value: 'closed' },
-                ]}
-                defaultValue={selectedAccident?.status}
-                required
-              />
-            </div>
-          </div>
-          <div className="flex justify-end gap-3 mt-6">
-            <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
-              {t('cancel')}
-            </Button>
-            <Button variant="primary" type="submit">
-              {selectedAccident ? t('save') : t('add_accident')}
-            </Button>
-          </div>
-        </form>
-      </Modal>
+        onClose={() => {
+          setIsModalOpen(false);
+          setSelectedAccident(null);
+        }}
+        selectedAccident={selectedAccident}
+        vehicles={vehicles}
+        drivers={drivers}
+        onSave={handleSave}
+      />
+
+      <ConfirmationModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleDelete}
+        title={t("delete_accident")}
+        message={t("are_you_sure_delete_accident")}
+      />
     </div>
   );
 };
