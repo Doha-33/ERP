@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { 
   RefreshCcw, 
   Search, 
@@ -8,243 +8,294 @@ import {
   ArrowRight, 
   Layers,
   Activity,
-  User
-} from 'lucide-react';
-import { Card, Button, Input, Select, Badge, ExportDropdown } from '../../components/ui/Common';
-import { Table, Column } from '../../components/ui/Table';
-
-interface WIPItem {
-  id: string;
-  orderNo: string;
-  productName: string;
-  currentOperation: string;
-  workCenter: string;
-  progress: number;
-  startTime: string;
-  estimatedCompletion: string;
-  assignedTo: string;
-  status: 'on_track' | 'delayed' | 'at_risk';
-}
+  Eye,
+  Package,
+  CheckCircle2,
+  Loader2
+} from "lucide-react";
+import { Card, Button, Input, Badge, ExportDropdown } from "../../components/ui/Common";
+import { Table, Column } from "../../components/ui/Table";
+import { WIPDetailsModal } from "../../components/manufacturing/WIPDetailsModal";
+import {manufacturingService} from "../../services/manufacturing.service";
+import { WorkInProgress as WIPType } from "../../types";
+import { toast } from "sonner";
 
 export const WorkInProgress: React.FC = () => {
   const { t } = useTranslation();
+  const [loading, setLoading] = useState(true);
+  const [wipItems, setWipItems] = useState<WIPType[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [selectedItem, setSelectedItem] = useState<WIPType | null>(null);
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
 
-  const wipData: WIPItem[] = [
-    {
-      id: '1',
-      orderNo: 'MO/2024/001',
-      productName: 'Laptop Lenovo',
-      currentOperation: 'Assembly',
-      workCenter: 'Assembly Line A',
-      progress: 65,
-      startTime: '2024-03-23 08:00',
-      estimatedCompletion: '2024-03-23 16:00',
-      assignedTo: 'Ahmed Ali',
-      status: 'on_track',
-    },
-    {
-      id: '2',
-      orderNo: 'MO/2024/002',
-      productName: 'Office Chair',
-      currentOperation: 'Cutting',
-      workCenter: 'Cutting Machine 2',
-      progress: 30,
-      startTime: '2024-03-23 09:30',
-      estimatedCompletion: '2024-03-23 14:00',
-      assignedTo: 'Sara Mohamed',
-      status: 'delayed',
-    },
-    {
-      id: '3',
-      orderNo: 'MO/2024/003',
-      productName: 'Desk Lamp',
-      currentOperation: 'Quality Check',
-      workCenter: 'Packaging Unit',
-      progress: 90,
-      startTime: '2024-03-23 07:00',
-      estimatedCompletion: '2024-03-23 11:00',
-      assignedTo: 'John Doe',
-      status: 'at_risk',
-    },
-  ];
+  useEffect(() => {
+    fetchWIP();
+  }, []);
 
-  const getStatusBadge = (status: WIPItem['status']) => {
-    const variants = {
-      on_track: 'success',
-      delayed: 'danger',
-      at_risk: 'warning',
-    } as const;
-
-    return <Badge variant={variants[status]}>{t(status)}</Badge>;
+  const fetchWIP = async () => {
+    try {
+      setLoading(true);
+      const data = await manufacturingService.getWIPs();
+      setWipItems(data);
+    } catch (error) {
+      console.error("Failed to fetch WIP:", error);
+      toast.error(t("failed_to_fetch_wip"));
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const columns: Column<WIPItem>[] = [
-    { header: t('order_no'), accessorKey: 'orderNo' },
-    { header: t('product_name'), accessorKey: 'productName' },
-    { header: t('current_operation'), accessorKey: 'currentOperation' },
-    { header: t('work_center'), accessorKey: 'workCenter' },
-    { 
-      header: t('progress'), 
-      accessorKey: 'progress',
-      render: (item: WIPItem) => (
-        <div className="flex items-center gap-2 min-w-[120px]">
-          <div className="flex-1 h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-            <div 
-              className={`h-full transition-all duration-500 ${
-                item.status === 'on_track' ? 'bg-green-500' : 
-                item.status === 'delayed' ? 'bg-red-500' : 'bg-orange-500'
-              }`}
-              style={{ width: `${item.progress}%` }}
-            />
+  const calculateProgress = (item: WIPType) => {
+    if (!item.planned_qty || item.planned_qty === 0) return 0;
+    return Math.round((item.produced_qty / item.planned_qty) * 100);
+  };
+
+  const getStatus = (item: WIPType) => {
+    const progress = calculateProgress(item);
+    if (progress >= 100) return { label: t("completed"), variant: "success" as const };
+    return { label: t("in_progress"), variant: "info" as const };
+  };
+
+  const getStatusBadge = (item: WIPType) => {
+    const status = getStatus(item);
+    return <Badge variant={status.variant}>{status.label}</Badge>;
+  };
+
+  const filteredItems = wipItems.filter((item) => {
+    const matchesSearch =
+      item.mo_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.product?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === "all" || 
+      (statusFilter === "completed" && calculateProgress(item) >= 100) ||
+      (statusFilter === "in_progress" && calculateProgress(item) < 100);
+    return matchesSearch && matchesStatus;
+  });
+
+  // Summary statistics
+  const totalActiveTasks = wipItems.filter(item => calculateProgress(item) < 100).length;
+  const avgProgress = wipItems.length > 0 
+    ? Math.round(wipItems.reduce((acc, curr) => acc + calculateProgress(curr), 0) / wipItems.length)
+    : 0;
+  const totalScrap = wipItems.reduce((acc, curr) => acc + curr.scrap_qty, 0);
+  const totalProduced = wipItems.reduce((acc, curr) => acc + curr.produced_qty, 0);
+  const totalPlanned = wipItems.reduce((acc, curr) => acc + curr.planned_qty, 0);
+
+  const columns: Column<WIPType>[] = [
+    {
+      header: t("mo_number"),
+      accessorKey: "mo_number",
+      render: (item) => (
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
+            <Package size={14} className="text-indigo-600" />
           </div>
-          <span className="text-xs font-medium dark:text-gray-300">{item.progress}%</span>
+          <div className="flex flex-col">
+            <span className="font-medium text-sm text-gray-900">{item.mo_number}</span>
+            <span className="text-xs text-gray-500">{item.product}</span>
+          </div>
         </div>
-      )
-    },
-    { header: t('estimated_completion'), accessorKey: 'estimatedCompletion' },
-    {
-      header: t('status'),
-      accessorKey: 'status',
-      render: (item: WIPItem) => getStatusBadge(item.status),
+      ),
     },
     {
-      header: t('actions'),
-      accessorKey: 'id',
-      render: (item: WIPItem) => (
-        <Button variant="secondary" size="sm">
-          {t('view_details')}
-        </Button>
+      header: t("production"),
+      render: (item) => (
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500">{t("planned")}:</span>
+            <span className="text-sm font-medium">{item.planned_qty.toLocaleString()}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500">{t("produced")}:</span>
+            <span className="text-sm font-medium text-green-600">{item.produced_qty.toLocaleString()}</span>
+          </div>
+          {item.scrap_qty > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500">{t("scrap")}:</span>
+              <span className="text-sm font-medium text-red-600">{item.scrap_qty.toLocaleString()}</span>
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      header: t("progress"),
+      render: (item) => {
+        const progress = calculateProgress(item);
+        return (
+          <div className="flex flex-col gap-1 min-w-[120px]">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-gray-500">{progress}%</span>
+            </div>
+            <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div 
+                className={`h-full transition-all duration-500 rounded-full ${
+                  progress >= 100 ? "bg-green-500" : "bg-indigo-600"
+                }`}
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
+        );
+      }
+    },
+    {
+      header: t("dates"),
+      render: (item) => (
+        <div className="flex flex-col gap-0.5">
+          <div className="flex items-center gap-1.5">
+            <Clock size={12} className="text-gray-400" />
+            <span className="text-xs">Start: {new Date(item.start_date).toLocaleDateString()}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Clock size={12} className="text-gray-400" />
+            <span className="text-xs">End: {new Date(item.expected_end_date).toLocaleDateString()}</span>
+          </div>
+        </div>
+      ),
+    },
+    {
+      header: t("status"),
+      render: (item) => getStatusBadge(item),
+    },
+    {
+      header: t("actions"),
+      render: (item) => (
+        <button
+          onClick={() => {
+            setSelectedItem(item);
+            setIsDetailsModalOpen(true);
+          }}
+          className="p-1.5 text-gray-400 hover:text-indigo-600 transition-colors border border-gray-200 rounded-lg"
+        >
+          <Eye size={16} />
+        </button>
       ),
     },
   ];
 
+  const statusOptions = [
+    { value: "all", label: t("all_tasks") },
+    { value: "in_progress", label: t("in_progress") },
+    { value: "completed", label: t("completed") },
+  ];
+
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('work_in_progress')}</h1>
-          <p className="text-gray-500 dark:text-gray-400">{t('monitor_active_production')}</p>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {t("work_in_progress")}
+          </h1>
+          <p className="text-gray-500 mt-1">
+            {t("monitor_active_production")}
+          </p>
         </div>
         <div className="flex gap-3">
-          <ExportDropdown />
-          <Button variant="secondary">
+          <ExportDropdown data={wipItems} filename="work-in-progress" />
+          <Button 
+            variant="secondary" 
+            onClick={fetchWIP}
+            className="border-gray-200"
+          >
             <RefreshCcw size={18} />
-            {t('refresh')}
+            {t("refresh")}
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="p-4 border-l-4 border-l-blue-500">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
-              <Layers size={20} />
+            <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center">
+              <Activity size={18} className="text-indigo-600" />
             </div>
             <div>
-              <p className="text-sm text-gray-500">{t('active_tasks')}</p>
-              <p className="text-xl font-bold">18</p>
+              <p className="text-xs text-gray-500">{t("active_tasks")}</p>
+              <p className="text-xl font-bold text-gray-900">{totalActiveTasks}</p>
             </div>
-          </div>
-        </Card>
-        <Card className="p-4 border-l-4 border-l-green-500">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-green-50 text-green-600 rounded-lg">
-              <Activity size={20} />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">{t('on_track')}</p>
-              <p className="text-xl font-bold">14</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-4 border-l-4 border-l-red-500">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-red-50 text-red-600 rounded-lg">
-              <AlertCircle size={20} />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">{t('delayed')}</p>
-              <p className="text-xl font-bold">4</p>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      <Card>
-        <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex flex-wrap gap-4 items-center justify-between">
-          <div className="flex flex-wrap gap-4 items-center">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <Input placeholder={t('search_placeholder')} className="pl-10 w-64" />
-            </div>
-            <Select
-              options={[
-                { label: t('all_statuses'), value: 'all' },
-                { label: t('on_track'), value: 'on_track' },
-                { label: t('delayed'), value: 'delayed' },
-                { label: t('at_risk'), value: 'at_risk' },
-              ]}
-              className="w-48"
-            />
           </div>
         </div>
-        <Table 
-          columns={columns} 
-          data={wipData} 
-          keyExtractor={(item) => item.id}
+        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center">
+              <CheckCircle2 size={18} className="text-green-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">{t("avg_progress")}</p>
+              <p className="text-xl font-bold text-gray-900">{avgProgress}%</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-orange-50 rounded-lg flex items-center justify-center">
+              <Layers size={18} className="text-orange-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">{t("total_produced")}</p>
+              <p className="text-xl font-bold text-gray-900">{totalProduced.toLocaleString()}</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center">
+              <AlertCircle size={18} className="text-red-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">{t("total_scrap")}</p>
+              <p className="text-xl font-bold text-red-600">{totalScrap.toLocaleString()}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-4 items-center">
+        <Input
+          placeholder={t("search_wip_placeholder")}
+          icon={<Search size={18} />}
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="max-w-md"
+          fullWidth={false}
+        />
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          {statusOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Table */}
+      <Card className="bg-white">
+        <Table
+          columns={columns}
+          data={filteredItems}
+          keyExtractor={(item) => item._id}
+          isLoading={loading}
+          selectable
         />
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="p-6">
-          <h3 className="text-lg font-semibold mb-6 dark:text-white">{t('work_center_load')}</h3>
-          <div className="space-y-6">
-            {[
-              { name: 'Assembly Line A', load: 85, color: 'bg-blue-500' },
-              { name: 'Cutting Machine 2', load: 45, color: 'bg-green-500' },
-              { name: 'Packaging Unit', load: 92, color: 'bg-orange-500' },
-              { name: 'Painting Booth', load: 20, color: 'bg-purple-500' },
-            ].map((wc) => (
-              <div key={wc.name} className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="font-medium dark:text-gray-300">{wc.name}</span>
-                  <span className="text-gray-500">{wc.load}%</span>
-                </div>
-                <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full ${wc.color}`} 
-                    style={{ width: `${wc.load}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-
-        <Card className="p-6">
-          <h3 className="text-lg font-semibold mb-6 dark:text-white">{t('recent_updates')}</h3>
-          <div className="space-y-6">
-            {[
-              { user: 'Ahmed Ali', action: 'completed_operation', target: 'Cutting', time: '10 mins ago' },
-              { user: 'Sara Mohamed', action: 'started_operation', target: 'Assembly', time: '25 mins ago' },
-              { user: 'System', action: 'delayed_alert', target: 'MO/2024/002', time: '1 hour ago' },
-              { user: 'John Doe', action: 'quality_check_passed', target: 'Desk Lamp', time: '2 hours ago' },
-            ].map((update, i) => (
-              <div key={i} className="flex gap-4">
-                <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-500">
-                  <User size={20} />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm dark:text-gray-300">
-                    <span className="font-semibold">{update.user}</span> {t(update.action)} <span className="font-semibold">{update.target}</span>
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">{update.time}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
+      {/* Details Modal */}
+      <WIPDetailsModal
+        isOpen={isDetailsModalOpen}
+        onClose={() => {
+          setIsDetailsModalOpen(false);
+          setSelectedItem(null);
+        }}
+        item={selectedItem}
+      />
     </div>
   );
 };

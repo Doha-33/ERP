@@ -94,7 +94,6 @@ export const CompanyPage: React.FC = () => {
         </div>
       </div>
 
-      <Card className="min-h-[500px]">
         {/* Toolbar */}
         <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
            <div className="w-full md:w-80 relative">
@@ -137,7 +136,6 @@ export const CompanyPage: React.FC = () => {
            minWidth="min-w-[1000px]" 
            emptyMessage="No companies found matching your filters"
         />
-      </Card>
 
       <CompanyModal 
          isOpen={isModalOpen}

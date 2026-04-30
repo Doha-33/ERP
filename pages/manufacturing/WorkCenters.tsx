@@ -1,104 +1,214 @@
-import React, { useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Plus, Search, Edit2, Trash2, Building2, Clock, Zap, AlertCircle } from 'lucide-react';
-import { Card, Button, Input, Select, Badge, ExportDropdown, TextArea } from '../../components/ui/Common';
-import { Table, Column } from '../../components/ui/Table';
-import { Modal } from '../../components/ui/Modal';
-
-interface WorkCenter {
-  id: string;
-  name: string;
-  code: string;
-  capacity: number;
-  efficiency: number;
-  oee: number;
-  status: 'active' | 'maintenance' | 'inactive';
-  location: string;
-}
+import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { 
+  Plus, Search, Edit2, Trash2, Building2, 
+  Clock, Zap, AlertCircle, Gauge, Target, MapPin
+} from "lucide-react";
+import {
+  Button,
+  Input,
+  ExportDropdown,
+  Badge,
+} from "../../components/ui/Common";
+import { Table, Column } from "../../components/ui/Table";
+import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
+import { WorkCenterFormModal } from "../../components/manufacturing/WorkCenterFormModal";
+import {manufacturingService} from "../../services/manufacturing.service";
+import { WorkCenter as WCType } from "../../types";
+import { toast } from "sonner";
 
 export const WorkCenters: React.FC = () => {
   const { t } = useTranslation();
+  const [workCenters, setWorkCenters] = useState<WCType[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedWC, setSelectedWC] = useState<WorkCenter | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [selectedWorkCenter, setSelectedWorkCenter] = useState<WCType | null>(null);
+  const [workCenterIdToDelete, setWorkCenterIdToDelete] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
-  const wcData: WorkCenter[] = [
-    {
-      id: '1',
-      name: 'Assembly Line A',
-      code: 'WC-001',
-      capacity: 100,
-      efficiency: 95,
-      oee: 88,
-      status: 'active',
-      location: 'Floor 1',
-    },
-    {
-      id: '2',
-      name: 'Cutting Machine 2',
-      code: 'WC-002',
-      capacity: 50,
-      efficiency: 85,
-      oee: 75,
-      status: 'maintenance',
-      location: 'Floor 1',
-    },
-    {
-      id: '3',
-      name: 'Packaging Unit',
-      code: 'WC-003',
-      capacity: 200,
-      efficiency: 98,
-      oee: 92,
-      status: 'active',
-      location: 'Floor 2',
-    },
-  ];
-
-  const getStatusBadge = (status: WorkCenter['status']) => {
-    const variants = {
-      active: 'success',
-      maintenance: 'warning',
-      inactive: 'danger',
-    } as const;
-
-    return <Badge variant={variants[status]}>{t(status)}</Badge>;
+  const fetchWorkCenters = async () => {
+    try {
+      setLoading(true);
+      const data = await manufacturingService.getWorkCenters();
+      setWorkCenters(data);
+    } catch (error) {
+      console.error("Failed to fetch work centers:", error);
+      toast.error(t("failed_to_fetch_wc"));
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const columns: Column<WorkCenter>[] = [
-    { header: t('name'), accessorKey: 'name' },
-    { header: t('code'), accessorKey: 'code' },
-    { header: t('capacity'), accessorKey: 'capacity' },
-    { 
-      header: t('efficiency'), 
-      accessorKey: 'efficiency',
-      render: (item: WorkCenter) => `${item.efficiency}%`
-    },
-    { 
-      header: t('oee'), 
-      accessorKey: 'oee',
-      render: (item: WorkCenter) => `${item.oee}%`
+  useEffect(() => {
+    fetchWorkCenters();
+  }, []);
+
+  const handleSave = async (data: Partial<WCType>) => {
+    try {
+      if (selectedWorkCenter) {
+        await manufacturingService.updateWorkCenter(selectedWorkCenter._id, data);
+        toast.success(t("wc_updated_successfully"));
+      } else {
+        await manufacturingService.createWorkCenter(data);
+        toast.success(t("wc_created_successfully"));
+      }
+      setIsModalOpen(false);
+      await fetchWorkCenters();
+    } catch (error) {
+      console.error("Failed to save work center:", error);
+      toast.error(t("failed_to_save_wc"));
+      throw error;
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!workCenterIdToDelete) return;
+    try {
+      await manufacturingService.deleteWorkCenter(workCenterIdToDelete);
+      setIsDeleteModalOpen(false);
+      setWorkCenterIdToDelete(null);
+      toast.success(t("wc_deleted_successfully"));
+      await fetchWorkCenters();
+    } catch (error) {
+      console.error("Failed to delete work center:", error);
+      toast.error(t("failed_to_delete_wc"));
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    const statusMap: Record<string, { variant: "success" | "warning" | "danger" | "neutral"; label: string; icon: any }> = {
+      Active: { variant: "success", label: t("active"), icon: Zap },
+      Maintenance: { variant: "warning", label: t("maintenance"), icon: Clock },
+      Inactive: { variant: "danger", label: t("inactive"), icon: AlertCircle },
+    };
+    const config = statusMap[status] || { variant: "neutral", label: status, icon: null };
+    const Icon = config.icon;
+    return (
+      <Badge variant={config.variant} className="flex items-center gap-1">
+        {Icon && <Icon size={12} />}
+        {config.label}
+      </Badge>
+    );
+  };
+
+  const filteredWorkCenters = workCenters.filter((wc) => {
+    const matchesSearch =
+      wc.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      wc.code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      wc.location?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === "all" || wc.state === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  // Summary statistics
+  const totalWC = workCenters.length;
+  const activeWC = workCenters.filter(wc => wc.state === 'Active').length;
+  const avgCapacity = workCenters.length > 0 
+    ? (workCenters.reduce((acc, curr) => acc + (curr.capacity || 0), 0) / workCenters.length).toFixed(1)
+    : 0;
+  const avgEfficiency = workCenters.length > 0 
+    ? (workCenters.reduce((acc, curr) => acc + (curr.efficiency || 0), 0) / workCenters.length).toFixed(1)
+    : 0;
+
+  const columns: Column<WCType>[] = [
+    {
+      header: t("code"),
+      accessorKey: "code",
+      render: (item) => (
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
+            <Building2 size={14} className="text-indigo-600" />
+          </div>
+          <div className="flex flex-col">
+            <span className="font-medium text-sm text-gray-900">{item.code}</span>
+            <span className="text-xs text-gray-500">{item.name}</span>
+          </div>
+        </div>
+      ),
     },
     {
-      header: t('status'),
-      accessorKey: 'status',
-      render: (item: WorkCenter) => getStatusBadge(item.status),
+      header: t("performance"),
+      render: (item) => (
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-1.5">
+            <Gauge size={14} className="text-gray-400" />
+            <span className="text-sm">
+              {t("capacity")}: {item.capacity?.toLocaleString()}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Target size={14} className="text-gray-400" />
+            <span className="text-sm">
+              {t("efficiency")}: {item.efficiency}%
+            </span>
+          </div>
+        </div>
+      ),
     },
-    { header: t('location'), accessorKey: 'location' },
     {
-      header: t('actions'),
-      accessorKey: 'id',
-      render: (item: WorkCenter) => (
+      header: t("oee"),
+      accessorKey: "oee",
+      render: (item) => {
+        const oeeValue = item.oee || 0;
+        const getColor = () => {
+          if (oeeValue >= 85) return "text-green-600";
+          if (oeeValue >= 60) return "text-yellow-600";
+          return "text-red-600";
+        };
+        return (
+          <div className="flex flex-col items-start gap-1">
+            <span className={`text-lg font-bold ${getColor()}`}>
+              {oeeValue}%
+            </span>
+            <div className="w-20 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+              <div 
+                className={`h-full rounded-full transition-all ${
+                  oeeValue >= 85 ? "bg-green-500" : oeeValue >= 60 ? "bg-yellow-500" : "bg-red-500"
+                }`}
+                style={{ width: `${Math.min(oeeValue, 100)}%` }}
+              />
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      header: t("location"),
+      accessorKey: "location",
+      render: (item) => (
+        <div className="flex items-center gap-1.5">
+          <MapPin size={14} className="text-gray-400" />
+          <span className="text-sm">{item.location}</span>
+        </div>
+      ),
+    },
+    {
+      header: t("status"),
+      accessorKey: "state",
+      render: (item) => getStatusBadge(item.state),
+    },
+    {
+      header: t("actions"),
+      render: (item) => (
         <div className="flex items-center gap-2">
           <button
             onClick={() => {
-              setSelectedWC(item);
+              setSelectedWorkCenter(item);
               setIsModalOpen(true);
             }}
-            className="p-1 hover:bg-gray-100 rounded text-blue-600"
+            className="p-1.5 text-gray-400 hover:text-indigo-600 transition-colors border border-gray-200 rounded-lg"
           >
             <Edit2 size={16} />
           </button>
-          <button className="p-1 hover:bg-gray-100 rounded text-red-600">
+          <button
+            onClick={() => {
+              setWorkCenterIdToDelete(item._id);
+              setIsDeleteModalOpen(true);
+            }}
+            className="p-1.5 text-gray-400 hover:text-red-500 transition-colors border border-gray-200 rounded-lg"
+          >
             <Trash2 size={16} />
           </button>
         </div>
@@ -106,129 +216,141 @@ export const WorkCenters: React.FC = () => {
     },
   ];
 
+  const statusOptions = [
+    { value: "all", label: t("all_statuses") },
+    { value: "Active", label: t("active") },
+    { value: "Maintenance", label: t("maintenance") },
+    { value: "Inactive", label: t("inactive") },
+  ];
+
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('work_centers')}</h1>
-          <p className="text-gray-500 dark:text-gray-400">{t('manage_your_wc')}</p>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {t("work_centers")}
+          </h1>
+          <p className="text-gray-500 mt-1">
+            {t("manage_your_wc")}
+          </p>
         </div>
         <div className="flex gap-3">
-          <ExportDropdown />
+          <ExportDropdown data={workCenters} filename="work-centers" />
           <Button
             variant="primary"
             onClick={() => {
-              setSelectedWC(null);
+              setSelectedWorkCenter(null);
               setIsModalOpen(true);
             }}
+            className="bg-indigo-600 hover:bg-indigo-700"
           >
             <Plus size={18} />
-            {t('add_wc')}
+            {t("add_wc")}
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="p-4 flex items-center gap-4">
-          <div className="p-3 bg-blue-100 text-blue-600 rounded-lg">
-            <Building2 size={24} />
-          </div>
-          <div>
-            <p className="text-sm text-gray-500">{t('total_wc')}</p>
-            <p className="text-2xl font-bold">12</p>
-          </div>
-        </Card>
-        <Card className="p-4 flex items-center gap-4">
-          <div className="p-3 bg-green-100 text-green-600 rounded-lg">
-            <Zap size={24} />
-          </div>
-          <div>
-            <p className="text-sm text-gray-500">{t('avg_efficiency')}</p>
-            <p className="text-2xl font-bold">92.5%</p>
-          </div>
-        </Card>
-        <Card className="p-4 flex items-center gap-4">
-          <div className="p-3 bg-orange-100 text-orange-600 rounded-lg">
-            <Clock size={24} />
-          </div>
-          <div>
-            <p className="text-sm text-gray-500">{t('in_maintenance')}</p>
-            <p className="text-2xl font-bold">2</p>
-          </div>
-        </Card>
-      </div>
-
-      <Card>
-        <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex flex-wrap gap-4 items-center justify-between">
-          <div className="flex flex-wrap gap-4 items-center">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <Input placeholder={t('search_placeholder')} className="pl-10 w-64" />
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center">
+              <Building2 size={18} className="text-indigo-600" />
             </div>
-            <Select
-              options={[
-                { label: t('all_statuses'), value: 'all' },
-                { label: t('active'), value: 'active' },
-                { label: t('maintenance'), value: 'maintenance' },
-                { label: t('inactive'), value: 'inactive' },
-              ]}
-              className="w-48"
-            />
+            <div>
+              <p className="text-xs text-gray-500">{t("total_work_centers")}</p>
+              <p className="text-xl font-bold text-gray-900">{totalWC}</p>
+            </div>
           </div>
         </div>
-        <Table 
-          columns={columns} 
-          data={wcData} 
-          keyExtractor={(item) => item.id}
-        />
-      </Card>
+        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center">
+              <Zap size={18} className="text-green-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">{t("active_work_centers")}</p>
+              <p className="text-xl font-bold text-gray-900">{activeWC}</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+              <Gauge size={18} className="text-blue-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">{t("avg_capacity")}</p>
+              <p className="text-xl font-bold text-gray-900">{avgCapacity}</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center">
+              <Target size={18} className="text-purple-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">{t("avg_efficiency")}</p>
+              <p className="text-xl font-bold text-gray-900">{avgEfficiency}%</p>
+            </div>
+          </div>
+        </div>
+      </div>
 
-      <Modal
+      {/* Filters */}
+      <div className="flex flex-wrap gap-4 items-center">
+        <Input
+          placeholder={t("search_wc_placeholder")}
+          icon={<Search size={18} />}
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="max-w-md"
+          fullWidth={false}
+        />
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          {statusOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Table */}
+      <Table
+        columns={columns}
+        data={filteredWorkCenters}
+        keyExtractor={(item) => item._id}
+        isLoading={loading}
+        selectable
+      />
+
+      {/* Add/Edit Modal */}
+      <WorkCenterFormModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title={selectedWC ? t('edit_wc') : t('add_wc')}
-      >
-        <form className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('name')} *</label>
-              <Input defaultValue={selectedWC?.name} required />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('code')} *</label>
-              <Input defaultValue={selectedWC?.code} required />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('capacity')} *</label>
-              <Input type="number" defaultValue={selectedWC?.capacity} required />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('location')} *</label>
-              <Input defaultValue={selectedWC?.location} required />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('status')} *</label>
-              <Select
-                options={[
-                  { label: t('active'), value: 'active' },
-                  { label: t('maintenance'), value: 'maintenance' },
-                  { label: t('inactive'), value: 'inactive' },
-                ]}
-                defaultValue={selectedWC?.status}
-                required
-              />
-            </div>
-          </div>
-          <div className="flex justify-end gap-3 mt-6">
-            <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
-              {t('cancel')}
-            </Button>
-            <Button variant="primary" type="submit">
-              {selectedWC ? t('submit') : t('add_wc')}
-            </Button>
-          </div>
-        </form>
-      </Modal>
+        onClose={() => {
+          setIsModalOpen(false);
+          setSelectedWorkCenter(null);
+        }}
+        selectedWorkCenter={selectedWorkCenter}
+        onSave={handleSave}
+        loading={loading}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleDelete}
+        title={t("delete_wc")}
+        message={t("are_you_sure_delete_wc")}
+      />
     </div>
   );
 };

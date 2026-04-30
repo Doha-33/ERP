@@ -2,12 +2,39 @@ import apiClient from '../client/apiClient';
 
 const inventoryService = {
   async getStockItems() {
-    const res = await apiClient.get('/inventory/items');
-    return res.data.data;
+    const res = await apiClient.get('/products');
+    const items = res.data.data || [];
+    return items.map((item: any) => ({
+      ...item,
+      id: item.id || item._id,
+      name: item.productName || item.name,
+      sellingPrice: item.salesPrice || item.sellingPrice,
+      purchasePrice: item.cost || item.purchasePrice,
+      currentStock: item.quantityOnHand || item.currentStock || 0,
+      reorderLevel: item.reorderLevel || 0,
+      expired: item.expired || 'Active', // Default status
+      defaultUnit: item.unitOfMeasure || item.defaultUnit,
+    }));
   },
-  async addStockItem(data: any) { return apiClient.post('/inventory/items', data); },
-  async updateStockItem(id: string, data: any) { return apiClient.put(`/inventory/items/${id}`, data); },
-  async deleteStockItem(id: string) { return apiClient.delete(`/inventory/items/${id}`); },
+  async addStockItem(data: any) { 
+    return apiClient.post('/products', {
+      ...data,
+      productName: data.name || data.productName,
+      salesPrice: data.sellingPrice || data.salesPrice,
+      cost: data.purchasePrice || data.cost,
+      unitOfMeasure: data.defaultUnit || data.unitOfMeasure,
+    }); 
+  },
+  async updateStockItem(id: string, data: any) { 
+    return apiClient.put(`/products/${id}`, {
+      ...data,
+      productName: data.name || data.productName,
+      salesPrice: data.sellingPrice || data.salesPrice,
+      cost: data.purchasePrice || data.cost,
+      unitOfMeasure: data.defaultUnit || data.unitOfMeasure,
+    }); 
+  },
+  async deleteStockItem(id: string) { return apiClient.delete(`/products/${id}`); },
   
   async getWarehouses() {
     const res = await apiClient.get('/warehouses');

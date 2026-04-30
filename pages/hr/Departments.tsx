@@ -83,7 +83,6 @@ export const Departments: React.FC = () => {
         </div>
       </div>
 
-      <Card className="min-h-[500px]">
         {/* Toolbar */}
         <div className="flex flex-wrap justify-end gap-4 mb-4">
            <div className="w-48">
@@ -112,7 +111,6 @@ export const Departments: React.FC = () => {
            selectable 
            minWidth="min-w-[1000px]" 
         />
-      </Card>
 
       <DepartmentModal 
          isOpen={isModalOpen}

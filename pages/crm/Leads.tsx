@@ -1,178 +1,343 @@
-
-import React, { useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Plus, Edit2, Trash2, ChevronDown } from 'lucide-react';
-import { Card, Button, Input, Select, Badge } from '../../components/ui/Common';
-import { Modal } from '../../components/ui/Modal';
-import { Table, Column } from '../../components/ui/Table';
-
-interface Lead {
-  id: string;
-  leadName: string;
-  phone: string;
-  company: string;
-  leadOwner: string;
-  leadStatus: 'Connected' | 'Not Contacted' | 'Lost';
-}
+import React, { useState, useMemo, useCallback } from "react";
+import { useTranslation } from "react-i18next";
+import { Plus, Search, Edit2, Trash2, Building, User, Phone, Filter, X, Users, Target, TrendingUp, Briefcase } from "lucide-react";
+import { Card, Button, Input, Badge, ExportDropdown } from "../../components/ui/Common";
+import { Table, Column } from "../../components/ui/Table";
+import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
+import { LeadModal } from "../../components/crm/LeadModal";
+import { useCRM } from "../../context/crm/CRMContext";
+import { CRMLead } from "../../types";
+import { toast } from "sonner";
 
 export const Leads: React.FC = () => {
   const { t } = useTranslation();
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const { leads, loading, addLead, updateLead, deleteLead } = useCRM();
+  
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingLead, setEditingLead] = useState<CRMLead | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const [leads, setLeads] = useState<Lead[]>([
-    {
-      id: '1',
-      leadName: 'mohamed ibrahim',
-      phone: '234567890',
-      company: 'Company x',
-      leadOwner: 'Zaki',
-      leadStatus: 'Connected',
-    },
-    {
-      id: '2',
-      leadName: '',
-      phone: '',
-      company: '',
-      leadOwner: '',
-      leadStatus: 'Not Contacted',
-    },
-    {
-      id: '3',
-      leadName: '',
-      phone: '',
-      company: '',
-      leadOwner: '',
-      leadStatus: 'Lost',
-    },
-  ]);
-
-  const columns: Column<Lead>[] = [
-    { header: t('lead_name'), accessorKey: 'leadName' },
-    { header: t('phone'), accessorKey: 'phone' },
-    { header: t('company'), accessorKey: 'company' },
-    { header: t('lead_owner'), accessorKey: 'leadOwner' },
-    { 
-      header: t('lead_status'), 
-      render: (item) => {
-        const variants: Record<string, string> = {
-          'Connected': 'success',
-          'Not Contacted': 'warning',
-          'Lost': 'danger'
-        };
-        return <Badge status={variants[item.leadStatus]}>{item.leadStatus}</Badge>;
+  const handleSave = async (lead: Partial<CRMLead>) => {
+    try {
+      setIsLoading(true);
+      if (editingLead) {
+        await updateLead(editingLead.id || editingLead._id!, lead);
+        toast.success(t("lead_updated_successfully"));
+      } else {
+        await addLead(lead);
+        toast.success(t("lead_created_successfully"));
       }
-    },
-    {
-      header: t('actions'),
-      render: (item) => (
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={() => { setSelectedLead(item); setIsEditModalOpen(true); }}
-            className="p-1.5 text-gray-400 hover:text-primary transition-colors border border-gray-200 dark:border-gray-700 rounded-lg"
-          >
-            <Edit2 size={16} />
-          </button>
-          <button className="p-1.5 text-gray-400 hover:text-red-500 transition-colors border border-gray-200 dark:border-gray-700 rounded-lg">
-            <Trash2 size={16} />
-          </button>
-        </div>
-      )
+      setIsModalOpen(false);
+      setEditingLead(null);
+    } catch (error) {
+      console.error("Error saving lead:", error);
+      toast.error(t("failed_to_save_lead"));
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  const handleEdit = useCallback((lead: CRMLead) => {
+    setEditingLead(lead);
+    setIsModalOpen(true);
+  }, []);
+
+  const handleDelete = useCallback((id: string) => {
+    setDeleteId(id);
+  }, []);
+
+  const confirmDelete = useCallback(async () => {
+    if (deleteId) {
+      try {
+        await deleteLead(deleteId);
+        toast.success(t("lead_deleted_successfully"));
+        setDeleteId(null);
+        setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+      } catch (error) {
+        toast.error(t("failed_to_delete_lead"));
+      }
+    }
+  }, [deleteId, deleteLead, t]);
+
+  const handleBulkDelete = async () => {
+    try {
+      setIsLoading(true);
+      await Promise.all(selectedIds.map(id => deleteLead(id)));
+      toast.success(t("leads_deleted_successfully", { count: selectedIds.length }));
+      setSelectedIds([]);
+      setIsBulkConfirmOpen(false);
+    } catch (error) {
+      console.error("Bulk delete failed", error);
+      toast.error(t("failed_to_delete_leads"));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Apply filters
+  const filteredLeads = useMemo(() => {
+    return leads.filter(l => {
+      const matchesSearch = 
+        l.leadName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        l.company?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        l.phone?.includes(searchTerm) ||
+        l.leadOwner?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesStatus = !statusFilter || l.leadStatus === statusFilter;
+      
+      return matchesSearch && matchesStatus;
+    });
+  }, [leads, searchTerm, statusFilter]);
+
+  // Statistics
+  const totalLeads = filteredLeads.length;
+  const newLeads = filteredLeads.filter(l => l.leadStatus === "New").length;
+  const connectedLeads = filteredLeads.filter(l => l.leadStatus === "Connected").length;
+  const qualifiedLeads = filteredLeads.filter(l => l.leadStatus === "Not Contacted").length;
+  const lostLeads = filteredLeads.filter(l => l.leadStatus === "Lost").length;
+
+  const getStatusBadge = (status: string) => {
+    const statusMap: Record<string, { variant: "success" | "warning" | "info" | "danger" | "purple"; label: string }> = {
+      "Connected": { variant: "success", label: t("connected") },
+      "Not Contacted": { variant: "warning", label: t("not_contacted") },
+      "Lost": { variant: "danger", label: t("lost") },
+    };
+    const config = statusMap[status] || { variant: "info", label: status };
+    return <Badge variant={config.variant}>{config.label}</Badge>;
+  };
+
+  const statusOptions = [
+    { value: "", label: t("all_statuses") },
+    { value: "Not Contacted", label: t("not_contacted") },
+    { value: "Connected", label: t("connected") },
+    { value: "Lost", label: t("lost") },
   ];
+
+  const columns: Column<CRMLead>[] = useMemo(
+    () => [
+      {header: t("lead_code"),
+        render: (l) => (
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-gray-900">{l.leadCode}</span>
+          </div>
+        )
+      },
+      {
+        header: t("lead_info"),
+        render: (l) => (
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2">
+              <User size={16} className="text-indigo-500" />
+              <span className="font-medium text-gray-900">{l.leadName}</span>
+            </div>
+            <div className="flex items-center gap-1.5 ml-6 mt-0.5">
+              <Phone size={12} className="text-gray-400" />
+              <span className="text-xs text-gray-500">{l.phone}</span>
+            </div>
+          </div>
+        )
+      },
+      {
+        header: t("company"),
+        render: (l) => (
+          <div className="flex items-center gap-1.5">
+            <Building size={14} className="text-gray-400" />
+            <span className="text-sm text-gray-600">{l.company}</span>
+          </div>
+        )
+      },
+      {
+        header: t("owner"),
+        render: (l) => (
+          <div className="flex items-center gap-1.5">
+            <Briefcase size={14} className="text-gray-400" />
+            <span className="text-sm text-gray-600">{l.leadOwner}</span>
+          </div>
+        )
+      },
+      {
+        header: t("status"),
+        render: (l) => getStatusBadge(l.leadStatus)
+      },
+      {
+        header: t("actions"),
+        className: "text-center",
+        render: (l) => (
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={() => handleEdit(l)}
+              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+              title={t("edit")}
+            >
+              <Edit2 size={16} />
+            </button>
+            <button
+              onClick={() => handleDelete(l.id || l._id!)}
+              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+              title={t("delete")}
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
+        )
+      }
+    ],
+    [t, handleEdit, handleDelete]
+  );
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-blue-900 dark:text-white">{t('leads')}</h1>
-          <p className="text-gray-500 dark:text-gray-400 text-sm">{t('manage_your_leads')}</p>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {t("leads")}
+          </h1>
+          <p className="text-gray-500 mt-1">
+            {t("manage_crm_leads")}
+          </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Button variant="outline" className="text-primary border-primary flex items-center gap-2">
-            <ChevronDown size={16} />
-            {t('export')}
-          </Button>
-          <Button onClick={() => setIsAddModalOpen(true)} className="bg-primary hover:bg-primary/90 flex items-center gap-2">
+        <div className="flex gap-3">
+          {selectedIds.length > 0 && (
+            <Button
+              variant="danger"
+              onClick={() => setIsBulkConfirmOpen(true)}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              <Trash2 size={18} />
+              {t("delete_selected")} ({selectedIds.length})
+            </Button>
+          )}
+          <ExportDropdown data={filteredLeads} filename="leads" />
+          <Button
+            variant="primary"
+            onClick={() => {
+              setEditingLead(null);
+              setIsModalOpen(true);
+            }}
+            className="bg-indigo-600 hover:bg-indigo-700"
+          >
             <Plus size={18} />
-            {t('add_leads')}
+            {t("add_lead")}
           </Button>
         </div>
       </div>
 
-      <Card className="p-0 overflow-hidden border-none shadow-sm">
-        <div className="p-6 space-y-6">
-          <div className="flex justify-end gap-3">
-            <Button variant="outline" className="flex items-center gap-2 text-gray-600 border-gray-200">
-              <ChevronDown size={16} />
-              {t('state')}
-            </Button>
-            <Button variant="outline" className="flex items-center gap-2 text-gray-600 border-gray-200">
-              <ChevronDown size={16} />
-              {t('trip_id')}
-            </Button>
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+        <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <Users size={18} className="text-indigo-600" />
+            <p className="text-xs text-gray-500">{t("total_leads")}</p>
           </div>
-
-          <div className="border border-gray-100 dark:border-gray-800 rounded-xl overflow-hidden">
-            <Table 
-              data={leads}
-              columns={columns}
-              keyExtractor={(item) => item.id}
-              selectable
-              className="w-full"
-              headerClassName="bg-blue-50/50 dark:bg-blue-900/10 text-blue-900 dark:text-blue-200"
-            />
+          <p className="text-xl font-bold text-gray-900 mt-1">{totalLeads}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <Phone size={18} className="text-green-600" />
+            <p className="text-xs text-gray-500">{t("connected")}</p>
           </div>
+          <p className="text-xl font-bold text-green-600 mt-1">{connectedLeads}</p>
         </div>
-      </Card>
+        <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <Target size={18} className="text-yellow-600" />
+            <p className="text-xs text-gray-500">{t("not_contacted")}</p>
+          </div>
+          <p className="text-xl font-bold text-purple-600 mt-1">{qualifiedLeads}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <X size={18} className="text-red-600" />
+            <p className="text-xs text-gray-500">{t("lost")}</p>
+          </div>
+          <p className="text-xl font-bold text-red-600 mt-1">{lostLeads}</p>
+        </div>
+      </div>
 
-      {/* Add Modal */}
-      <Modal 
-        isOpen={isAddModalOpen} 
-        onClose={() => setIsAddModalOpen(false)}
-        title={<div className="flex items-center gap-2"><Plus size={20} className="text-primary" /> {t('add_leads')}</div>}
-      >
-        <div className="grid grid-cols-2 gap-4 mt-4">
-          <Input label={t('lead_name')} placeholder="aaaaaaa" required />
-          <Input label={t('company')} placeholder="aaaaaaa" required />
-          <Input label={t('phone')} placeholder="444555" required />
-          <Select label={t('lead_owner')} options={[{ value: 'aaaaa', label: 'aaaaa' }]} required />
-          <Select label={t('lead_status')} options={[{ value: 'Connected', label: 'Connected' }]} required />
+      {/* Filters */}
+      <div className="flex flex-wrap gap-4 items-center">
+        <div className="relative max-w-md">
+          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder={t("search_leads")}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
         </div>
-        <div className="flex justify-end gap-3 mt-6">
-          <Button variant="secondary" onClick={() => setIsAddModalOpen(false)} className="bg-slate-700 text-white hover:bg-slate-800">
-            {t('cancel')}
-          </Button>
-          <Button className="bg-primary hover:bg-primary/90 flex items-center gap-2">
-            <Plus size={18} />
-            {t('add_leads')}
-          </Button>
-        </div>
-      </Modal>
 
-      {/* Edit Modal */}
-      <Modal 
-        isOpen={isEditModalOpen} 
-        onClose={() => setIsEditModalOpen(false)}
-        title={<div className="flex items-center gap-2"><Edit2 size={20} className="text-primary" /> {t('edit_leads')}</div>}
-      >
-        <div className="grid grid-cols-2 gap-4 mt-4">
-          <Input label={t('lead_name')} defaultValue={selectedLead?.leadName} placeholder="aaaaaaa" required />
-          <Input label={t('company')} defaultValue={selectedLead?.company} placeholder="aaaaaaa" required />
-          <Input label={t('phone')} defaultValue={selectedLead?.phone} placeholder="444555" required />
-          <Select label={t('lead_owner')} defaultValue={selectedLead?.leadOwner} options={[{ value: 'aaaaa', label: 'aaaaa' }]} required />
-          <Select label={t('lead_status')} defaultValue={selectedLead?.leadStatus} options={[{ value: 'Connected', label: 'Connected' }]} required />
-        </div>
-        <div className="flex justify-end gap-3 mt-6">
-          <Button variant="secondary" onClick={() => setIsEditModalOpen(false)} className="bg-slate-700 text-white hover:bg-slate-800">
-            {t('cancel')}
-          </Button>
-          <Button className="bg-primary hover:bg-primary/90">
-            {t('save')}
-          </Button>
-        </div>
-      </Modal>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          {statusOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+
+        {(statusFilter || searchTerm) && (
+          <button
+            onClick={() => {
+              setStatusFilter("");
+              setSearchTerm("");
+            }}
+            className="text-sm text-red-600 hover:text-red-700"
+          >
+            {t("clear_filters")}
+          </button>
+        )}
+      </div>
+
+      {/* Table */}
+        <Table
+          data={filteredLeads}
+          columns={columns}
+          keyExtractor={(item) => item.id || item._id!}
+          isLoading={loading || isLoading}
+          selectable
+          selectedIds={selectedIds}
+          onSelectionChange={setSelectedIds}
+        />
+
+      {/* Modal */}
+      <LeadModal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingLead(null);
+        }}
+        onSave={handleSave}
+        leadToEdit={editingLead}
+        isLoading={loading || isLoading}
+      />
+
+      {/* Delete Confirmation */}
+      <ConfirmationModal
+        isOpen={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        onConfirm={confirmDelete}
+        title={t("delete_lead")}
+        message={t("are_you_sure_delete_lead")}
+      />
+
+      {/* Bulk Delete Confirmation */}
+      <ConfirmationModal
+        isOpen={isBulkConfirmOpen}
+        onClose={() => setIsBulkConfirmOpen(false)}
+        onConfirm={handleBulkDelete}
+        title={t("delete_leads")}
+        message={t("are_you_sure_delete_leads", { count: selectedIds.length })}
+      />
     </div>
   );
 };

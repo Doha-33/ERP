@@ -1,57 +1,67 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useData } from '../../../context/DataContext';
 import { ReportLayout } from '../../../components/reports/ReportLayout';
 import { Column } from '../../../components/ui/Table';
-import { Contract } from '../../../types';
 import { Badge } from '../../../components/ui/Common';
+import hrService from '../../../services/hr.service';
 
 export const ExpiredContractsReport: React.FC = () => {
   const { t } = useTranslation();
-  const { contracts, employees } = useData();
+  const [data, setData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [days, setDays] = useState(60);
+
+  useEffect(() => {
+    fetchData();
+  }, [days]);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const reportData = await hrService.getContractsExpiryReport(days);
+      setData(reportData || []);
+    } catch (error) {
+      console.error('Failed to fetch contracts expiry report:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredData = useMemo(() => {
-    return contracts.filter(c => {
-      const matchesSearch = c.employeeName.toLowerCase().includes(searchTerm.toLowerCase());
+    return data.filter((c: any) => {
+      const matchesSearch = (c.employeeName || '').toLowerCase().includes(searchTerm.toLowerCase());
       return matchesSearch;
     });
-  }, [contracts, searchTerm]);
+  }, [data, searchTerm]);
 
-  const columns: Column<Contract>[] = [
-    { header: t('employee_id'), accessorKey: 'empCode' },
+  const columns: Column<any>[] = [
+    { header: t('employee_id'), accessorKey: 'employeeCode' },
     { 
       header: t('employee_name'), 
       render: (c) => (
         <div className="flex items-center gap-2">
-          <img src={c.avatar} alt={c.employeeName} className="w-8 h-8 rounded-full object-cover" />
+          {c.avatar && <img src={c.avatar} alt={c.employeeName} className="w-8 h-8 rounded-full object-cover" />}
           <span className="font-bold">{c.employeeName}</span>
         </div>
       )
     },
-    { 
-      header: t('department'), 
-      render: (c) => employees.find(e => e.id === c.employeeId)?.departmentName || 'N/A' 
-    },
+    { header: t('department'), accessorKey: 'departmentName' },
     { header: t('job_title'), accessorKey: 'jobTitle' },
     { header: t('contract_start_date'), accessorKey: 'startDate' },
+    { header: t('contract_end_date'), accessorKey: 'endDate' },
     { 
       header: t('state'), 
       render: (c) => (
         <Badge variant={c.state === 'Active' ? 'success' : 'danger'}>
-          {t(c.state.toLowerCase())}
+          {t((c.state || 'inactive').toLowerCase())}
         </Badge>
       )
     },
     { 
       header: t('days_remaining'), 
-      render: (c) => {
-        const end = new Date(c.endDate);
-        const now = new Date();
-        const diff = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-        return diff > 0 ? diff : 0;
-      }
+      accessorKey: 'daysRemaining'
     },
   ];
 
@@ -65,6 +75,19 @@ export const ExpiredContractsReport: React.FC = () => {
       onSearchChange={setSearchTerm}
       searchPlaceholder={t('search_by_name')}
       filename="expired_contracts_report"
+      isLoading={loading}
+      filters={
+        <select 
+          className="bg-white dark:bg-dark-surface border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 py-2 px-4 rounded-xl text-sm font-bold focus:ring-2 focus:ring-primary/20 outline-none transition-all cursor-pointer"
+          value={days}
+          onChange={(e) => setDays(Number(e.target.value))}
+        >
+          <option value={30}>30 {t('days')}</option>
+          <option value={60}>60 {t('days')}</option>
+          <option value={90}>90 {t('days')}</option>
+          <option value={180}>180 {t('days')}</option>
+        </select>
+      }
     />
   );
 };

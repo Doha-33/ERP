@@ -1,34 +1,16 @@
-
-import React, { useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { Modal } from '../ui/Modal';
-import { Button, Input, Select } from '../ui/Common';
-import { Product } from '../../types';
-
-const productSchema = z.object({
-  sku: z.string().min(1, 'SKU is required'),
-  productName: z.string().min(1, 'Name is required'),
-  category: z.string().min(1, 'Category is required'),
-  productType: z.enum(['STOCKABLE', 'SERVICE', 'CONSUMABLE']),
-  salesPrice: z.number().min(0, 'Sales price must be positive'),
-  cost: z.number().min(0, 'Cost must be positive'),
-  description: z.string().min(0),
-  unitOfMeasure: z.string().min(1, 'Unit of measure is required'),
-  barcode: z.string().min(0),
-  hasExpiry: z.boolean(),
-  status: z.enum(['ACTIVE', 'INACTIVE']),
-});
-
-type ProductFormData = z.infer<typeof productSchema>;
+import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { Plus, Edit2, Package, Barcode, Tag, DollarSign, Layers, Box } from "lucide-react";
+import { Modal } from "../../components/ui/Modal";
+import { Button, Input, Select, TextArea, Switch } from "../../components/ui/Common";
+import { Product } from "../../types";
 
 interface ProductModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (product: Product) => void;
+  onSave: (data: Partial<Product>) => Promise<void>;
   productToEdit?: Product | null;
+  isLoading?: boolean;
 }
 
 export const ProductModal: React.FC<ProductModalProps> = ({
@@ -36,183 +18,284 @@ export const ProductModal: React.FC<ProductModalProps> = ({
   onClose,
   onSave,
   productToEdit,
+  isLoading = false,
 }) => {
   const { t } = useTranslation();
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors },
-  } = useForm<ProductFormData>({
-    resolver: zodResolver(productSchema),
-    defaultValues: {
-      productType: 'STOCKABLE',
-      unitOfMeasure: 'pcs',
-      hasExpiry: false,
-      status: 'ACTIVE',
-    },
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formData, setFormData] = useState({
+    sku: "",
+    productName: "",
+    category: "",
+    productType: "STOCKABLE",
+    salesPrice: 0,
+    cost: 0,
+    description: "",
+    unitOfMeasure: "pcs",
+    barcode: "",
+    hasExpiry: false,
+    status: "ACTIVE",
   });
 
   useEffect(() => {
-    if (productToEdit) {
-      reset({
-        sku: productToEdit.sku,
-        productName: productToEdit.productName,
-        category: productToEdit.category,
-        productType: productToEdit.productType,
-        salesPrice: productToEdit.salesPrice,
-        cost: productToEdit.cost,
-        description: productToEdit.description,
-        unitOfMeasure: productToEdit.unitOfMeasure,
-        barcode: productToEdit.barcode,
-        hasExpiry: productToEdit.hasExpiry,
-        status: productToEdit.status,
+    if (productToEdit && isOpen) {
+      setFormData({
+        sku: productToEdit.sku || "",
+        productName: productToEdit.productName || "",
+        category: productToEdit.category || "",
+        productType: productToEdit.productType || "STOCKABLE",
+        salesPrice: productToEdit.salesPrice || 0,
+        cost: productToEdit.cost || 0,
+        description: productToEdit.description || "",
+        unitOfMeasure: productToEdit.unitOfMeasure || "pcs",
+        barcode: productToEdit.barcode || "",
+        hasExpiry: productToEdit.hasExpiry || false,
+        status: productToEdit.status || "ACTIVE",
       });
-    } else {
-      reset({
-        sku: '',
-        productName: '',
-        category: '',
-        productType: 'STOCKABLE',
+    } else if (!productToEdit && isOpen) {
+      setFormData({
+        sku: "",
+        productName: "",
+        category: "",
+        productType: "STOCKABLE",
         salesPrice: 0,
         cost: 0,
-        description: '',
-        unitOfMeasure: 'pcs',
-        barcode: '',
+        description: "",
+        unitOfMeasure: "pcs",
+        barcode: "",
         hasExpiry: false,
-        status: 'ACTIVE',
+        status: "ACTIVE",
       });
     }
-  }, [productToEdit, reset]);
+  }, [productToEdit, isOpen]);
 
-  const onSubmit = (data: ProductFormData) => {
-    onSave({
-      ...data,
-      id: productToEdit?.id || '',
-    } as Product);
+  const categoryOptions = [
+    { value: "Electronics", label: "Electronics" },
+    { value: "Laptops", label: "Laptops" },
+    { value: "Services", label: "Services" },
+    { value: "Furniture", label: "Furniture" },
+    { value: "Clothing", label: "Clothing" },
+    { value: "Other", label: "Other" },
+  ];
+
+  const productTypeOptions = [
+    { value: "STOCKABLE", label: t("stockable") },
+    { value: "SERVICE", label: t("service") },
+    { value: "CONSUMABLE", label: t("consumable") },
+  ];
+
+  const unitOptions = [
+    { value: "pcs", label: "pcs" },
+    { value: "kg", label: "kg" },
+    { value: "m", label: "m" },
+    { value: "liters", label: "liters" },
+    { value: "boxes", label: "boxes" },
+  ];
+
+  const statusOptions = [
+    { value: "ACTIVE", label: t("active") },
+    { value: "INACTIVE", label: t("inactive") },
+  ];
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    
+    try {
+      await onSave(formData);
+      onClose();
+    } catch (error) {
+      console.error("Error in form submission:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleChange = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   return (
-    <Modal 
-      isOpen={isOpen} 
-      onClose={onClose} 
-      title={productToEdit ? t('edit_product') : t('add_product')}
-      className="max-w-3xl"
-    >
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Input
-            label={t('sku')}
-            {...register('sku')}
-            error={errors.sku?.message}
-            required
-          />
-          <Input
-            label={t('product_name')}
-            {...register('productName')}
-            error={errors.productName?.message}
-            required
-          />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Input
-            label={t('sales_price')}
-            type="number"
-            {...register('salesPrice', { valueAsNumber: true })}
-            error={errors.salesPrice?.message}
-            required
-          />
-          <Input
-            label={t('cost')}
-            type="number"
-            {...register('cost', { valueAsNumber: true })}
-            error={errors.cost?.message}
-            required
-          />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Select
-            label={t('category')}
-            {...register('category')}
-            error={errors.category?.message}
-            options={[
-              { value: 'Electronics', label: 'Electronics' },
-              { value: 'Laptops', label: 'Laptops' },
-              { value: 'Services', label: 'Services' },
-            ]}
-            required
-          />
-          <Select
-            label={t('product_type')}
-            {...register('productType')}
-            error={errors.productType?.message}
-            options={[
-              { value: 'STOCKABLE', label: t('stockable') },
-              { value: 'SERVICE', label: t('service') },
-              { value: 'CONSUMABLE', label: t('consumable') },
-            ]}
-            required
-          />
-          <Select
-            label={t('unit_of_measure')}
-            {...register('unitOfMeasure')}
-            error={errors.unitOfMeasure?.message}
-            options={[
-              { value: 'pcs', label: 'pcs' },
-              { value: 'kg', label: 'kg' },
-              { value: 'm', label: 'm' },
-            ]}
-            required
-          />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Input
-            label={t('barcode')}
-            {...register('barcode')}
-            error={errors.barcode?.message}
-          />
-          <Select
-            label={t('status')}
-            {...register('status')}
-            error={errors.status?.message}
-            options={[
-              { value: 'ACTIVE', label: t('active') },
-              { value: 'INACTIVE', label: t('inactive') },
-            ]}
-            required
-          />
-        </div>
-
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={
         <div className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            id="hasExpiry"
-            {...register('hasExpiry')}
-            className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
-          />
-          <label htmlFor="hasExpiry" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-            {t('has_expiry')}
+          {productToEdit ? <Edit2 size={20} /> : <Plus size={20} />}
+          {productToEdit ? t("edit_product") : t("add_product")}
+        </div>
+      }
+      size="4xl"
+    >
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+          {/* SKU */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("sku")} <span className="text-red-500">*</span>
+            </label>
+            <Input
+              value={formData.sku}
+              onChange={(e) => handleChange("sku", e.target.value)}
+              placeholder="PRD-001"
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Product Name */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("product_name")} <span className="text-red-500">*</span>
+            </label>
+            <Input
+              value={formData.productName}
+              onChange={(e) => handleChange("productName", e.target.value)}
+              placeholder={t("enter_product_name")}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Category */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("category")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.category}
+              onChange={(e) => handleChange("category", e.target.value)}
+              options={categoryOptions}
+              placeholder={t("select_category")}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Product Type */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("product_type")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.productType}
+              onChange={(e) => handleChange("productType", e.target.value)}
+              options={productTypeOptions}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Sales Price */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("sales_price")} (EGP) <span className="text-red-500">*</span>
+            </label>
+            <Input
+              type="number"
+              step="0.01"
+              value={formData.salesPrice}
+              onChange={(e) => handleChange("salesPrice", Number(e.target.value))}
+              placeholder="0.00"
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Cost */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("cost")} (EGP) <span className="text-red-500">*</span>
+            </label>
+            <Input
+              type="number"
+              step="0.01"
+              value={formData.cost}
+              onChange={(e) => handleChange("cost", Number(e.target.value))}
+              placeholder="0.00"
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Unit of Measure */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("unit_of_measure")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.unitOfMeasure}
+              onChange={(e) => handleChange("unitOfMeasure", e.target.value)}
+              options={unitOptions}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Barcode */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("barcode")}
+            </label>
+            <Input
+              value={formData.barcode}
+              onChange={(e) => handleChange("barcode", e.target.value)}
+              placeholder="123456789"
+              fullWidth
+            />
+          </div>
+
+          {/* Status */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("status")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.status}
+              onChange={(e) => handleChange("status", e.target.value)}
+              options={statusOptions}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Has Expiry */}
+          <div className="space-y-1 flex items-center gap-3 pt-6">
+            <Switch
+              checked={formData.hasExpiry}
+              onChange={(checked) => handleChange("hasExpiry", checked)}
+            />
+            <label className="text-sm font-medium text-gray-700">
+              {t("has_expiry_date")}
+            </label>
+          </div>
+        </div>
+
+        {/* Description */}
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-gray-700">
+            {t("description")}
           </label>
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('description')}</label>
-          <textarea
-            {...register('description')}
-            className="w-full p-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-sm"
+          <TextArea
+            value={formData.description}
+            onChange={(e) => handleChange("description", e.target.value)}
+            placeholder={t("enter_product_description")}
             rows={3}
+            fullWidth
           />
         </div>
 
-        <div className="flex justify-end gap-3 pt-4 border-t border-gray-100 dark:border-gray-800">
-          <Button type="button" variant="secondary" onClick={onClose}>
-            {t('cancel')}
+        <div className="flex justify-end gap-3 mt-8">
+          <Button variant="secondary" onClick={onClose} disabled={isSubmitting || isLoading}>
+            {t("cancel")}
           </Button>
-          <Button type="submit">
-            {productToEdit ? t('submit') : t('add_product')}
+          <Button
+            variant="primary"
+            type="submit"
+            className="bg-indigo-600 hover:bg-indigo-700 px-8"
+            isLoading={isSubmitting || isLoading}
+            disabled={isSubmitting || isLoading}
+          >
+            {productToEdit ? t("save") : t("add_product")}
           </Button>
         </div>
       </form>

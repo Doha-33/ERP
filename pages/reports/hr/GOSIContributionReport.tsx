@@ -1,63 +1,58 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useData } from '../../../context/DataContext';
 import { ReportLayout } from '../../../components/reports/ReportLayout';
 import { Column } from '../../../components/ui/Table';
 import { Badge } from '../../../components/ui/Common';
+import hrService from '../../../services/hr.service';
 
 export const GOSIContributionReport: React.FC = () => {
   const { t } = useTranslation();
-  const { employees, payrollRecords } = useData();
+  const [data, setData] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
-  const gosiData = useMemo(() => {
-    return employees.map(emp => {
-      const payroll = payrollRecords.find(p => p.employeeId === emp.id);
-      const basicSalary = Number(payroll?.basicSalary || 0);
-      const gosiSalary = basicSalary; // Simplified
-      const empContrib = gosiSalary * 0.09;
-      const employerContrib = gosiSalary * 0.09;
-      const totalContrib = empContrib + employerContrib;
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        const reportData = await hrService.getGosiReport();
+        setData(reportData || []);
+      } catch (error) {
+        console.error('Error fetching GOSI report:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
 
-      return {
-        id: emp.id,
-        employeeId: emp.code,
-        employeeName: emp.fullName,
-        nationalId: emp.nationalId || 'N/A',
-        basicSalary,
-        gosiSalary,
-        empContribPercent: '9%',
-        employerContribPercent: '9%',
-        totalContrib,
-        status: 'Paid',
-        avatar: emp.avatar
-      };
-    }).filter(e => e.employeeName.toLowerCase().includes(searchTerm.toLowerCase()));
-  }, [employees, payrollRecords, searchTerm]);
+  const filteredData = useMemo(() => {
+    return data.filter(e => (e.employeeName || '').toLowerCase().includes(searchTerm.toLowerCase()));
+  }, [data, searchTerm]);
 
   const columns: Column<any>[] = [
-    { header: t('employee_id'), accessorKey: 'employeeId' },
+    { header: t('employee_id'), accessorKey: 'employeeCode' },
     { 
       header: t('employee_name'), 
       render: (e) => (
         <div className="flex items-center gap-2">
-          <img src={e.avatar} alt={e.employeeName} className="w-8 h-8 rounded-full object-cover" />
+          {e.avatar && <img src={e.avatar} alt={e.employeeName} className="w-8 h-8 rounded-full object-cover" />}
           <span className="font-bold">{e.employeeName}</span>
         </div>
       )
     },
     { header: t('national_id'), accessorKey: 'nationalId' },
-    { header: t('basic_salary'), render: (e) => e.basicSalary.toFixed(2) },
-    { header: t('gosi_salary'), render: (e) => e.gosiSalary.toFixed(2) },
-    { header: t('employee_contribution_percent'), accessorKey: 'empContribPercent' },
-    { header: t('employer_contribution_percent'), accessorKey: 'employerContribPercent' },
-    { header: t('total_contribution'), render: (e) => e.totalContrib.toFixed(2) },
+    { header: t('basic_salary'), render: (e) => Number(e.basicSalary || 0).toFixed(2) },
+    { header: t('gosi_salary'), render: (e) => Number(e.gosiSalary || 0).toFixed(2) },
+    { header: t('employee_contribution'), render: (e) => Number(e.empContrib || 0).toFixed(2) },
+    { header: t('employer_contribution'), render: (e) => Number(e.employerContrib || 0).toFixed(2) },
+    { header: t('total_contribution'), render: (e) => Number(e.totalContrib || 0).toFixed(2) },
     { 
       header: t('payment_status'), 
       render: (e) => (
         <Badge variant={e.status === 'Paid' ? 'success' : 'warning'}>
-          {t(e.status.toLowerCase())}
+          {t((e.status || 'pending').toLowerCase())}
         </Badge>
       )
     },
@@ -67,8 +62,9 @@ export const GOSIContributionReport: React.FC = () => {
     <ReportLayout
       title={t('gosi_contribution_report')}
       subtitle={t('view_gosi_contributions_for_all_employees')}
-      data={gosiData}
+      data={filteredData}
       columns={columns}
+      isLoading={isLoading}
       searchTerm={searchTerm}
       onSearchChange={setSearchTerm}
       searchPlaceholder={t('search_by_name')}

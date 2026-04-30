@@ -687,6 +687,66 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
               icon: BarChart3,
             },
             {
+              id: "hr-report-overtime",
+              label: "overtime_report",
+              path: "/reports/hr/overtime",
+              icon: BarChart3,
+            },
+            {
+              id: "hr-report-docs-expiry",
+              label: "documents_expiry",
+              path: "/reports/hr/documents-expiry",
+              icon: BarChart3,
+            },
+            {
+              id: "hr-report-turnover",
+              label: "turnover_report",
+              path: "/reports/hr/turnover",
+              icon: BarChart3,
+            },
+            {
+              id: "hr-report-growth",
+              label: "headcount_growth",
+              path: "/reports/hr/headcount-growth",
+              icon: BarChart3,
+            },
+            {
+              id: "hr-report-salary-trend",
+              label: "salary_trend",
+              path: "/reports/hr/salary-trend",
+              icon: BarChart3,
+            },
+            {
+              id: "hr-report-dept-cost",
+              label: "department_cost",
+              path: "/reports/hr/department-cost",
+              icon: BarChart3,
+            },
+            {
+              id: "hr-report-leave-balance",
+              label: "leave_balance",
+              path: "/reports/hr/leave-balance",
+              icon: BarChart3,
+            },
+            {
+              id: "hr-report-payroll-variance",
+              label: "payroll_variance",
+              path: "/reports/hr/payroll-variance",
+              icon: BarChart3,
+            },
+            {
+              id: "hr-report-promotions",
+              label: "promotion_history",
+              path: "/reports/hr/promotion-history",
+              icon: BarChart3,
+            },
+            {
+              id: "hr-report-hiring",
+              label: "hiring_report",
+              path: "/reports/hr/hiring",
+              icon: BarChart3,
+            },
+            {
               id: "hr-report-insurance",
               label: "insurance_report",
               path: "/reports/hr/insurance",
@@ -893,6 +953,7 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
                 >
                   <nav className="mt-2 space-y-1 mr-2 border-r-2 rtl:border-r-0 rtl:border-l-2 border-gray-100 dark:border-dark-border">
                     {group.items.map((item: any) => {
+                      const isActive = location.pathname === item.path;
                       const hasSubItems =
                         item.subItems && item.subItems.length > 0;
                       const isItemExpanded = expandedItems.includes(item.id);
@@ -950,12 +1011,16 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
                                       }
                                     `}
                                   >
-                                    <span
-                                      className={`w-1.5 h-1.5 rounded-full transition-all ${isActive ? "bg-primary" : "bg-gray-300 dark:bg-gray-600"}`}
-                                    ></span>
-                                    <span>
-                                      {t(subItem.label) || subItem.label}
-                                    </span>
+                                    {({ isActive }) => (
+                                      <>
+                                        <span
+                                          className={`w-1.5 h-1.5 rounded-full transition-all ${isActive ? "bg-primary" : "bg-gray-300 dark:bg-gray-600"}`}
+                                        ></span>
+                                        <span>
+                                          {t(subItem.label) || subItem.label}
+                                        </span>
+                                      </>
+                                    )}
                                   </NavLink>
                                 ))}
                               </div>
@@ -963,8 +1028,6 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
                           </div>
                         );
                       }
-
-                      const isActive = location.pathname === item.path;
 
                       return (
                         <NavLink

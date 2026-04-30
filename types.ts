@@ -82,17 +82,17 @@ export interface Employee {
   dob: string;
   gender: 'Male' | 'Female' | string;
   maritalStatus: 'Single' | 'Married' | 'Divorced' | 'Widowed' | string;
-  phone: string;
+  phoneNumber: string;
   email: string;
   address: string;
-  employeeStatus: 'Active' | 'Inactive' | 'Suspended' | 'Resigned' | 'Contract Ended' | string;
+  employeeStatus: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'RESIGNED' | 'CONTRACT_ENDED' | string;
   companyId: any; // populated
   branchId: any; // populated
   departmentId: any; // populated
   jobId: any; // populated
   directManagerId: any; // populated
   terminationDate?: string | null;
-  joinDate: string;
+  hireDate: string;
   contractType: 'Full-Time' | 'Part-Time' | 'Temporary' | string;
   internalId: string;
   jobGrade: string;
@@ -167,13 +167,13 @@ export interface Attendance {
   date: string;
   checkInTime: string;
   checkOutTime: string;
-  shiftType: 'morning' | 'night' | string;
-  breakDuration: string | number;
-  workingHours: string | number;
-  overtimeHours: string | number;
-  lateMinutes: string | number;
+  shiftType: 'MORNING' | 'NIGHT' | 'EVENING'| string;
+  breakDuration: number;
+  workingHours: number;
+  overtimeHours: number;
+  lateMinutes: number;
   earlyLeaveMinutes: string | number;
-  status: 'Present' | 'Absent' | 'On Leave' | 'Late' | string;
+  status: 'PRESENT' | 'ABSENT' | 'LEAVE' | 'LATE' | 'PERMISSION' | string;
   notes?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -249,7 +249,7 @@ export interface Leave {
   _id: string;
   leaveId: string;
   employeeId: any; // populated
-  leaveType: 'ANNUAL' | 'SICK' | 'UNPAID' | string;
+  leaveType: 'ANNUAL' | 'SICK' | 'UNPAID' | 'EMERGENCY' | 'MATERNITY' | 'OTHER' | string;
   fromDate: string;
   toDate: string;
   days: number;
@@ -278,6 +278,7 @@ export interface HRRequest {
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | string;
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | string;
   notes?: string;
+  attachment?: string;
   requestDate: string;
   createdAt?: string;
   updatedAt?: string;
@@ -339,7 +340,7 @@ export interface Performance {
   employeeId: any; // populated
   period: string;
   evaluationScore: number;
-  status: 'COMPLETED' | 'DRAFT' | string;
+  status: 'COMPLETED' | 'DRAFT' | 'APPROVED' | string;
   notes?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -1477,4 +1478,203 @@ export interface FleetKPIs {
   totalFuelCost: number;
   averageFuelConsumption: number;
   maintenanceCosts: number;
+}
+
+
+// Manufacturing Module Types
+export interface BillOfMaterials {
+  _id: string;
+  bom_id: string;
+  product_name: string;
+  product_code: string;
+  component_item: string;
+  qty: number;
+  uom: string;
+  version: string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ManufacturingOrder {
+  _id: string;
+  mo_number: string;
+  product_name: string;
+  product_code: string;
+  planned_quantity: number;
+  produced_quantity: number;
+  cost_summary: number;
+  bom_used: string;
+  work_center: string;
+  start_date: string;
+  end_date: string;
+  responsible: string;
+  raw_material_availability: string;
+  state: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Operation {
+  _id: string;
+  operation_id: string;
+  operation_name: string;
+  work_center: string;
+  duration: number;
+  sequence: number;
+  cost: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface WorkCenter {
+  _id: string;
+  name: string;
+  code: string;
+  capacity: number;
+  efficiency: number;
+  oee: number;
+  status: string;
+  location: string;
+  state: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ProductionReport {
+  _id: string;
+  mo_number: string;
+  finished_product: string;
+  planned_qty: number;
+  produced_qty: number;
+  completion: number;
+  materials_consumed: number;
+  scrap_qty: number;
+  start_time: string;
+  end_time: string;
+  operation_duration: number;
+  operation_cost: number;
+  material_cost: number;
+  total_production_cost: number;
+  responsible: string;
+  production_status: string;
+  notes: string;
+  // UI helper fields (if summary exists)
+  report_name?: string;
+  report_date?: string;
+  total_production?: number;
+  avg_efficiency?: number;
+  downtime_hours?: number;
+  summary?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface MaterialRequirement {
+  _id: string;
+  material: string;
+  description: string;
+  bom_qty_per_unit: number;
+  required_qty: number;
+  available_qty: number;
+  unit: string;
+  source: string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface WorkInProgress {
+  _id: string;
+  mo_number: string;
+  product: string;
+  planned_qty: number;
+  produced_qty: number;
+  scrap_qty: number;
+  start_date: string;
+  expected_end_date: string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+
+// CRM Module Types
+export interface CRMContact {
+  id: string;
+  _id?: string;
+  name: string;
+  phone: string;
+  tags: string;
+  location: string;
+  rating: number;
+  status: 'Active' | 'Inactive' | string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CRMDeal {
+  id: string;
+  _id?: string;
+  dealName: string;
+  customer: string;
+  dealValue: number;
+  stage: 'Proposal' | 'Negotiation' | 'Won' | 'Lost' | string;
+  closingDate: string;
+  salesOwner: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CRMLead {
+  id: string;
+  _id?: string;
+  leadCode: string;
+  leadName: string;
+  phone: string;
+  company: string;
+  leadOwner: string;
+  leadStatus: 'New' | 'Contacted' | 'Connected' | 'Qualified' | 'Lost' | string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CRMPipeline {
+  id: string;
+  _id?: string;
+  pipelineCode: string;
+  pipelineName: string;
+  totalDealValue: number;
+  numberOfDeals: number;
+  stage: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CRMProject {
+  id: string;
+  _id?: string;
+  projectName: string;
+  teamLeader: string;
+  client: string;
+  progress: number;
+  startDate: string;
+  deadline: string;
+  status: 'Planning' | 'In Progress' | 'On Hold' | 'Completed' | string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CRMTask {
+  id: string;
+  _id?: string;
+  taskTitle: string;
+  startDate: string;
+  dueDate: string;
+  assignee: string;
+  state: 'To Do' | 'In Progress' | 'Review' | 'Done' | string;
+  description: string;
+  priority?: 'Low' | 'Medium' | 'High';
+  createdAt?: string;
+  updatedAt?: string;
 }

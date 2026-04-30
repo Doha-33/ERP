@@ -119,8 +119,7 @@ export const Invoices: React.FC = () => {
         </div>
       </div>
 
-      <Card className="min-h-[500px] !p-0 overflow-hidden">
-        <div className="p-6 border-b border-gray-100 dark:border-gray-800 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div className="flex flex-col md:flex-row justify-between items-center gap-4">
            <div className="flex items-center gap-3 w-full md:w-auto">
               <div className="relative">
                   <input type="date" className="pl-4 pr-10 py-2 bg-white dark:bg-dark-surface border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none" defaultValue="2025-02-10" />
@@ -148,7 +147,6 @@ export const Invoices: React.FC = () => {
           onSelectionChange={setSelectedIds}
           className="border-none"
         />
-      </Card>
 
       <InvoiceModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSave} invoiceToEdit={editingInvoice} />
       <ConfirmationModal isOpen={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={confirmDelete} />

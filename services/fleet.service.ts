@@ -1,212 +1,244 @@
-import api from './api';
-import { Vehicle, Driver, Trip, Maintenance, FuelLog, FleetAccident, VehicleExpense, VehicleBooking, CostCenter } from '../types';
+import apiClient from '../client/apiClient';
+import { 
+  Vehicle, Driver, Trip, MaintenanceRecord, FuelLog, 
+  Accident, VehicleExpense, VehicleBooking, CostCenter 
+} from '../types';
 
 export const fleetService = {
-  // Vehicles
-  getVehicles: async () => {
-    const response = await api.get<{ success: boolean; data: Vehicle[] }>('/fleet/vehicles/list');
+  // --- Vehicles ---
+  async getVehicles(): Promise<Vehicle[]> {
+    const response = await apiClient.get('/fleet/vehicles/list');
     return response.data.data;
-  },
-  getVehicleById: async (id: string) => {
-    const response = await api.get<{ success: boolean; data: Vehicle }>(`/fleet/vehicles/${id}`);
-    return response.data.data;
-  },
-  createVehicle: async (data: Partial<Vehicle>) => {
-    const response = await api.post<{ success: boolean; data: Vehicle }>('/fleet/vehicles/create', data);
-    return response.data.data;
-  },
-  updateVehicle: async (id: string, data: Partial<Vehicle>) => {
-    const response = await api.patch<{ success: boolean; data: Vehicle }>(`/fleet/vehicles/update/${id}`, data);
-    return response.data.data;
-  },
-  deleteVehicle: async (id: string) => {
-    const response = await api.delete<{ success: boolean }>(`/fleet/vehicles/delete/${id}`);
-    return response.data.success;
   },
 
-  // Drivers
-  getDrivers: async () => {
-    const response = await api.get<{ success: boolean; data: Driver[] }>('/fleet/drivers/list');
+  async getVehicleById(id: string): Promise<Vehicle> {
+    const response = await apiClient.get(`/fleet/vehicles/${id}`);
     return response.data.data;
-  },
-  getDriverById: async (id: string) => {
-    const response = await api.get<{ success: boolean; data: Driver }>(`/fleet/drivers/${id}`);
-    return response.data.data;
-  },
-  createDriver: async (data: Partial<Driver>) => {
-    const response = await api.post<{ success: boolean; data: Driver }>('/fleet/drivers/create', data);
-    return response.data.data;
-  },
-  updateDriver: async (id: string, data: Partial<Driver>) => {
-    const response = await api.patch<{ success: boolean; data: Driver }>(`/fleet/drivers/update/${id}`, data);
-    return response.data.data;
-  },
-  deleteDriver: async (id: string) => {
-    const response = await api.delete<{ success: boolean }>(`/fleet/drivers/delete/${id}`);
-    return response.data.success;
   },
 
-  // Trips
-  getTrips: async () => {
-    const response = await api.get<{ success: boolean; data: Trip[] }>('/fleet/trips/list');
+  async createVehicle(data: Partial<Vehicle>): Promise<Vehicle> {
+    const response = await apiClient.post('/fleet/vehicles/create', data);
     return response.data.data;
-  },
-  getTripById: async (id: string) => {
-    const response = await api.get<{ success: boolean; data: Trip }>(`/fleet/trips/${id}`);
-    return response.data.data;
-  },
-  createTrip: async (data: Partial<Trip>) => {
-    const response = await api.post<{ success: boolean; data: Trip }>('/fleet/trips/create', data);
-    return response.data.data;
-  },
-  updateTrip: async (id: string, data: Partial<Trip>) => {
-    const response = await api.patch<{ success: boolean; data: Trip }>(`/fleet/trips/update/${id}`, data);
-    return response.data.data;
-  },
-  deleteTrip: async (id: string) => {
-    const response = await api.delete<{ success: boolean }>(`/fleet/trips/delete/${id}`);
-    return response.data.success;
   },
 
-  // Maintenance
-  getMaintenance: async () => {
-    const response = await api.get<{ success: boolean; data: Maintenance[] }>('/fleet/maintenance/list');
+  async updateVehicle(id: string, data: Partial<Vehicle>): Promise<Vehicle> {
+    const response = await apiClient.patch(`/fleet/vehicles/update/${id}`, data);
     return response.data.data;
-  },
-  getMaintenanceById: async (id: string) => {
-    const response = await api.get<{ success: boolean; data: Maintenance }>(`/fleet/maintenance/${id}`);
-    return response.data.data;
-  },
-  createMaintenance: async (data: Partial<Maintenance>) => {
-    const response = await api.post<{ success: boolean; data: Maintenance }>('/fleet/maintenance/create', data);
-    return response.data.data;
-  },
-  updateMaintenance: async (id: string, data: Partial<Maintenance>) => {
-    const response = await api.patch<{ success: boolean; data: Maintenance }>(`/fleet/maintenance/update/${id}`, data);
-    return response.data.data;
-  },
-  deleteMaintenance: async (id: string) => {
-    const response = await api.delete<{ success: boolean }>(`/fleet/maintenance/delete/${id}`);
-    return response.data.success;
   },
 
-  // Fuel Logs
-  getFuelLogs: async () => {
-    const response = await api.get<{ success: boolean; data: FuelLog[] }>('/fleet/fuel-logs/list');
-    return response.data.data;
-  },
-  getFuelLogById: async (id: string) => {
-    const response = await api.get<{ success: boolean; data: FuelLog }>(`/fleet/fuel-logs/${id}`);
-    return response.data.data;
-  },
-  createFuelLog: async (data: Partial<FuelLog>) => {
-    const response = await api.post<{ success: boolean; data: FuelLog }>('/fleet/fuel-logs/create', data);
-    return response.data.data;
-  },
-  updateFuelLog: async (id: string, data: Partial<FuelLog>) => {
-    const response = await api.patch<{ success: boolean; data: FuelLog }>(`/fleet/fuel-logs/update/${id}`, data);
-    return response.data.data;
-  },
-  deleteFuelLog: async (id: string) => {
-    const response = await api.delete<{ success: boolean }>(`/fleet/fuel-logs/delete/${id}`);
-    return response.data.success;
+  async deleteVehicle(id: string): Promise<void> {
+    await apiClient.delete(`/fleet/vehicles/delete/${id}`);
   },
 
-  // Accidents
-  getAccidents: async () => {
-    const response = await api.get<{ success: boolean; data: FleetAccident[] }>('/fleet/accidents/list');
+  // --- Drivers ---
+  async getDrivers(): Promise<Driver[]> {
+    const response = await apiClient.get('/fleet/drivers/list');
     return response.data.data;
-  },
-  getAccidentById: async (id: string) => {
-    const response = await api.get<{ success: boolean; data: FleetAccident }>(`/fleet/accidents/${id}`);
-    return response.data.data;
-  },
-  createAccident: async (data: Partial<FleetAccident>) => {
-    const response = await api.post<{ success: boolean; data: FleetAccident }>('/fleet/accidents/create', data);
-    return response.data.data;
-  },
-  updateAccident: async (id: string, data: Partial<FleetAccident>) => {
-    const response = await api.patch<{ success: boolean; data: FleetAccident }>(`/fleet/accidents/update/${id}`, data);
-    return response.data.data;
-  },
-  deleteAccident: async (id: string) => {
-    const response = await api.delete<{ success: boolean }>(`/fleet/accidents/delete/${id}`);
-    return response.data.success;
   },
 
-  // Vehicle Expenses
-  getExpenses: async () => {
-    const response = await api.get<{ success: boolean; data: VehicleExpense[] }>('/fleet/vehicle-expenses/list');
+  async getDriverById(id: string): Promise<Driver> {
+    const response = await apiClient.get(`/fleet/drivers/${id}`);
     return response.data.data;
-  },
-  getExpenseById: async (id: string) => {
-    const response = await api.get<{ success: boolean; data: VehicleExpense }>(`/fleet/vehicle-expenses/${id}`);
-    return response.data.data;
-  },
-  createExpense: async (data: Partial<VehicleExpense>) => {
-    const response = await api.post<{ success: boolean; data: VehicleExpense }>('/fleet/vehicle-expenses/create', data);
-    return response.data.data;
-  },
-  updateExpense: async (id: string, data: Partial<VehicleExpense>) => {
-    const response = await api.patch<{ success: boolean; data: VehicleExpense }>(`/fleet/vehicle-expenses/update/${id}`, data);
-    return response.data.data;
-  },
-  deleteExpense: async (id: string) => {
-    const response = await api.delete<{ success: boolean }>(`/fleet/vehicle-expenses/delete/${id}`);
-    return response.data.success;
   },
 
-  // Bookings
-  getBookings: async () => {
-    const response = await api.get<{ success: boolean; data: VehicleBooking[] }>('/fleet/bookings/list');
+  async createDriver(data: Partial<Driver>): Promise<Driver> {
+    const response = await apiClient.post('/fleet/drivers/create', data);
     return response.data.data;
-  },
-  getBookingById: async (id: string) => {
-    const response = await api.get<{ success: boolean; data: VehicleBooking }>(`/fleet/bookings/${id}`);
-    return response.data.data;
-  },
-  createBooking: async (data: Partial<VehicleBooking>) => {
-    const response = await api.post<{ success: boolean; data: VehicleBooking }>('/fleet/bookings/create', data);
-    return response.data.data;
-  },
-  updateBooking: async (id: string, data: Partial<VehicleBooking>) => {
-    const response = await api.patch<{ success: boolean; data: VehicleBooking }>(`/fleet/bookings/update/${id}`, data);
-    return response.data.data;
-  },
-  deleteBooking: async (id: string) => {
-    const response = await api.delete<{ success: boolean }>(`/fleet/bookings/delete/${id}`);
-    return response.data.success;
   },
 
-  // Cost Centers
-  getCostCenters: async () => {
-    const response = await api.get<{ success: boolean; data: CostCenter[] }>('/fleet/cost-centers/list');
+  async updateDriver(id: string, data: Partial<Driver>): Promise<Driver> {
+    const response = await apiClient.patch(`/fleet/drivers/update/${id}`, data);
     return response.data.data;
-  },
-  getCostCenterById: async (id: string) => {
-    const response = await api.get<{ success: boolean; data: CostCenter }>(`/fleet/cost-centers/${id}`);
-    return response.data.data;
-  },
-  createCostCenter: async (data: Partial<CostCenter>) => {
-    const response = await api.post<{ success: boolean; data: CostCenter }>('/fleet/cost-centers/create', data);
-    return response.data.data;
-  },
-  updateCostCenter: async (id: string, data: Partial<CostCenter>) => {
-    const response = await api.patch<{ success: boolean; data: CostCenter }>(`/fleet/cost-centers/update/${id}`, data);
-    return response.data.data;
-  },
-  deleteCostCenter: async (id: string) => {
-    const response = await api.delete<{ success: boolean }>(`/fleet/cost-centers/delete/${id}`);
-    return response.data.success;
   },
 
-  // KPI & Dashboard
-  getKPIs: async () => {
-    const response = await api.get<{ success: boolean; data: any }>('/fleet/kpis');
+  async deleteDriver(id: string): Promise<void> {
+    await apiClient.delete(`/fleet/drivers/delete/${id}`);
+  },
+
+  // --- Trips ---
+  async getTrips(): Promise<Trip[]> {
+    const response = await apiClient.get('/fleet/trips/list');
     return response.data.data;
   },
-  getDashboardStats: async (period: string = 'this_month') => {
-    const response = await api.get<{ success: boolean; data: any }>(`/fleet/dashboard?period=${period}`);
+
+  async getTripById(id: string): Promise<Trip> {
+    const response = await apiClient.get(`/fleet/trips/${id}`);
+    return response.data.data;
+  },
+
+  async createTrip(data: Partial<Trip>): Promise<Trip> {
+    const response = await apiClient.post('/fleet/trips/create', data);
+    return response.data.data;
+  },
+
+  async updateTrip(id: string, data: Partial<Trip>): Promise<Trip> {
+    const response = await apiClient.patch(`/fleet/trips/update/${id}`, data);
+    return response.data.data;
+  },
+
+  async deleteTrip(id: string): Promise<void> {
+    await apiClient.delete(`/fleet/trips/delete/${id}`);
+  },
+
+  // --- Maintenance ---
+  async getMaintenance(): Promise<MaintenanceRecord[]> {
+    const response = await apiClient.get('/fleet/maintenance/list');
+    return response.data.data;
+  },
+
+  async getMaintenanceById(id: string): Promise<MaintenanceRecord> {
+    const response = await apiClient.get(`/fleet/maintenance/${id}`);
+    return response.data.data;
+  },
+
+  async createMaintenance(data: Partial<MaintenanceRecord>): Promise<MaintenanceRecord> {
+    const response = await apiClient.post('/fleet/maintenance/create', data);
+    return response.data.data;
+  },
+
+  async updateMaintenance(id: string, data: Partial<MaintenanceRecord>): Promise<MaintenanceRecord> {
+    const response = await apiClient.patch(`/fleet/maintenance/update/${id}`, data);
+    return response.data.data;
+  },
+
+  async deleteMaintenance(id: string): Promise<void> {
+    await apiClient.delete(`/fleet/maintenance/delete/${id}`);
+  },
+
+  // --- Fuel Logs ---
+  async getFuelLogs(): Promise<FuelLog[]> {
+    const response = await apiClient.get('/fleet/fuel-logs/list');
+    return response.data.data;
+  },
+
+  async getFuelLogById(id: string): Promise<FuelLog> {
+    const response = await apiClient.get(`/fleet/fuel-logs/${id}`);
+    return response.data.data;
+  },
+
+  async createFuelLog(data: Partial<FuelLog>): Promise<FuelLog> {
+    const response = await apiClient.post('/fleet/fuel-logs/create', data);
+    return response.data.data;
+  },
+
+  async updateFuelLog(id: string, data: Partial<FuelLog>): Promise<FuelLog> {
+    const response = await apiClient.patch(`/fleet/fuel-logs/update/${id}`, data);
+    return response.data.data;
+  },
+
+  async deleteFuelLog(id: string): Promise<void> {
+    await apiClient.delete(`/fleet/fuel-logs/delete/${id}`);
+  },
+
+  // --- Accidents ---
+  async getAccidents(): Promise<Accident[]> {
+    const response = await apiClient.get('/fleet/accidents/list');
+    return response.data.data;
+  },
+
+  async getAccidentById(id: string): Promise<Accident> {
+    const response = await apiClient.get(`/fleet/accidents/${id}`);
+    return response.data.data;
+  },
+
+  async createAccident(data: Partial<Accident>): Promise<Accident> {
+    const response = await apiClient.post('/fleet/accidents/create', data);
+    return response.data.data;
+  },
+
+  async updateAccident(id: string, data: Partial<Accident>): Promise<Accident> {
+    const response = await apiClient.patch(`/fleet/accidents/update/${id}`, data);
+    return response.data.data;
+  },
+
+  async deleteAccident(id: string): Promise<void> {
+    await apiClient.delete(`/fleet/accidents/delete/${id}`);
+  },
+
+  // --- Vehicle Expenses ---
+  async getExpenses(): Promise<VehicleExpense[]> {
+    const response = await apiClient.get('/fleet/vehicle-expenses/list');
+    return response.data.data;
+  },
+
+  async getExpenseById(id: string): Promise<VehicleExpense> {
+    const response = await apiClient.get(`/fleet/vehicle-expenses/${id}`);
+    return response.data.data;
+  },
+
+  async createExpense(data: Partial<VehicleExpense>): Promise<VehicleExpense> {
+    const response = await apiClient.post('/fleet/vehicle-expenses/create', data);
+    return response.data.data;
+  },
+
+  async updateExpense(id: string, data: Partial<VehicleExpense>): Promise<VehicleExpense> {
+    const response = await apiClient.patch(`/fleet/vehicle-expenses/update/${id}`, data);
+    return response.data.data;
+  },
+
+  async deleteExpense(id: string): Promise<void> {
+    await apiClient.delete(`/fleet/vehicle-expenses/delete/${id}`);
+  },
+
+  // --- Bookings ---
+  async getBookings(): Promise<VehicleBooking[]> {
+    const response = await apiClient.get('/fleet/bookings/list');
+    return response.data.data;
+  },
+
+  async getBookingById(id: string): Promise<VehicleBooking> {
+    const response = await apiClient.get(`/fleet/bookings/${id}`);
+    return response.data.data;
+  },
+
+  async createBooking(data: Partial<VehicleBooking>): Promise<VehicleBooking> {
+    const response = await apiClient.post('/fleet/bookings/create', data);
+    return response.data.data;
+  },
+
+  async updateBooking(id: string, data: Partial<VehicleBooking>): Promise<VehicleBooking> {
+    const response = await apiClient.patch(`/fleet/bookings/update/${id}`, data);
+    return response.data.data;
+  },
+
+  async deleteBooking(id: string): Promise<void> {
+    await apiClient.delete(`/fleet/bookings/delete/${id}`);
+  },
+
+  // --- Cost Centers ---
+  async getCostCenters(): Promise<CostCenter[]> {
+    const response = await apiClient.get('/fleet/cost-centers/list');
+    return response.data.data;
+  },
+
+  async getCostCenterById(id: string): Promise<CostCenter> {
+    const response = await apiClient.get(`/fleet/cost-centers/${id}`);
+    return response.data.data;
+  },
+
+  async createCostCenter(data: Partial<CostCenter>): Promise<CostCenter> {
+    const response = await apiClient.post('/fleet/cost-centers/create', data);
+    return response.data.data;
+  },
+
+  async updateCostCenter(id: string, data: Partial<CostCenter>): Promise<CostCenter> {
+    const response = await apiClient.patch(`/fleet/cost-centers/update/${id}`, data);
+    return response.data.data;
+  },
+
+  async deleteCostCenter(id: string): Promise<void> {
+    await apiClient.delete(`/fleet/cost-centers/delete/${id}`);
+  },
+
+  // --- KPIs & Dashboard ---
+  async getKPIs(): Promise<any> {
+    const response = await apiClient.get('/fleet/kpis');
+    return response.data.data;
+  },
+
+  async getDashboardStats(period: string = 'this_month'): Promise<any> {
+    const response = await apiClient.get(`/fleet/dashboard?period=${period}`);
     return response.data.data;
   },
 };
+

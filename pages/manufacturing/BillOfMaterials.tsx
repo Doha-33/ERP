@@ -1,87 +1,161 @@
-import React, { useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Plus, Search, Edit2, Trash2, FileText } from 'lucide-react';
-import { Card, Button, Input, Select, Badge, ExportDropdown, TextArea } from '../../components/ui/Common';
-import { Table, Column } from '../../components/ui/Table';
-import { Modal } from '../../components/ui/Modal';
-
-interface BOMItem {
-  id: string;
-  bomId: string;
-  productName: string;
-  productCode: string;
-  componentItem: string;
-  qty: number;
-  uom: string;
-  version: string;
-  notes: string;
-}
+import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { Plus, Search, Edit2, Trash2, Package, Hash, Box, Layers } from "lucide-react";
+import {
+  Button,
+  Input,
+  ExportDropdown,
+  Badge,
+} from "../../components/ui/Common";
+import { Table, Column } from "../../components/ui/Table";
+import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
+import { BOMFormModal } from "../../components/manufacturing/BOMFormModal";
+import {manufacturingService} from "../../services/manufacturing.service";
+import { BillOfMaterials as BOMType } from "../../types";
+import { toast } from "sonner";
 
 export const BillOfMaterials: React.FC = () => {
   const { t } = useTranslation();
+  const [boms, setBoms] = useState<BOMType[]>([]);
+  const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedBOM, setSelectedBOM] = useState<BOMItem | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [selectedBOM, setSelectedBOM] = useState<BOMType | null>(null);
+  const [bomIdToDelete, setBomIdToDelete] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
 
-  const bomData: BOMItem[] = [
-    {
-      id: '1',
-      bomId: '23EER',
-      productName: 'Laptop Lenovo',
-      productCode: '234',
-      componentItem: 'x',
-      qty: 3,
-      uom: 'kg',
-      version: 'wwww',
-      notes: 'wwww',
-    },
-    {
-      id: '2',
-      bomId: '23EER',
-      productName: 'Laptop Lenovo',
-      productCode: '4554',
-      componentItem: 'z',
-      qty: 2,
-      uom: 'pcs',
-      version: 'www',
-      notes: 'www',
-    },
-    {
-      id: '3',
-      bomId: '23EER',
-      productName: 'Laptop Lenovo',
-      productCode: '3268',
-      componentItem: 'x',
-      qty: 4,
-      uom: 'pcs',
-      version: 'wwwww',
-      notes: 'wwwww',
-    },
-  ];
+  const fetchBOMs = async () => {
+    try {
+      setLoading(true);
+      const data = await manufacturingService.getBOMs();
+      setBoms(data);
+    } catch (error) {
+      console.error("Failed to fetch BOMs:", error);
+      toast.error(t("failed_to_fetch_boms"));
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const columns: Column<BOMItem>[] = [
-    { header: t('bom_id'), accessorKey: 'bomId' },
-    { header: t('product_name'), accessorKey: 'productName' },
-    { header: t('product_code'), accessorKey: 'productCode' },
-    { header: t('component_item'), accessorKey: 'componentItem' },
-    { header: t('qty'), accessorKey: 'qty' },
-    { header: t('uom'), accessorKey: 'uom' },
-    { header: t('version'), accessorKey: 'version' },
-    { header: t('notes'), accessorKey: 'notes' },
+  useEffect(() => {
+    fetchBOMs();
+  }, []);
+
+  const handleSave = async (data: Partial<BOMType>) => {
+    try {
+      if (selectedBOM) {
+        await manufacturingService.updateBOM(selectedBOM._id, data);
+        toast.success(t("bom_updated_successfully"));
+      } else {
+        await manufacturingService.createBOM(data);
+        toast.success(t("bom_created_successfully"));
+      }
+      setIsModalOpen(false);
+      await fetchBOMs();
+    } catch (error) {
+      console.error("Failed to save BOM:", error);
+      toast.error(t("failed_to_save_bom"));
+      throw error;
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!bomIdToDelete) return;
+    try {
+      await manufacturingService.deleteBOM(bomIdToDelete);
+      setIsDeleteModalOpen(false);
+      setBomIdToDelete(null);
+      toast.success(t("bom_deleted_successfully"));
+      await fetchBOMs();
+    } catch (error) {
+      console.error("Failed to delete BOM:", error);
+      toast.error(t("failed_to_delete_bom"));
+    }
+  };
+
+  const filteredBOMs = boms.filter((bom) =>
+    bom.product_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    bom.product_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    bom.bom_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    bom.component_item?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const columns: Column<BOMType>[] = [
     {
-      header: t('actions'),
-      accessorKey: 'id',
-      render: (item: BOMItem) => (
+      header: t("bom_id"),
+      accessorKey: "bom_id",
+      render: (item) => (
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
+            <Hash size={14} className="text-indigo-600" />
+          </div>
+          <span className="font-medium text-sm text-gray-900">{item.bom_id}</span>
+        </div>
+      ),
+    },
+    {
+      header: t("product_info"),
+      render: (item) => (
+        <div className="flex flex-col">
+          <div className="flex items-center gap-1.5">
+            <Package size={14} className="text-gray-400" />
+            <span className="text-sm font-medium text-gray-900">{item.product_name}</span>
+          </div>
+          <span className="text-xs text-gray-500 ml-5">{item.product_code}</span>
+        </div>
+      ),
+    },
+    {
+      header: t("component"),
+      accessorKey: "component_item",
+      render: (item) => (
+        <div className="flex items-center gap-1.5">
+          <Box size={14} className="text-gray-400" />
+          <span className="text-sm">{item.component_item}</span>
+        </div>
+      ),
+    },
+    {
+      header: t("quantity"),
+      accessorKey: "qty",
+      render: (item) => (
+        <div className="flex items-center gap-1.5">
+          <Layers size={14} className="text-gray-400" />
+          <span className="text-sm font-medium">
+            {item.qty} {item.uom}
+          </span>
+        </div>
+      ),
+    },
+    {
+      header: t("version"),
+      accessorKey: "version",
+      render: (item) => (
+        <Badge variant="info" className="bg-gray-100 text-gray-700">
+          {item.version}
+        </Badge>
+      ),
+    },
+    {
+      header: t("actions"),
+      render: (item) => (
         <div className="flex items-center gap-2">
           <button
             onClick={() => {
               setSelectedBOM(item);
               setIsModalOpen(true);
             }}
-            className="p-1 hover:bg-gray-100 rounded text-blue-600"
+            className="p-1.5 text-gray-400 hover:text-indigo-600 transition-colors border border-gray-200 rounded-lg"
           >
             <Edit2 size={16} />
           </button>
-          <button className="p-1 hover:bg-gray-100 rounded text-red-600">
+          <button
+            onClick={() => {
+              setBomIdToDelete(item._id);
+              setIsDeleteModalOpen(true);
+            }}
+            className="p-1.5 text-gray-400 hover:text-red-500 transition-colors border border-gray-200 rounded-lg"
+          >
             <Trash2 size={16} />
           </button>
         </div>
@@ -91,104 +165,73 @@ export const BillOfMaterials: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('bill_of_materials')}</h1>
-          <p className="text-gray-500 dark:text-gray-400">{t('manage_your_bom')}</p>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {t("bill_of_materials")}
+          </h1>
+          <p className="text-gray-500 mt-1">
+            {t("manage_your_bom")}
+          </p>
         </div>
         <div className="flex gap-3">
-          <ExportDropdown />
+          <ExportDropdown data={boms} filename="bill-of-materials" />
           <Button
             variant="primary"
             onClick={() => {
               setSelectedBOM(null);
               setIsModalOpen(true);
             }}
+            className="bg-indigo-600 hover:bg-indigo-700"
           >
             <Plus size={18} />
-            {t('add_bom')}
+            {t("add_bom")}
           </Button>
         </div>
       </div>
 
-      <Card>
-        <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex flex-wrap gap-4 items-center justify-between">
-          <div className="flex flex-wrap gap-4 items-center">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <Input placeholder={t('search_placeholder')} className="pl-10 w-64" />
-            </div>
-            <Select
-              options={[
-                { label: t('product_name'), value: 'product_name' },
-              ]}
-              className="w-48"
-            />
-            <Select
-              options={[
-                { label: t('bom_id'), value: 'bom_id' },
-              ]}
-              className="w-48"
-            />
-          </div>
-        </div>
-        <Table 
-          columns={columns} 
-          data={bomData} 
-          keyExtractor={(item) => item.id}
+      {/* Search Bar */}
+      <div className="flex flex-wrap gap-4 items-center">
+        <Input
+          placeholder={t("search_bom_placeholder")}
+          icon={<Search size={18} />}
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="max-w-md"
+          fullWidth={false}
         />
-      </Card>
+      </div>
 
-      <Modal
+      {/* Table */}
+      <Table
+        columns={columns}
+        data={filteredBOMs}
+        keyExtractor={(item) => item._id}
+        isLoading={loading}
+        selectable
+      />
+
+      {/* Add/Edit Modal */}
+      <BOMFormModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title={selectedBOM ? t('edit_bom') : t('add_bom')}
-      >
-        <form className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('product_name')} *</label>
-              <Input defaultValue={selectedBOM?.productName} required />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('version')} *</label>
-              <Input defaultValue={selectedBOM?.version} required />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('qty')} *</label>
-              <Input type="number" defaultValue={selectedBOM?.qty} required />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('component_item')} *</label>
-              <Input defaultValue={selectedBOM?.componentItem} required />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('uom')} *</label>
-              <Select
-                options={[
-                  { label: 'kg', value: 'kg' },
-                  { label: 'pcs', value: 'pcs' },
-                  { label: 'sheets', value: 'sheets' },
-                ]}
-                defaultValue={selectedBOM?.uom}
-                required
-              />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('notes')} *</label>
-            <TextArea defaultValue={selectedBOM?.notes} required />
-          </div>
-          <div className="flex justify-end gap-3 mt-6">
-            <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
-              {t('cancel')}
-            </Button>
-            <Button variant="primary" type="submit">
-              {selectedBOM ? t('submit') : t('add_bom')}
-            </Button>
-          </div>
-        </form>
-      </Modal>
+        onClose={() => {
+          setIsModalOpen(false);
+          setSelectedBOM(null);
+        }}
+        selectedBOM={selectedBOM}
+        onSave={handleSave}
+        loading={loading}
+      />
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={handleDelete}
+        title={t("delete_bom")}
+        message={t("are_you_sure_delete_bom")}
+      />
     </div>
   );
 };

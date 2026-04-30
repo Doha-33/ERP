@@ -1,292 +1,494 @@
-
-import React, { useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { Button, Input, Select } from '../ui/Common';
-import { Modal } from '../ui/Modal';
-import { Payroll } from '../../types';
-import { useData } from '../../context/DataContext';
-import { PlusCircle, Edit2, Users } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { PlusCircle, Edit2, Users, Calculator, DollarSign } from "lucide-react";
+import { Modal } from "../../components/ui/Modal";
+import { Button, Input, Select, TextArea } from "../../components/ui/Common";
+import { Payroll, Employee } from "../../types";
+import { useData } from "../../context/DataContext";
 
 interface PayrollModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (record: Payroll) => void;
+  onSave: (record: Partial<Payroll>) => Promise<void>;
   recordToEdit?: Payroll | null;
+  isLoading?: boolean;
 }
 
-const payrollSchema = z.object({
-  employeeId: z.string().optional(), 
-  payrollMonth: z.number().min(1).max(12),
-  payrollYear: z.number().min(2000),
-  basicSalary: z.number().optional(),
-  housingAllowance: z.number().optional(),
-  medicalAllowance: z.number().optional(),
-  workNatureAllowance: z.number().optional(),
-  transportAllowance: z.number().optional(),
-  commissions: z.number().optional(),
-  bonus: z.number().optional(),
-  companyId: z.string().optional(),
-  branchId: z.string().optional(),
-  netSalary: z.number().optional(),
-  status: z.enum(['DRAFT', 'PAID']).optional(),
-});
+interface Deductions {
+  absence: number;
+  lateArrival: number;
+  earlyLeave: number;
+  loan: number;
+  penalties: number;
+  other: number;
+}
 
-type PayrollFormInputs = z.infer<typeof payrollSchema>;
-
-export const PayrollModal: React.FC<PayrollModalProps> = ({ isOpen, onClose, onSave, recordToEdit }) => {
+export const PayrollModal: React.FC<PayrollModalProps> = ({
+  isOpen,
+  onClose,
+  onSave,
+  recordToEdit,
+  isLoading = false,
+}) => {
   const { t } = useTranslation();
   const { employees } = useData();
-  
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors, isSubmitting },
-  } = useForm<PayrollFormInputs>({
-    resolver: zodResolver(payrollSchema),
-    defaultValues: {
-      payrollMonth: new Date().getMonth() + 1,
-      payrollYear: new Date().getFullYear(),
-      status: 'DRAFT',
-      basicSalary: 0,
-      housingAllowance: 0,
-      medicalAllowance: 0,
-      workNatureAllowance: 0,
-      transportAllowance: 0,
-      commissions: 0,
-      bonus: 0,
-      netSalary: 0
-    }
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formData, setFormData] = useState({
+    employeeId: "",
+    payrollMonth: new Date().getMonth() + 1,
+    payrollYear: new Date().getFullYear(),
+    basicSalary: 0,
+    housingAllowance: 0,
+    transportAllowance: 0,
+    workNatureAllowance: 0,
+    medicalAllowance: 0,
+    commissions: 0,
+    bonus: 0,
+    overtimeHours: 0,
+    overtimeRate: 50,
+    overtimeAmount: 0,
+    deductions: {
+      absence: 0,
+      lateArrival: 0,
+      earlyLeave: 0,
+      loan: 0,
+      penalties: 0,
+      other: 0,
+    },
+    totalDeductions: 0,
+    totalAllowances: 0,
+    grossSalary: 0,
+    netSalary: 0,
+    status: "DRAFT",
+    notes: "",
   });
 
   useEffect(() => {
-    if (isOpen) {
-      if (recordToEdit) {
-        const empId = typeof recordToEdit.employeeId === 'object' ? recordToEdit.employeeId?._id : recordToEdit.employeeId;
-        const compId = typeof recordToEdit.companyId === 'object' ? recordToEdit.companyId?._id : recordToEdit.companyId;
-        const branchId = typeof recordToEdit.branchId === 'object' ? recordToEdit.branchId?._id : recordToEdit.branchId;
-        reset({
-          employeeId: empId || '',
-          payrollMonth: Number(recordToEdit.payrollMonth),
-          payrollYear: Number(recordToEdit.payrollYear),
-          basicSalary: recordToEdit.basicSalary,
-          housingAllowance: recordToEdit.housingAllowance,
-          medicalAllowance: recordToEdit.medicalAllowance,
-          workNatureAllowance: recordToEdit.workNatureAllowance,
-          transportAllowance: recordToEdit.transportAllowance,
-          commissions: recordToEdit.commissions,
-          bonus: recordToEdit.bonus,
-          companyId: compId || '',
-          branchId: branchId || '',
-          netSalary: recordToEdit.netSalary,
-          status: recordToEdit.status as any,
-        });
-      } else {
-        reset({
-          employeeId: '', 
-          payrollMonth: new Date().getMonth() + 1,
-          payrollYear: new Date().getFullYear(),
-          status: 'DRAFT',
-        });
-      }
-    }
-  }, [recordToEdit, isOpen, reset]);
+    if (recordToEdit && isOpen) {
+      const employeeId = typeof recordToEdit.employeeId === "object"
+        ? (recordToEdit.employeeId as any)._id
+        : recordToEdit.employeeId;
 
-  const onSubmit = (data: PayrollFormInputs) => {
-    const newRecord: Payroll = {
-      id: recordToEdit ? recordToEdit.id : '',
-      _id: recordToEdit ? recordToEdit._id : '',
-      employeeId: data.employeeId || '', 
-      companyId: data.companyId || '',
-      branchId: data.branchId || '',
-      payrollMonth: Number(data.payrollMonth),
-      payrollYear: Number(data.payrollYear),
-      basicSalary: data.basicSalary || 0,
-      housingAllowance: data.housingAllowance || 0,
-      medicalAllowance: data.medicalAllowance || 0,
-      workNatureAllowance: data.workNatureAllowance || 0,
-      transportAllowance: data.transportAllowance || 0,
-      commissions: data.commissions || 0,
-      bonus: data.bonus || 0,
-      overtimeHours: recordToEdit?.overtimeHours || 0,
-      overtimeRate: recordToEdit?.overtimeRate || 0,
-      overtimeAmount: recordToEdit?.overtimeAmount || 0,
-      totalAllowances: recordToEdit?.totalAllowances || 0,
-      totalDeductions: recordToEdit?.totalDeductions || 0,
-      grossSalary: recordToEdit?.grossSalary || 0,
-      netSalary: data.netSalary || 0,
-      status: data.status || 'DRAFT',
-      notes: recordToEdit?.notes || '',
-      deductions: recordToEdit?.deductions || {
-        absence: 0,
-        lateArrival: 0,
-        earlyLeave: 0,
-        loan: 0,
-        penalties: 0,
-        other: 0
-      }
-    };
-    onSave(newRecord);
-    onClose();
+      setFormData({
+        employeeId: employeeId || "",
+        payrollMonth: recordToEdit.payrollMonth,
+        payrollYear: recordToEdit.payrollYear,
+        basicSalary: recordToEdit.basicSalary || 0,
+        housingAllowance: recordToEdit.housingAllowance || 0,
+        transportAllowance: recordToEdit.transportAllowance || 0,
+        workNatureAllowance: recordToEdit.workNatureAllowance || 0,
+        medicalAllowance: recordToEdit.medicalAllowance || 0,
+        commissions: recordToEdit.commissions || 0,
+        bonus: recordToEdit.bonus || 0,
+        overtimeHours: recordToEdit.overtimeHours || 0,
+        overtimeRate: recordToEdit.overtimeRate || 50,
+        overtimeAmount: recordToEdit.overtimeAmount || 0,
+        deductions: recordToEdit.deductions || {
+          absence: 0,
+          lateArrival: 0,
+          earlyLeave: 0,
+          loan: 0,
+          penalties: 0,
+          other: 0,
+        },
+        totalDeductions: recordToEdit.totalDeductions || 0,
+        totalAllowances: recordToEdit.totalAllowances || 0,
+        grossSalary: recordToEdit.grossSalary || 0,
+        netSalary: recordToEdit.netSalary || 0,
+        status: recordToEdit.status || "DRAFT",
+        notes: recordToEdit.notes || "",
+      });
+    } else if (!recordToEdit && isOpen) {
+      setFormData({
+        employeeId: "",
+        payrollMonth: new Date().getMonth() + 1,
+        payrollYear: new Date().getFullYear(),
+        basicSalary: 0,
+        housingAllowance: 0,
+        transportAllowance: 0,
+        workNatureAllowance: 0,
+        medicalAllowance: 0,
+        commissions: 0,
+        bonus: 0,
+        overtimeHours: 0,
+        overtimeRate: 50,
+        overtimeAmount: 0,
+        deductions: {
+          absence: 0,
+          lateArrival: 0,
+          earlyLeave: 0,
+          loan: 0,
+          penalties: 0,
+          other: 0,
+        },
+        totalDeductions: 0,
+        totalAllowances: 0,
+        grossSalary: 0,
+        netSalary: 0,
+        status: "DRAFT",
+        notes: "",
+      });
+    }
+  }, [recordToEdit, isOpen]);
+
+  // Calculate totals whenever relevant fields change
+  useEffect(() => {
+    const totalAllowances = 
+      formData.housingAllowance +
+      formData.transportAllowance +
+      formData.workNatureAllowance +
+      formData.medicalAllowance +
+      formData.commissions +
+      formData.bonus +
+      formData.overtimeAmount;
+
+    const totalDeductions = Object.values(formData.deductions).reduce((sum, val) => sum + val, 0);
+    const grossSalary = formData.basicSalary + totalAllowances;
+    const netSalary = grossSalary - totalDeductions;
+
+    setFormData(prev => ({
+      ...prev,
+      totalAllowances,
+      totalDeductions,
+      grossSalary,
+      netSalary,
+    }));
+  }, [
+    formData.basicSalary,
+    formData.housingAllowance,
+    formData.transportAllowance,
+    formData.workNatureAllowance,
+    formData.medicalAllowance,
+    formData.commissions,
+    formData.bonus,
+    formData.overtimeAmount,
+    formData.deductions,
+  ]);
+
+  // Calculate overtime amount when hours or rate changes
+  useEffect(() => {
+    const overtimeAmount = formData.overtimeHours * formData.overtimeRate;
+    setFormData(prev => ({ ...prev, overtimeAmount }));
+  }, [formData.overtimeHours, formData.overtimeRate]);
+
+  const employeeOptions = [
+    { value: "", label: t("all_active_employees") },
+    ...employees.map(emp => ({
+      value: emp._id || emp.id,
+      label: `${emp.fullName} (${emp.employeeCode})`,
+    })),
+  ];
+
+  const monthOptions = [
+    { value: 1, label: t("january") },
+    { value: 2, label: t("february") },
+    { value: 3, label: t("march") },
+    { value: 4, label: t("april") },
+    { value: 5, label: t("may") },
+    { value: 6, label: t("june") },
+    { value: 7, label: t("july") },
+    { value: 8, label: t("august") },
+    { value: 9, label: t("september") },
+    { value: 10, label: t("october") },
+    { value: 11, label: t("november") },
+    { value: 12, label: t("december") },
+  ];
+
+  const yearOptions = [2023, 2024, 2025, 2026, 2027].map(y => ({ value: y, label: String(y) }));
+  const statusOptions = [
+    { value: "DRAFT", label: t("draft") },
+    { value: "PAID", label: t("paid") },
+  ];
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    
+    try {
+      await onSave(formData);
+      onClose();
+    } catch (error) {
+      console.error("Error in form submission:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const title = (
-    <div className="flex items-center gap-3">
-      {recordToEdit ? (
-        <Edit2 size={24} className="text-[#2D3748]" />
-      ) : (
-        <PlusCircle size={24} className="text-[#2D3748]" />
-      )}
-      <span className="text-[#2D3748] font-bold text-2xl uppercase tracking-tight">
-        {recordToEdit ? "Edit Payroll" : "Generate All Payrolls"}
-      </span>
-    </div>
-  );
+  const handleChange = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
 
-  const footer = (
-    <div className="flex justify-end gap-4 w-full">
-       <Button 
-          type="button" 
-          disabled={isSubmitting}
-          className="bg-[#4A5568] hover:bg-[#2D3748] text-white px-10 rounded-xl py-3 font-bold" 
-          onClick={onClose}
-        >
-          {t('cancel')}
-        </Button>
-       <Button 
-          type="submit" 
-          form="payroll-form" 
-          disabled={isSubmitting}
-          className="bg-[#4361EE] hover:bg-blue-700 min-w-[200px] flex items-center justify-center gap-2 text-white rounded-xl py-3 font-bold shadow-lg shadow-blue-200"
-        >
-          {recordToEdit ? (
-            "Save Changes"
-          ) : (
-            <>
-              {isSubmitting ? 'Generating...' : (
-                <>
-                  <PlusCircle size={18} />
-                  Start Generation
-                </>
-              )}
-            </>
-          )}
-       </Button>
-    </div>
-  );
-
-  // Month values as numbers to ensure integer handling
-  const months = [
-    { value: 1, label: 'January' }, { value: 2, label: 'February' },
-    { value: 3, label: 'March' }, { value: 4, label: 'April' },
-    { value: 5, label: 'May' }, { value: 6, label: 'June' },
-    { value: 7, label: 'July' }, { value: 8, label: 'August' },
-    { value: 9, label: 'September' }, { value: 10, label: 'October' },
-    { value: 11, label: 'November' }, { value: 12, label: 'December' }
-  ];
-  
-  const years = [2023, 2024, 2025, 2026];
+  const handleDeductionChange = (field: keyof Deductions, value: number) => {
+    setFormData(prev => ({
+      ...prev,
+      deductions: { ...prev.deductions, [field]: value },
+    }));
+  };
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={title}
-      footer={footer}
-      className={recordToEdit ? "max-w-4xl" : "max-w-2xl"}
+      title={
+        <div className="flex items-center gap-2">
+          {recordToEdit ? <Edit2 size={20} /> : <PlusCircle size={20} />}
+          {recordToEdit ? t("edit_payroll") : t("generate_payroll")}
+        </div>
+      }
+      size="4xl"
     >
-      <form id="payroll-form" onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-         {!recordToEdit ? (
-            <div className="space-y-8 py-2">
-               <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-2xl flex items-start gap-4">
-                  <div className="p-2 bg-blue-100 rounded-lg text-primary"><Users size={20} /></div>
-                  <div>
-                    <p className="text-sm font-bold text-blue-900">Batch Generation Mode</p>
-                    <p className="text-xs text-blue-700 mt-1">This will automatically calculate salaries for all eligible employees for the selected period.</p>
-                  </div>
-               </div>
-
-               <div className="grid grid-cols-1 gap-x-10">
-                  <Select 
-                     label={<span className="text-[#718096] font-bold flex items-center gap-1">{t('employee_info')}</span>}
-                     options={[
-                        {value: '', label: '⚡ All Active Employees'}, 
-                        ...employees.map(e => ({ value: e.id, label: e.fullName }))
-                     ]}
-                     {...register('employeeId')} 
-                     error={errors.employeeId?.message as string} 
-                     className="rounded-xl border-[#E2E8F0] py-3 text-sm font-black text-primary bg-white"
-                  />
-               </div>
-               
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8">
-                  <Select 
-                     label={<span className="text-[#718096] font-bold flex items-center gap-1">Payroll Month <span className="text-red-500 font-bold">*</span></span>}
-                     options={months}
-                     {...register('payrollMonth', { valueAsNumber: true })} 
-                     className="rounded-xl border-[#E2E8F0] py-3 text-sm font-medium"
-                  />
-                  <Select 
-                     label={<span className="text-[#718096] font-bold flex items-center gap-1">Payroll Year <span className="text-red-500 font-bold">*</span></span>}
-                     options={years.map(y => ({ value: y, label: String(y) }))}
-                     {...register('payrollYear', { valueAsNumber: true })} 
-                     className="rounded-xl border-[#E2E8F0] py-3 text-sm font-medium"
-                  />
-               </div>
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {!recordToEdit && (
+          <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <Users size={18} className="text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-blue-900">{t("batch_generation_mode")}</p>
+                <p className="text-xs text-blue-700 mt-0.5">
+                  {t("batch_generation_description")}
+                </p>
+              </div>
             </div>
-         ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6">
-               <Select 
-                  label={<span className="text-[#718096] font-bold flex items-center gap-1">{t('employee_info')}</span>}
-                  options={employees.map(e => ({ value: e.id, label: e.fullName }))}
-                  {...register('employeeId')} 
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+          {/* Employee */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("employee")} {!recordToEdit && <span className="text-red-500">*</span>}
+            </label>
+            <Select
+              value={formData.employeeId}
+              onChange={(e) => handleChange("employeeId", e.target.value)}
+              options={employeeOptions}
+              placeholder={t("select_employee")}
+              disabled={!!recordToEdit}
+              required={!recordToEdit}
+              fullWidth
+            />
+          </div>
+
+          {/* Month & Year */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-gray-700">
+                {t("month")} <span className="text-red-500">*</span>
+              </label>
+              <Select
+                value={formData.payrollMonth}
+                onChange={(e) => handleChange("payrollMonth", Number(e.target.value))}
+                options={monthOptions}
+                required
+                fullWidth
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-gray-700">
+                {t("year")} <span className="text-red-500">*</span>
+              </label>
+              <Select
+                value={formData.payrollYear}
+                onChange={(e) => handleChange("payrollYear", Number(e.target.value))}
+                options={yearOptions}
+                required
+                fullWidth
+              />
+            </div>
+          </div>
+        </div>
+
+        {recordToEdit && (
+          <>
+            {/* Allowances Section */}
+            <div className="border-t border-gray-100 pt-4">
+              <h3 className="text-md font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <DollarSign size={18} className="text-green-600" />
+                {t("allowances")}
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3">
+                <Input
+                  label={t("basic_salary")}
+                  type="number"
+                  value={formData.basicSalary}
+                  onChange={(e) => handleChange("basicSalary", Number(e.target.value))}
+                  fullWidth
+                />
+                <Input
+                  label={t("housing_allowance")}
+                  type="number"
+                  value={formData.housingAllowance}
+                  onChange={(e) => handleChange("housingAllowance", Number(e.target.value))}
+                  fullWidth
+                />
+                <Input
+                  label={t("transport_allowance")}
+                  type="number"
+                  value={formData.transportAllowance}
+                  onChange={(e) => handleChange("transportAllowance", Number(e.target.value))}
+                  fullWidth
+                />
+                <Input
+                  label={t("work_nature_allowance")}
+                  type="number"
+                  value={formData.workNatureAllowance}
+                  onChange={(e) => handleChange("workNatureAllowance", Number(e.target.value))}
+                  fullWidth
+                />
+                <Input
+                  label={t("medical_allowance")}
+                  type="number"
+                  value={formData.medicalAllowance}
+                  onChange={(e) => handleChange("medicalAllowance", Number(e.target.value))}
+                  fullWidth
+                />
+                <Input
+                  label={t("commissions")}
+                  type="number"
+                  value={formData.commissions}
+                  onChange={(e) => handleChange("commissions", Number(e.target.value))}
+                  fullWidth
+                />
+                <Input
+                  label={t("bonus")}
+                  type="number"
+                  value={formData.bonus}
+                  onChange={(e) => handleChange("bonus", Number(e.target.value))}
+                  fullWidth
+                />
+                <Input
+                  label={t("overtime_hours")}
+                  type="number"
+                  value={formData.overtimeHours}
+                  onChange={(e) => handleChange("overtimeHours", Number(e.target.value))}
+                  fullWidth
+                />
+                <Input
+                  label={t("overtime_rate")}
+                  type="number"
+                  value={formData.overtimeRate}
+                  onChange={(e) => handleChange("overtimeRate", Number(e.target.value))}
+                  fullWidth
+                />
+                <Input
+                  label={t("overtime_amount")}
+                  type="number"
+                  value={formData.overtimeAmount}
                   disabled
-                  className="rounded-xl border-[#E2E8F0] py-3 text-sm font-medium opacity-60"
-               />
-               <Input label={<span className="text-[#718096] font-bold">Basic Salary <span className="text-red-500 font-bold">*</span></span>} placeholder="0.00" type="number" {...register('basicSalary', { valueAsNumber: true })} className="rounded-xl border-[#E2E8F0] py-3" />
-               
-               <Input label={<span className="text-[#718096] font-bold">Housing Allowance</span>} placeholder="0.00" type="number" {...register('housingAllowance', { valueAsNumber: true })} className="rounded-xl border-[#E2E8F0] py-3" />
-               <Input label={<span className="text-[#718096] font-bold">Medical Allowance</span>} placeholder="0.00" type="number" {...register('medicalAllowance', { valueAsNumber: true })} className="rounded-xl border-[#E2E8F0] py-3" />
-               
-               <Input label={<span className="text-[#718096] font-bold">Work Nature Allowance</span>} placeholder="0.00" type="number" {...register('workNatureAllowance', { valueAsNumber: true })} className="rounded-xl border-[#E2E8F0] py-3" />
-               <Input label={<span className="text-[#718096] font-bold">Transport Allowance</span>} placeholder="0.00" type="number" {...register('transportAllowance', { valueAsNumber: true })} className="rounded-xl border-[#E2E8F0] py-3" />
-               
-               <Input label={<span className="text-[#718096] font-bold">Commissions</span>} placeholder="0.00" type="number" {...register('commissions', { valueAsNumber: true })} className="rounded-xl border-[#E2E8F0] py-3" />
-               <Input label={<span className="text-[#718096] font-bold">Bonus</span>} placeholder="0.00" type="number" {...register('bonus', { valueAsNumber: true })} className="rounded-xl border-[#E2E8F0] py-3" />
-               
-               <Input label={<span className="text-[#718096] font-bold">Company ID</span>} {...register('companyId')} className="rounded-xl border-[#E2E8F0] py-3" />
-               <Input label={<span className="text-[#718096] font-bold">Branch ID</span>} {...register('branchId')} className="rounded-xl border-[#E2E8F0] py-3" />
-               
-               <div className="md:col-span-2">
-                 <Input label={<span className="text-primary font-black">Net Total Salary <span className="text-red-500 font-bold">*</span></span>} placeholder="0.00" type="number" {...register('netSalary', { valueAsNumber: true })} className="rounded-xl border-primary py-3 font-bold text-primary text-lg" />
-               </div>
-
-               <Select 
-                  label={<span className="text-[#718096] font-bold flex items-center gap-1">Payment Status <span className="text-red-500 font-bold">*</span></span>}
-                  options={[{value: 'PAID', label: 'Paid'}, {value: 'DRAFT', label: 'Draft'}]}
-                  {...register('status')} 
-                  className="rounded-xl border-[#E2E8F0] py-3 text-sm font-medium"
-               />
-               
-               <div className="grid grid-cols-2 gap-4">
-                  <Select 
-                    label={<span className="text-[#718096] font-bold">Month</span>}
-                    options={months}
-                    {...register('payrollMonth', { valueAsNumber: true })} 
-                    className="rounded-xl border-[#E2E8F0] py-3 text-sm font-medium"
-                  />
-                  <Select 
-                    label={<span className="text-[#718096] font-bold">Year</span>}
-                    options={years.map(y => ({ value: y, label: String(y) }))}
-                    {...register('payrollYear', { valueAsNumber: true })} 
-                    className="rounded-xl border-[#E2E8F0] py-3 text-sm font-medium"
-                  />
-               </div>
+                  fullWidth
+                />
+              </div>
             </div>
-         )}
+
+            {/* Deductions Section */}
+            <div className="border-t border-gray-100 pt-4">
+              <h3 className="text-md font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <Calculator size={18} className="text-red-600" />
+                {t("deductions")}
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3">
+                <Input
+                  label={t("absence_deduction")}
+                  type="number"
+                  value={formData.deductions.absence}
+                  onChange={(e) => handleDeductionChange("absence", Number(e.target.value))}
+                  fullWidth
+                />
+                <Input
+                  label={t("late_arrival_deduction")}
+                  type="number"
+                  value={formData.deductions.lateArrival}
+                  onChange={(e) => handleDeductionChange("lateArrival", Number(e.target.value))}
+                  fullWidth
+                />
+                <Input
+                  label={t("early_leave_deduction")}
+                  type="number"
+                  value={formData.deductions.earlyLeave}
+                  onChange={(e) => handleDeductionChange("earlyLeave", Number(e.target.value))}
+                  fullWidth
+                />
+                <Input
+                  label={t("loan_deduction")}
+                  type="number"
+                  value={formData.deductions.loan}
+                  onChange={(e) => handleDeductionChange("loan", Number(e.target.value))}
+                  fullWidth
+                />
+                <Input
+                  label={t("penalties_deduction")}
+                  type="number"
+                  value={formData.deductions.penalties}
+                  onChange={(e) => handleDeductionChange("penalties", Number(e.target.value))}
+                  fullWidth
+                />
+                <Input
+                  label={t("other_deductions")}
+                  type="number"
+                  value={formData.deductions.other}
+                  onChange={(e) => handleDeductionChange("other", Number(e.target.value))}
+                  fullWidth
+                />
+              </div>
+            </div>
+
+            {/* Summary Section */}
+            <div className="bg-gray-50 rounded-xl p-4 space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600">{t("total_allowances")}</span>
+                <span className="text-sm font-semibold text-green-600">{formData.totalAllowances.toLocaleString()} EGP</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600">{t("total_deductions")}</span>
+                <span className="text-sm font-semibold text-red-600">{formData.totalDeductions.toLocaleString()} EGP</span>
+              </div>
+              <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+                <span className="text-base font-bold text-gray-900">{t("gross_salary")}</span>
+                <span className="text-base font-bold text-gray-900">{formData.grossSalary.toLocaleString()} EGP</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-lg font-bold text-indigo-600">{t("net_salary")}</span>
+                <span className="text-lg font-bold text-indigo-600">{formData.netSalary.toLocaleString()} EGP</span>
+              </div>
+            </div>
+
+            {/* Status & Notes */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+              <Select
+                label={t("status")}
+                value={formData.status}
+                onChange={(e) => handleChange("status", e.target.value)}
+                options={statusOptions}
+                fullWidth
+              />
+              <TextArea
+                label={t("notes")}
+                value={formData.notes}
+                onChange={(e) => handleChange("notes", e.target.value)}
+                placeholder={t("enter_notes")}
+                rows={2}
+                fullWidth
+              />
+            </div>
+          </>
+        )}
+
+        <div className="flex justify-end gap-3 mt-8">
+          <Button variant="secondary" onClick={onClose} disabled={isSubmitting || isLoading}>
+            {t("cancel")}
+          </Button>
+          <Button
+            variant="primary"
+            type="submit"
+            className="bg-indigo-600 hover:bg-indigo-700 px-8"
+            isLoading={isSubmitting || isLoading}
+            disabled={isSubmitting || isLoading}
+          >
+            {recordToEdit ? t("save") : t("generate_payroll")}
+          </Button>
+        </div>
       </form>
     </Modal>
   );

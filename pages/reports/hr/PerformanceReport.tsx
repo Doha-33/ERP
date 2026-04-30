@@ -1,29 +1,46 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useData } from '../../../context/DataContext';
 import { ReportLayout } from '../../../components/reports/ReportLayout';
 import { Column } from '../../../components/ui/Table';
-import { Evaluation } from '../../../types';
+import hrService from '../../../services/hr.service';
 
 export const PerformanceReport: React.FC = () => {
   const { t } = useTranslation();
-  const { evaluations } = useData();
+  const [data, setData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedPeriod, setSelectedPeriod] = useState('Q1-2026');
+
+  useEffect(() => {
+    fetchData();
+  }, [selectedPeriod]);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const reportData = await hrService.getPerformanceReport(selectedPeriod);
+      setData(reportData || []);
+    } catch (error) {
+      console.error('Failed to fetch performance report:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredData = useMemo(() => {
-    return evaluations.filter(e => {
-      const matchesSearch = e.employeeName.toLowerCase().includes(searchTerm.toLowerCase());
+    return data.filter((e: any) => {
+      const matchesSearch = (e.employeeName || '').toLowerCase().includes(searchTerm.toLowerCase());
       return matchesSearch;
     });
-  }, [evaluations, searchTerm]);
+  }, [data, searchTerm]);
 
-  const columns: Column<Evaluation>[] = [
+  const columns: Column<any>[] = [
     { 
       header: t('employee_name'), 
       render: (e) => (
         <div className="flex items-center gap-2">
-          <img src={e.avatar} alt={e.employeeName} className="w-8 h-8 rounded-full object-cover" />
+          {e.avatar && <img src={e.avatar} alt={e.employeeName} className="w-8 h-8 rounded-full object-cover" />}
           <span className="font-bold">{e.employeeName}</span>
         </div>
       )
@@ -54,6 +71,19 @@ export const PerformanceReport: React.FC = () => {
       onSearchChange={setSearchTerm}
       searchPlaceholder={t('search_by_name')}
       filename="performance_report"
+      isLoading={loading}
+      filters={
+        <select 
+          className="bg-white dark:bg-dark-surface border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 py-2 px-4 rounded-xl text-sm font-bold focus:ring-2 focus:ring-primary/20 outline-none transition-all cursor-pointer"
+          value={selectedPeriod}
+          onChange={(e) => setSelectedPeriod(e.target.value)}
+        >
+          <option value="Q1-2026">Q1-2026</option>
+          <option value="Q2-2026">Q2-2026</option>
+          <option value="Q3-2026">Q3-2026</option>
+          <option value="Q4-2026">Q4-2026</option>
+        </select>
+      }
     />
   );
 };

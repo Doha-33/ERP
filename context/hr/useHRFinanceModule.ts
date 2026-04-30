@@ -114,11 +114,18 @@ export const useHRFinanceModule = (fetchAllData?: () => Promise<void>) => {
 
   return useMemo(() => ({
     payrollRecords, setPayrollRecords,
+    payrolls: payrollRecords, // alias
     payrollLogs, setPayrollLogs,
     deductionRecords, setDeductionRecords,
     loans, setLoans,
     fetchFinanceData,
-    addPayrollRecord, updatePayrollRecord, deletePayrollRecord, generatePayroll,
+    addPayrollRecord,
+    addPayroll: addPayrollRecord, // alias
+    updatePayrollRecord,
+    updatePayroll: updatePayrollRecord, // alias
+    deletePayrollRecord,
+    deletePayroll: deletePayrollRecord, // alias
+    generatePayroll,
     addDeductionRecord, updateDeductionRecord, deleteDeductionRecord,
     addLoan, updateLoan, deleteLoan, toggleLoanWorkflow, rejectLoan
   }), [

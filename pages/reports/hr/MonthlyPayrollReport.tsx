@@ -1,45 +1,60 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useData } from '../../../context/DataContext';
 import { ReportLayout } from '../../../components/reports/ReportLayout';
 import { Column } from '../../../components/ui/Table';
-import { PayrollRecord } from '../../../types';
+import hrService from '../../../services/hr.service';
 
 export const MonthlyPayrollReport: React.FC = () => {
   const { t } = useTranslation();
-  const { payrollRecords, employees } = useData();
+  const [data, setData] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
 
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        const reportData = await hrService.getMonthlyPayrollReport();
+        setData(reportData || []);
+      } catch (error) {
+        console.error('Error fetching monthly payroll report:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
   const filteredData = useMemo(() => {
-    return payrollRecords.filter(p => {
-      const matchesSearch = p.employeeName.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesMonth = p.month === selectedMonth;
+    return data.filter(p => {
+      const matchesSearch = (p.employeeName || '').toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesMonth = selectedMonth === 0 || p.month === selectedMonth;
       return matchesSearch && matchesMonth;
     });
-  }, [payrollRecords, searchTerm, selectedMonth]);
+  }, [data, searchTerm, selectedMonth]);
 
-  const columns: Column<PayrollRecord>[] = [
-    { header: t('date'), render: () => new Date().toLocaleDateString() },
-    { header: t('employee_id'), accessorKey: 'employeeId' },
+  const columns: Column<any>[] = [
+    { header: t('date'), render: (p) => p.report_date || new Date().toLocaleDateString() },
+    { header: t('employee_id'), accessorKey: 'employeeCode' },
     { 
       header: t('employee_name'), 
       render: (p) => (
         <div className="flex items-center gap-2">
-          <img src={p.avatar} alt={p.employeeName} className="w-8 h-8 rounded-full object-cover" />
+          {p.avatar && <img src={p.avatar} alt={p.employeeName} className="w-8 h-8 rounded-full object-cover" />}
           <span className="font-bold">{p.employeeName}</span>
         </div>
       )
     },
-    { header: t('base_salary'), accessorKey: 'basicSalary' },
+    { header: t('base_salary'), render: (p) => Number(p.basicSalary || 0).toFixed(2) },
     { 
       header: t('allowances'), 
-      render: (p) => (Number(p.housingAllowance) + Number(p.transportAllowance) + Number(p.workNatureAllowance) + Number(p.medicalAllowance)).toFixed(2)
+      render: (p) => Number(p.totalAllowances || 0).toFixed(2)
     },
-    { header: t('bonuses'), accessorKey: 'bonus' },
-    { header: t('deductions'), render: (p) => (0).toFixed(2) }, // Placeholder for deductions
-    { header: t('net_salary'), accessorKey: 'totals' },
+    { header: t('bonuses'), render: (p) => Number(p.bonus || 0).toFixed(2) },
+    { header: t('deductions'), render: (p) => Number(p.totalDeductions || 0).toFixed(2) },
+    { header: t('net_salary'), render: (p) => Number(p.netSalary || 0).toFixed(2) },
     { header: t('payroll_month'), render: (p) => `${p.month}/${p.year}` },
   ];
 
@@ -49,6 +64,7 @@ export const MonthlyPayrollReport: React.FC = () => {
       subtitle={t('view_payroll_details_by_month')}
       data={filteredData}
       columns={columns}
+      isLoading={isLoading}
       searchTerm={searchTerm}
       onSearchChange={setSearchTerm}
       searchPlaceholder={t('search_by_name')}
@@ -59,6 +75,7 @@ export const MonthlyPayrollReport: React.FC = () => {
           value={selectedMonth}
           onChange={(e) => setSelectedMonth(Number(e.target.value))}
         >
+          <option value="0">{t('all_months')}</option>
           {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
             <option key={m} value={m}>{new Date(0, m - 1).toLocaleString('default', { month: 'long' })}</option>
           ))}

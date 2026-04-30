@@ -1,134 +1,380 @@
-
-import React, { useState, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Plus, Search, Filter, Download, Edit2, Trash2 } from 'lucide-react';
-import { Card, Button, Input, Select, Badge } from '../../components/ui/Common';
-import { Table, Column } from '../../components/ui/Table';
-import { Product } from '../../types';
-import { useData } from '../../context/DataContext';
-import { ProductModal } from '../../components/sales/ProductModal';
+import React, { useState, useMemo, useCallback } from "react";
+import { useTranslation } from "react-i18next";
+import { Plus, Search, Edit2, Trash2, Package, Barcode, DollarSign, Tag, Filter, X } from "lucide-react";
+import { Card, Button, Input, Badge, ExportDropdown } from "../../components/ui/Common";
+import { Table, Column } from "../../components/ui/Table";
+import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
+import { ProductModal } from "../../components/sales/ProductModal";
+import { useData } from "../../context/DataContext";
+import { Product } from "../../types";
+import { toast } from "sonner";
 
 export const Products: React.FC = () => {
   const { t } = useTranslation();
   const { products, addSalesProduct, updateSalesProduct, deleteSalesProduct } = useData();
-  const [searchTerm, setSearchTerm] = useState('');
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const filtered = useMemo(() => {
-    return products.filter(p => 
-      p.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.category.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [products, searchTerm]);
-
-  const columns: Column<Product>[] = [
-    { header: t('sku'), accessorKey: 'sku' },
-    { 
-      header: t('name'), 
-      render: (item) => (
-        <div className="flex items-center gap-2">
-          <img src={`https://ui-avatars.com/api/?name=${item.productName}&background=random`} alt={item.productName} className="w-8 h-8 rounded object-cover" referrerPolicy="no-referrer" />
-          <span>{item.productName}</span>
-        </div>
-      )
-    },
-    { header: t('description'), accessorKey: 'description' },
-    { header: t('sales_price'), accessorKey: 'salesPrice' },
-    { header: t('cost'), accessorKey: 'cost' },
-    { header: t('category'), accessorKey: 'category' },
-    { header: t('product_type'), accessorKey: 'productType' },
-    { header: t('unit_of_measure'), accessorKey: 'unitOfMeasure' },
-    { 
-      header: t('status'), 
-      render: (item) => (
-        <Badge status={item.status === 'ACTIVE' ? 'Active' : 'Inactive'}>{t(item.status.toLowerCase())}</Badge>
-      )
-    },
-    {
-      header: t('actions'),
-      render: (item) => (
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={() => { setEditingProduct(item); setIsModalOpen(true); }}
-            className="p-1.5 text-gray-400 hover:text-primary transition-colors border border-gray-200 dark:border-gray-700 rounded-lg"
-          >
-            <Edit2 size={16} />
-          </button>
-          <button 
-            onClick={() => deleteSalesProduct(item.id)}
-            className="p-1.5 text-gray-400 hover:text-red-500 transition-colors border border-gray-200 dark:border-gray-700 rounded-lg"
-          >
-            <Trash2 size={16} />
-          </button>
-        </div>
-      )
+  const handleSave = async (product: Partial<Product>) => {
+    try {
+      setIsLoading(true);
+      if (editingProduct) {
+        await updateSalesProduct({ ...product, id: editingProduct.id, _id: editingProduct._id } as Product);
+        toast.success(t("product_updated_successfully"));
+      } else {
+        await addSalesProduct(product as Product);
+        toast.success(t("product_created_successfully"));
+      }
+      setIsModalOpen(false);
+      setEditingProduct(null);
+    } catch (error) {
+      console.error("Error saving product:", error);
+      toast.error(t("failed_to_save_product"));
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  const handleEdit = useCallback((product: Product) => {
+    setEditingProduct(product);
+    setIsModalOpen(true);
+  }, []);
+
+  const handleDelete = useCallback((id: string) => {
+    setDeleteId(id);
+  }, []);
+
+  const confirmDelete = useCallback(async () => {
+    if (deleteId) {
+      try {
+        await deleteSalesProduct(deleteId);
+        toast.success(t("product_deleted_successfully"));
+        setDeleteId(null);
+        setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+      } catch (error) {
+        toast.error(t("failed_to_delete_product"));
+      }
+    }
+  }, [deleteId, deleteSalesProduct, t]);
+
+  const handleBulkDelete = async () => {
+    try {
+      setIsLoading(true);
+      await Promise.all(selectedIds.map(id => deleteSalesProduct(id)));
+      toast.success(t("products_deleted_successfully", { count: selectedIds.length }));
+      setSelectedIds([]);
+      setIsBulkConfirmOpen(false);
+    } catch (error) {
+      console.error("Bulk delete failed", error);
+      toast.error(t("failed_to_delete_products"));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Apply filters
+  const filteredProducts = useMemo(() => {
+    return products.filter(p => {
+      const matchesSearch = 
+        p.productName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.barcode?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesType = !typeFilter || p.productType === typeFilter;
+      const matchesStatus = !statusFilter || p.status === statusFilter;
+      
+      return matchesSearch && matchesType && matchesStatus;
+    });
+  }, [products, searchTerm, typeFilter, statusFilter]);
+
+  // Statistics
+  const totalProducts = filteredProducts.length;
+  const totalValue = filteredProducts.reduce((sum, p) => sum + (p.salesPrice * 1), 0);
+  const activeCount = filteredProducts.filter(p => p.status === "ACTIVE").length;
+  const stockableCount = filteredProducts.filter(p => p.productType === "STOCKABLE").length;
+  const serviceCount = filteredProducts.filter(p => p.productType === "SERVICE").length;
+
+  const getStatusBadge = (status: string) => {
+    return (
+      <Badge variant={status === "ACTIVE" ? "success" : "danger"}>
+        {status === "ACTIVE" ? t("active") : t("inactive")}
+      </Badge>
+    );
+  };
+
+  const getTypeBadge = (type: string) => {
+    const typeMap: Record<string, { variant: "info" | "success" | "warning"; label: string }> = {
+      STOCKABLE: { variant: "info", label: t("stockable") },
+      SERVICE: { variant: "success", label: t("service") },
+      CONSUMABLE: { variant: "warning", label: t("consumable") },
+    };
+    const config = typeMap[type] || { variant: "info", label: type };
+    return <Badge variant={config.variant}>{config.label}</Badge>;
+  };
+
+  const typeOptions = [
+    { value: "", label: t("all_types") },
+    { value: "STOCKABLE", label: t("stockable") },
+    { value: "SERVICE", label: t("service") },
+    { value: "CONSUMABLE", label: t("consumable") },
   ];
+
+  const statusOptions = [
+    { value: "", label: t("all_statuses") },
+    { value: "ACTIVE", label: t("active") },
+    { value: "INACTIVE", label: t("inactive") },
+  ];
+
+  const columns: Column<Product>[] = useMemo(
+    () => [
+      {
+        header: t("product_info"),
+        render: (p) => (
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center">
+              <Package size={18} className="text-indigo-600" />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-medium text-gray-900">{p.productName}</span>
+              <span className="text-xs text-gray-500">SKU: {p.sku}</span>
+            </div>
+          </div>
+        )
+      },
+      {
+        header: t("category"),
+        render: (p) => (
+          <div className="flex items-center gap-1.5">
+            <Tag size={14} className="text-gray-400" />
+            <span className="text-sm text-gray-600">{p.category || "-"}</span>
+          </div>
+        )
+      },
+      {
+        header: t("pricing"),
+        render: (p) => (
+          <div className="flex flex-col">
+            <div className="flex items-center gap-1.5">
+              <DollarSign size={14} className="text-gray-400" />
+              <span className="text-sm font-medium text-gray-900">{p.salesPrice?.toLocaleString()} EGP</span>
+            </div>
+            <span className="text-xs text-gray-400">{t("cost")}: {p.cost?.toLocaleString()} EGP</span>
+          </div>
+        )
+      },
+      {
+        header: t("type"),
+        render: (p) => getTypeBadge(p.productType)
+      },
+      {
+        header: t("unit"),
+        accessorKey: "unitOfMeasure",
+        render: (p) => (
+          <span className="text-sm text-gray-600">{p.unitOfMeasure || "-"}</span>
+        )
+      },
+      {
+        header: t("barcode"),
+        render: (p) => (
+          <div className="flex items-center gap-1.5">
+            <Barcode size={14} className="text-gray-400" />
+            <span className="text-sm font-mono text-gray-500">{p.barcode || "-"}</span>
+          </div>
+        )
+      },
+      {
+        header: t("status"),
+        render: (p) => getStatusBadge(p.status)
+      },
+      {
+        header: t("actions"),
+        className: "text-center",
+        render: (p) => (
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={() => handleEdit(p)}
+              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+              title={t("edit")}
+            >
+              <Edit2 size={16} />
+            </button>
+            <button
+              onClick={() => handleDelete(p._id || p.id)}
+              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+              title={t("delete")}
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
+        )
+      }
+    ],
+    [t, handleEdit, handleDelete]
+  );
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('products')}</h1>
-          <p className="text-gray-500 dark:text-gray-400">{t('manage_your_products')}</p>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {t("products")}
+          </h1>
+          <p className="text-gray-500 mt-1">
+            {t("manage_your_products")}
+          </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Button variant="secondary" className="flex items-center gap-2">
-            <Download size={18} />
-            {t('export')}
-          </Button>
-          <Button onClick={() => { setEditingProduct(null); setIsModalOpen(true); }} className="flex items-center gap-2">
+        <div className="flex gap-3">
+          {selectedIds.length > 0 && (
+            <Button
+              variant="danger"
+              onClick={() => setIsBulkConfirmOpen(true)}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              <Trash2 size={18} />
+              {t("delete_selected")} ({selectedIds.length})
+            </Button>
+          )}
+          <ExportDropdown data={filteredProducts} filename="products" />
+          <Button
+            variant="primary"
+            onClick={() => {
+              setEditingProduct(null);
+              setIsModalOpen(true);
+            }}
+            className="bg-indigo-600 hover:bg-indigo-700"
+          >
             <Plus size={18} />
-            {t('add_product')}
+            {t("add_product")}
           </Button>
         </div>
       </div>
 
-      <Card className="p-0 overflow-hidden">
-        <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-4 flex-1 min-w-[300px]">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <Input 
-                placeholder={t('search')} 
-                className="pl-10" 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-            <Select 
-              options={[
-                { value: 'all', label: t('category') },
-                { value: 'electronics', label: 'Electronics' },
-              ]}
-              className="w-40"
-            />
-          </div>
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+        <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
+          <p className="text-xs text-gray-500">{t("total_products")}</p>
+          <p className="text-xl font-bold text-gray-900">{totalProducts}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
+          <p className="text-xs text-gray-500">{t("total_inventory_value")}</p>
+          <p className="text-xl font-bold text-indigo-600">{totalValue.toLocaleString()} EGP</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
+          <p className="text-xs text-gray-500">{t("active_products")}</p>
+          <p className="text-xl font-bold text-green-600">{activeCount}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
+          <p className="text-xs text-gray-500">{t("stockable")}</p>
+          <p className="text-xl font-bold text-blue-600">{stockableCount}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
+          <p className="text-xs text-gray-500">{t("service")}</p>
+          <p className="text-xl font-bold text-purple-600">{serviceCount}</p>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-4 items-center">
+        <div className="relative max-w-md">
+          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder={t("search_products")}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
         </div>
 
-        <Table 
-          data={filtered}
+        <select
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value)}
+          className="px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          {typeOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          {statusOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+
+        {(typeFilter || statusFilter || searchTerm) && (
+          <button
+            onClick={() => {
+              setTypeFilter("");
+              setStatusFilter("");
+              setSearchTerm("");
+            }}
+            className="text-sm text-red-600 hover:text-red-700"
+          >
+            {t("clear_filters")}
+          </button>
+        )}
+      </div>
+
+      {/* Table */}
+      <Card className="bg-white">
+        <Table
+          data={filteredProducts}
           columns={columns}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item._id || item.id}
+          isLoading={isLoading}
           selectable
           selectedIds={selectedIds}
           onSelectionChange={setSelectedIds}
-          className="border-none"
         />
       </Card>
 
-      <ProductModal 
+      {/* Modal */}
+      <ProductModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSave={(product) => {
-          if (editingProduct) updateSalesProduct(product);
-          else addSalesProduct(product);
+        onClose={() => {
           setIsModalOpen(false);
+          setEditingProduct(null);
         }}
+        onSave={handleSave}
         productToEdit={editingProduct}
+        isLoading={isLoading}
+      />
+
+      {/* Delete Confirmation */}
+      <ConfirmationModal
+        isOpen={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        onConfirm={confirmDelete}
+        title={t("delete_product")}
+        message={t("are_you_sure_delete_product")}
+      />
+
+      {/* Bulk Delete Confirmation */}
+      <ConfirmationModal
+        isOpen={isBulkConfirmOpen}
+        onClose={() => setIsBulkConfirmOpen(false)}
+        onConfirm={handleBulkDelete}
+        title={t("delete_products")}
+        message={t("are_you_sure_delete_products", { count: selectedIds.length })}
       />
     </div>
   );
