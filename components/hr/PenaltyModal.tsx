@@ -1,32 +1,18 @@
-
-import React, { useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { Button, Input, Select, FileUpload } from '../ui/Common';
-import { Modal } from '../ui/Modal';
-import { Penalty } from '../../types';
-import { useData } from '../../context/DataContext';
+import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { Plus, Edit2, User, Calendar, DollarSign, AlertCircle, FileText, Upload } from "lucide-react";
+import { Modal } from "../../components/ui/Modal";
+import { Button, Input, Select, TextArea, FileUpload } from "../../components/ui/Common";
+import { Penalty } from "../../types";
+import { useData } from "../../context/DataContext";
 
 interface PenaltyModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (penalty: Penalty) => void;
+  onSave: (data: Partial<Penalty>) => Promise<void>;
   penaltyToEdit?: Penalty | null;
+  isLoading?: boolean;
 }
-
-const penaltySchema = z.object({
-  employeeId: z.string().min(1, 'Required'),
-  penaltyType: z.string().min(1, 'Required'),
-  amount: z.string().min(1, 'Required'),
-  date: z.string().min(1, 'Required'),
-  decisionMaker: z.string().optional(),
-  status: z.enum(['Pending', 'Approved', 'Rejected']),
-  reason: z.string().min(1, 'Required'),
-});
-
-type PenaltyFormInputs = z.infer<typeof penaltySchema>;
 
 const compressImage = (base64Str: string, maxWidth = 1200, maxHeight = 1200): Promise<string> => {
   return new Promise((resolve) => {
@@ -37,10 +23,16 @@ const compressImage = (base64Str: string, maxWidth = 1200, maxHeight = 1200): Pr
       let width = img.width;
       let height = img.height;
       if (width > maxWidth || height > maxHeight) {
-        if (width > height) { height *= maxWidth / width; width = maxWidth; }
-        else { width *= maxHeight / height; height = maxHeight; }
+        if (width > height) {
+          height *= maxWidth / width;
+          width = maxWidth;
+        } else {
+          width *= maxHeight / height;
+          height = maxHeight;
+        }
       }
-      canvas.width = width; canvas.height = height;
+      canvas.width = width;
+      canvas.height = height;
       const ctx = canvas.getContext('2d');
       ctx?.drawImage(img, 0, 0, width, height);
       resolve(canvas.toDataURL('image/jpeg', 0.5));
@@ -49,51 +41,97 @@ const compressImage = (base64Str: string, maxWidth = 1200, maxHeight = 1200): Pr
   });
 };
 
-export const PenaltyModal: React.FC<PenaltyModalProps> = ({ isOpen, onClose, onSave, penaltyToEdit }) => {
+export const PenaltyModal: React.FC<PenaltyModalProps> = ({
+  isOpen,
+  onClose,
+  onSave,
+  penaltyToEdit,
+  isLoading = false,
+}) => {
   const { t } = useTranslation();
   const { employees } = useData();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [attachment, setAttachment] = useState<string | undefined>(undefined);
-  const [isProcessing, setIsProcessing] = useState(false);
-  
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<PenaltyFormInputs>({
-    resolver: zodResolver(penaltySchema),
-    defaultValues: { status: 'Pending' }
+  const [attachmentName, setAttachmentName] = useState<string>("");
+  const [formData, setFormData] = useState({
+    employeeInfo: "",
+    penaltyType: "",
+    penaltyAmount: 0,
+    date: new Date().toISOString().split("T")[0],
+    decisionMaker: "",
+    status: "Pending",
+    reason: "",
   });
 
   useEffect(() => {
-    if (penaltyToEdit) {
-      setAttachment(penaltyToEdit.attachment);
-      reset({
-        employeeId: penaltyToEdit.employeeId || '',
-        penaltyType: penaltyToEdit.penaltyType,
-        amount: penaltyToEdit.amount,
-        date: penaltyToEdit.date,
-        decisionMaker: penaltyToEdit.decisionMaker,
-        status: penaltyToEdit.status,
-        reason: penaltyToEdit.reason,
-      });
-    } else {
-      setAttachment(undefined);
-      reset({
-        employeeId: '',
-        penaltyType: '',
-        amount: '',
-        date: new Date().toISOString().split('T')[0],
-        decisionMaker: '',
-        status: 'Pending',
-        reason: '',
-      });
-    }
-  }, [penaltyToEdit, isOpen, reset]);
+    if (penaltyToEdit && isOpen) {
+      const employeeId = typeof penaltyToEdit.employeeInfo === "object"
+        ? (penaltyToEdit.employeeInfo as any)?._id
+        : penaltyToEdit.employeeInfo || penaltyToEdit.employeeId;
 
-  const handleFileChange = (file: File | null) => {
+      setFormData({
+        employeeInfo: employeeId || "",
+        penaltyType: penaltyToEdit.penaltyType || "",
+        penaltyAmount: penaltyToEdit.penaltyAmount || penaltyToEdit.amount || 0,
+        date: penaltyToEdit.date
+          ? new Date(penaltyToEdit.date).toISOString().split("T")[0]
+          : new Date().toISOString().split("T")[0],
+        decisionMaker: penaltyToEdit.decisionMaker || "",
+        status: penaltyToEdit.status || "Pending",
+        reason: penaltyToEdit.reason || "",
+      });
+      setAttachment(penaltyToEdit.attachment);
+    } else if (!penaltyToEdit && isOpen) {
+      setFormData({
+        employeeInfo: "",
+        penaltyType: "",
+        penaltyAmount: 0,
+        date: new Date().toISOString().split("T")[0],
+        decisionMaker: "",
+        status: "Pending",
+        reason: "",
+      });
+      setAttachment(undefined);
+      setAttachmentName("");
+    }
+  }, [penaltyToEdit, isOpen]);
+
+  const penaltyTypeOptions = [
+    { value: "Late Arrival", label: t("late_arrival") },
+    { value: "Absence", label: t("absence") },
+    { value: "Misconduct", label: t("misconduct") },
+    { value: "Violation", label: t("violation") },
+    { value: "Other", label: t("other") },
+  ];
+
+  const statusOptions = [
+    { value: "Pending", label: t("pending") },
+    { value: "Approved", label: t("approved") },
+    { value: "Rejected", label: t("rejected") },
+  ];
+
+  const employeeOptions = employees.map(emp => ({
+    value: emp._id || emp.id,
+    label: `${emp.fullName} (${emp.employeeCode})`,
+  }));
+
+  const decisionMakerOptions = [
+    { value: "", label: t("none") },
+    ...employees.map(emp => ({
+      value: emp._id || emp.id,
+      label: `${emp.fullName} (${emp.employeeCode})`,
+    })),
+  ];
+
+  const handleFileChange = async (file: File | null) => {
     if (file) {
+      setAttachmentName(file.name);
       const reader = new FileReader();
       reader.onloadend = async () => {
         const result = reader.result as string;
         if (file.type.startsWith('image/')) {
-          const optimized = await compressImage(result);
-          setAttachment(optimized);
+          const compressed = await compressImage(result);
+          setAttachment(compressed);
         } else {
           setAttachment(result);
         }
@@ -101,58 +139,186 @@ export const PenaltyModal: React.FC<PenaltyModalProps> = ({ isOpen, onClose, onS
       reader.readAsDataURL(file);
     } else {
       setAttachment(undefined);
+      setAttachmentName("");
     }
   };
 
-  const onSubmit = async (data: PenaltyFormInputs) => {
-    setIsProcessing(true);
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    
     try {
-      const selectedEmp = employees.find(e => e.id === data.employeeId);
-      const newPenalty: Penalty = {
-        id: penaltyToEdit ? penaltyToEdit.id : '', 
-        penaltyId: penaltyToEdit ? penaltyToEdit.penaltyId : '',
-        employeeId: data.employeeId,
-        employeeName: selectedEmp ? selectedEmp.fullName : '',
-        avatar: selectedEmp ? selectedEmp.avatar : '',
+      await onSave({
+        ...formData,
         attachment: attachment,
-        ...data,
-        decisionMaker: data.decisionMaker || '',
-      };
-      await onSave(newPenalty);
+      });
       onClose();
+    } catch (error) {
+      console.error("Error in form submission:", error);
     } finally {
-      setIsProcessing(false);
+      setIsSubmitting(false);
     }
   };
 
-  const footer = (
-    <>
-       <Button type="button" variant="ghost" className="bg-gray-700 text-white hover:bg-gray-800" onClick={onClose}>{t('cancel')}</Button>
-       <Button type="submit" form="penalty-form" disabled={isProcessing} className="bg-[#4361EE] hover:bg-blue-700">
-         {isProcessing ? 'Saving...' : (penaltyToEdit ? t('save') : t('add_penalties'))}
-       </Button>
-    </>
-  );
+  const handleChange = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={penaltyToEdit ? t('edit_penalties') : t('add_penalties')} footer={footer} className="max-w-4xl">
-      <form id="penalty-form" onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-             <div className="space-y-6">
-                <Select label={t('employee_info') + ' *'} options={employees.map(e => ({ value: e.id, label: e.fullName }))} {...register('employeeId')} error={errors.employeeId?.message} />
-                <Input type="date" label={t('date') + ' *'} {...register('date')} error={errors.date?.message} />
-                <Select label={t('state') + ' *'} options={[{value: 'Pending', label: t('pending')}, {value: 'Approved', label: t('approved')}, {value: 'Rejected', label: t('rejected')}]} {...register('status')} error={errors.status?.message} />
-             </div>
-             <div className="space-y-6">
-                <Select label={t('penalty_type') + ' *'} options={[{value: 'Late Arrival', label: 'Late Arrival'}, {value: 'Absence', label: 'Absence'}, {value: 'Misconduct', label: 'Misconduct'}]} {...register('penaltyType')} error={errors.penaltyType?.message} />
-                <Input label={t('penalty_amount') + ' *'} placeholder="Amount" {...register('amount')} error={errors.amount?.message} />
-                <Select label={t('decision_maker')} options={[{value: '', label: 'None'}, ...employees.map(e => ({ value: e.id, label: e.fullName }))]} {...register('decisionMaker')} error={errors.decisionMaker?.message} />
-             </div>
-         </div>
-         <div className="space-y-6">
-            <Input label={t('reason') + ' *'} placeholder="Reason..." {...register('reason')} error={errors.reason?.message} className="h-12" />
-            <FileUpload label={t('upload_attachment')} accept=".pdf,.png,.jpg" onChange={handleFileChange} />
-         </div>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={
+        <div className="flex items-center gap-2">
+          {penaltyToEdit ? <Edit2 size={20} /> : <Plus size={20} />}
+          {penaltyToEdit ? t("edit_penalty") : t("add_penalty")}
+        </div>
+      }
+      size="4xl"
+    >
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+          {/* Employee */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("employee")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.employeeInfo}
+              onChange={(e) => handleChange("employeeInfo", e.target.value)}
+              options={employeeOptions}
+              placeholder={t("select_employee")}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Date */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("date")} <span className="text-red-500">*</span>
+            </label>
+            <Input
+              type="date"
+              value={formData.date}
+              onChange={(e) => handleChange("date", e.target.value)}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Penalty Type */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("penalty_type")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.penaltyType}
+              onChange={(e) => handleChange("penaltyType", e.target.value)}
+              options={penaltyTypeOptions}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Penalty Amount */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("penalty_amount")} (EGP) <span className="text-red-500">*</span>
+            </label>
+            <Input
+              type="number"
+              step="0.01"
+              value={formData.penaltyAmount}
+              onChange={(e) => handleChange("penaltyAmount", Number(e.target.value))}
+              placeholder="0.00"
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Decision Maker */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("decision_maker")}
+            </label>
+            <Select
+              value={formData.decisionMaker}
+              onChange={(e) => handleChange("decisionMaker", e.target.value)}
+              options={decisionMakerOptions}
+              placeholder={t("select_decision_maker")}
+              fullWidth
+            />
+          </div>
+
+          {/* Status */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("status")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.status}
+              onChange={(e) => handleChange("status", e.target.value)}
+              options={statusOptions}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Reason */}
+          <div className="col-span-2 space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("reason")} <span className="text-red-500">*</span>
+            </label>
+            <TextArea
+              value={formData.reason}
+              onChange={(e) => handleChange("reason", e.target.value)}
+              placeholder={t("enter_reason")}
+              rows={3}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Attachment */}
+          <div className="col-span-2 space-y-2">
+            <label className="text-sm font-medium text-gray-700">
+              {t("attachment")}
+            </label>
+            <FileUpload label={t("upload_attachment")} onChange={handleFileChange} accept="image/*,application/pdf" />
+            {attachmentName && (
+              <div className="flex items-center gap-2 text-sm text-gray-600 mt-2">
+                <FileText size={14} />
+                <span>{attachmentName}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAttachment(undefined);
+                    setAttachmentName("");
+                  }}
+                  className="text-red-500 hover:text-red-700"
+                >
+                  {t("remove")}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-3 mt-8">
+          <Button variant="secondary" onClick={onClose} disabled={isSubmitting || isLoading}>
+            {t("cancel")}
+          </Button>
+          <Button
+            variant="primary"
+            type="submit"
+            className="bg-indigo-600 hover:bg-indigo-700 px-8"
+            isLoading={isSubmitting || isLoading}
+            disabled={isSubmitting || isLoading}
+          >
+            {penaltyToEdit ? t("save") : t("add_penalty")}
+          </Button>
+        </div>
       </form>
     </Modal>
   );

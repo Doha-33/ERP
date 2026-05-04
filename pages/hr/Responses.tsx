@@ -1,142 +1,278 @@
+import React, { useState, useMemo, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
+import { FileText, ChevronRight, History, Eye, UserCheck, UserX, Clock } from "lucide-react";
+import { Card, Button, Badge, ExportDropdown } from "../../components/ui/Common";
+import { Table, Column } from "../../components/ui/Table";
+import { ResponsesHistoryModal } from "../../components/hr/ResponsesHistoryModal";
+import { useData } from "../../context/DataContext";
+import { useAuth } from "../../context/AuthContext";
+import { ActionHistory } from "../../types";
+import { toast } from "sonner";
 
-import React, { useState, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
-import { FileText, ChevronRight, History } from 'lucide-react';
-import { Card, Button } from '../../components/ui/Common';
-import { useData } from '../../context/DataContext';
-import { useAuth } from '../../context/AuthContext';
-import { ResponsesHistoryModal } from '../../components/hr/ResponsesHistoryModal';
-import { ActionHistory } from '../../types';
-
-type ResponseType = 'eos' | 'loans' | 'leaves' | 'requests';
+type ResponseType = "eos" | "loans" | "leaves" | "requests";
 
 export const Responses: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { endOfServices, loans, leaves, requests, actionHistory, fetchActionHistory, currentUserEmployee } = useData();
-  const [activeTab, setActiveTab] = useState<ResponseType>('eos');
+  const { fetchResponses, responses, actionHistory } = useData();
+  const [activeTab, setActiveTab] = useState<ResponseType>("eos");
+  const [loading, setLoading] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [selectedHistory, setSelectedHistory] = useState<ActionHistory[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
 
-  const isAdmin = user?.role === 'admin';
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        await fetchResponses(activeTab === "eos" ? "end-of-service" : activeTab);
+      } catch (error) {
+        console.error("Error fetching responses:", error);
+        toast.error(t("failed_to_fetch_responses"));
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [activeTab, fetchResponses, t]);
+
+  const isAdmin = user?.role === "admin";
 
   const handleShowHistory = async (id: string) => {
-    await fetchActionHistory();
-    const filteredHistory = actionHistory.filter(h => h.requestId === id);
-    setSelectedHistory(filteredHistory);
-    setIsHistoryOpen(true);
+    try {
+      const filteredHistory = actionHistory.filter(h => h.requestId === id);
+      setSelectedHistory(filteredHistory);
+      setIsHistoryOpen(true);
+    } catch (error) {
+      console.error("Error fetching history:", error);
+      toast.error(t("failed_to_fetch_history"));
+    }
   };
 
-  const data = useMemo(() => {
-    let source: any[] = [];
-    switch (activeTab) {
-      case 'eos': source = endOfServices; break;
-      case 'loans': source = loans; break;
-      case 'leaves': source = leaves; break;
-      case 'requests': source = requests; break;
+  const getStatusBadge = (status: string) => {
+    const statusMap: Record<string, { variant: "warning" | "success" | "danger"; label: string }> = {
+      Pending: { variant: "warning", label: t("pending") },
+      Approved: { variant: "success", label: t("approved") },
+      Rejected: { variant: "danger", label: t("rejected") },
+    };
+    const config = statusMap[status] || { variant: "info", label: status };
+    return <Badge variant={config.variant}>{config.label}</Badge>;
+  };
+
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return "-";
+    return new Date(dateStr).toLocaleDateString();
+  };
+
+  const filteredResponses = useMemo(() => {
+    return responses.filter(item => {
+      const matchesSearch = 
+        (item.employeeName || item.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (item.requestNumber || "").toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = !statusFilter || item.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [responses, searchTerm, statusFilter]);
+
+  // Statistics
+  const totalCount = filteredResponses.length;
+  const pendingCount = filteredResponses.filter(r => r.status === "Pending").length;
+  const approvedCount = filteredResponses.filter(r => r.status === "Approved").length;
+  const rejectedCount = filteredResponses.filter(r => r.status === "Rejected").length;
+
+  const statusOptions = [
+    { value: "", label: t("all_statuses") },
+    { value: "Pending", label: t("pending") },
+    { value: "Approved", label: t("approved") },
+    { value: "Rejected", label: t("rejected") },
+  ];
+
+  const columns: Column<any>[] = [
+    {
+      header: t("request_info"),
+      render: (item) => (
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center">
+            <FileText size={18} className="text-indigo-600" />
+          </div>
+          <div className="flex flex-col">
+            <span className="font-medium text-gray-900">
+              {item.employeeName || item.name || item.requestNumber}
+            </span>
+            <span className="text-xs text-gray-500">{formatDate(item.date || item.createdAt || item.requestDate)}</span>
+          </div>
+        </div>
+      )
+    },
+    {
+      header: t("details"),
+      render: (item) => (
+        <div className="flex flex-col">
+          <span className="text-sm text-gray-600">{item.type || item.requestType || "-"}</span>
+          <span className="text-xs text-gray-400">{item.reason || "-"}</span>
+        </div>
+      )
+    },
+    {
+      header: t("status"),
+      render: (item) => getStatusBadge(item.status)
+    },
+    {
+      header: t("actions"),
+      className: "text-center",
+      render: (item) => (
+        <div className="flex items-center justify-center gap-2">
+          <button
+            onClick={() => handleShowHistory(item.id || item._id)}
+            className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+            title={t("action_history")}
+          >
+            <History size={16} />
+          </button>
+          <button
+            onClick={() => navigate(`/hr/responses/${activeTab}/${item.id || item._id}`)}
+            className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg border border-indigo-200 transition-colors flex items-center gap-1"
+            title={t("view_details")}
+          >
+            <Eye size={16} />
+            <span className="text-xs hidden sm:inline">{t("view")}</span>
+          </button>
+        </div>
+      )
     }
+  ];
 
-    // Filter by employee identity if not admin
-    const filteredSource = isAdmin 
-      ? source 
-      : source.filter(item => item.employeeId === currentUserEmployee?.id);
-
-    // Map to displayable format
-    return filteredSource.map(i => ({
-       id: i.id, 
-       name: i.employeeName, 
-       date: i.requestDate || i.createdAt || i.fromDate || i.date, 
-       sub: i.eosType || i.loanAmount || i.leaveType || i.requestType 
-    }));
-  }, [activeTab, endOfServices, loans, leaves, requests, isAdmin, currentUserEmployee]);
+  const tabConfig: Record<ResponseType, { label: string; key: string }> = {
+    eos: { label: t("end_of_service"), key: "end-of-service" },
+    loans: { label: t("loans"), key: "loans" },
+    leaves: { label: t("leaves"), key: "leaves" },
+    requests: { label: t("requests"), key: "requests" },
+  };
 
   return (
     <div className="space-y-6">
-       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-           <h1 className="text-2xl font-bold dark:text-white">{t('responses')}</h1>
-           <p className="text-gray-500 dark:text-gray-400 text-sm">
-             {isAdmin ? t('manage_responses') : 'Track the status of your requests'}
-           </p>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {t("responses")}
+          </h1>
+          <p className="text-gray-500 mt-1">
+            {isAdmin ? t("manage_responses") : t("track_your_requests_status")}
+          </p>
         </div>
-        <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl">
-           {(['eos', 'loans', 'leaves', 'requests'] as ResponseType[]).map((tab) => (
-             <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${
-                  activeTab === tab 
-                  ? 'bg-primary text-white shadow-lg' 
-                  : 'text-gray-500 hover:text-primary'
-                }`}
-             >
-                {t(tab === 'eos' ? 'end_of_service' : tab)}
-             </button>
-           ))}
+        <div className="flex gap-3">
+          <ExportDropdown data={filteredResponses} filename={`${activeTab}-responses`} />
         </div>
       </div>
 
-      <Card className="p-8">
-        <h3 className="text-xl font-bold text-slate-700 dark:text-slate-200 mb-8 border-b pb-4">
-          {t(`employee_${activeTab === 'eos' ? 'eos' : activeTab}`)}
-        </h3>
+      {/* Tabs */}
+      <div className="flex bg-gray-100 rounded-xl p-1 w-fit">
+        {(["eos", "loans", "leaves", "requests"] as ResponseType[]).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${
+              activeTab === tab
+                ? "bg-indigo-600 text-white shadow-md"
+                : "text-gray-500 hover:text-indigo-600"
+            }`}
+          >
+            {tabConfig[tab].label}
+          </button>
+        ))}
+      </div>
 
-        <div className="space-y-6">
-           <p className="text-sm font-bold text-slate-500 uppercase tracking-wider">
-              {t(`recent_${activeTab === 'eos' ? 'eos' : activeTab}`)}
-           </p>
-
-           <div className="space-y-3">
-              {data.length === 0 ? (
-                <div className="p-12 text-center text-gray-400 bg-gray-50 dark:bg-gray-800/20 rounded-xl border border-dashed border-gray-200 dark:border-gray-700">
-                  No {activeTab} records found.
-                </div>
-              ) : (
-                data.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between p-4 bg-[#F5F7FF] dark:bg-gray-800/40 rounded-xl hover:shadow-md transition-all group border border-transparent hover:border-primary/20">
-                    <div className="flex items-center gap-6">
-                        <div className="p-2.5 bg-white dark:bg-gray-700 rounded-lg shadow-sm">
-                          <FileText className="text-slate-400" size={20} />
-                        </div>
-                        <div>
-                          <h4 className="font-bold text-slate-800 dark:text-slate-100">{item.name}</h4>
-                          <div className="flex items-center gap-4 text-xs text-slate-400 font-bold mt-1">
-                              <span>{item.date}</span>
-                              <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
-                              <span>{item.sub}</span>
-                          </div>
-                        </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-4">
-                        <button 
-                          onClick={() => handleShowHistory(item.id)}
-                          className="px-5 py-2 text-sm font-bold text-primary hover:bg-primary/5 rounded-lg border border-primary transition-colors flex items-center gap-2"
-                        >
-                          <History size={16} />
-                          <span className="hidden sm:inline">{t('action_history')}</span>
-                        </button>
-                        <Button 
-                          className="bg-[#4361EE] hover:bg-blue-700 px-8"
-                          onClick={() => navigate(`/hr/responses/${activeTab}/${item.id}`)}
-                        >
-                          {t('view')}
-                        </Button>
-                    </div>
-                  </div>
-                ))
-              )}
-           </div>
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <FileText size={18} className="text-indigo-600" />
+            <p className="text-xs text-gray-500">{t("total_requests")}</p>
+          </div>
+          <p className="text-xl font-bold text-gray-900 mt-1">{totalCount}</p>
         </div>
-      </Card>
+        <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <Clock size={18} className="text-orange-600" />
+            <p className="text-xs text-gray-500">{t("pending")}</p>
+          </div>
+          <p className="text-xl font-bold text-orange-600 mt-1">{pendingCount}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <UserCheck size={18} className="text-green-600" />
+            <p className="text-xs text-gray-500">{t("approved")}</p>
+          </div>
+          <p className="text-xl font-bold text-green-600 mt-1">{approvedCount}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <UserX size={18} className="text-red-600" />
+            <p className="text-xs text-gray-500">{t("rejected")}</p>
+          </div>
+          <p className="text-xl font-bold text-red-600 mt-1">{rejectedCount}</p>
+        </div>
+      </div>
 
-      <ResponsesHistoryModal 
-        isOpen={isHistoryOpen} 
-        onClose={() => setIsHistoryOpen(false)} 
-        history={selectedHistory} 
+      {/* Filters */}
+      <div className="flex flex-wrap gap-4 items-center">
+        <div className="relative max-w-md">
+          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder={t("search_by_employee_or_request")}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          {statusOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+
+        {(statusFilter || searchTerm) && (
+          <button
+            onClick={() => {
+              setStatusFilter("");
+              setSearchTerm("");
+            }}
+            className="text-sm text-red-600 hover:text-red-700"
+          >
+            {t("clear_filters")}
+          </button>
+        )}
+      </div>
+
+      {/* Table */}
+        <Table
+          data={filteredResponses}
+          columns={columns}
+          keyExtractor={(item) => item.id || item._id}
+          isLoading={loading}
+        />
+
+      {/* History Modal */}
+      <ResponsesHistoryModal
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        history={selectedHistory}
       />
     </div>
   );
 };
+
+// Add missing imports
+import { Search } from "lucide-react";

@@ -1,128 +1,347 @@
-
-import React, { useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Plus, Search, FileText, Edit2, Trash2 } from 'lucide-react';
-import { Card, Button, Input, Select } from '../../components/ui/Common';
-import { Table } from '../../components/ui/Table';
-import { useData } from '../../context/DataContext';
-import { GoodsReceipt } from '../../types';
-import { GoodsReceiptModal } from '../../components/purchase/GoodsReceiptModal';
+import React, { useState, useMemo, useCallback } from "react";
+import { useTranslation } from "react-i18next";
+import { Plus, Search, Edit2, Trash2, FileText, Package, Warehouse, Calendar, User, DollarSign, Filter, X } from "lucide-react";
+import { Card, Button, Input, Badge, ExportDropdown } from "../../components/ui/Common";
+import { Table, Column } from "../../components/ui/Table";
+import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
+import { GoodsReceiptModal } from "../../components/purchase/GoodsReceiptModal";
+import { useData } from "../../context/DataContext";
+import { GoodsReceipt } from "../../types";
+import { toast } from "sonner";
 
 export const GoodsReceipts: React.FC = () => {
   const { t } = useTranslation();
   const { goodsReceipts, addGoodsReceipt, updateGoodsReceipt, deleteGoodsReceipt } = useData();
-  const [searchTerm, setSearchTerm] = useState('');
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [receiptToEdit, setReceiptToEdit] = useState<GoodsReceipt | null>(null);
+  const [editingReceipt, setEditingReceipt] = useState<GoodsReceipt | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const filteredReceipts = goodsReceipts.filter(r =>
-    r.grNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    r.items.some(item => (typeof item.productId === 'object' ? item.productId?.productName : '').toLowerCase().includes(searchTerm.toLowerCase()))
-  );
-
-  const handleEdit = (receipt: GoodsReceipt) => {
-    setReceiptToEdit(receipt);
-    setIsModalOpen(true);
-  };
-
-  const handleSave = (data: any) => {
-    if (receiptToEdit) {
-      updateGoodsReceipt({ ...receiptToEdit, ...data, id: receiptToEdit._id || receiptToEdit.id });
-    } else {
-      addGoodsReceipt(data);
+  const handleSave = async (receipt: Partial<GoodsReceipt>) => {
+    try {
+      setIsLoading(true);
+      if (editingReceipt) {
+        await updateGoodsReceipt({ ...receipt, _id: editingReceipt._id, id: editingReceipt.id } as GoodsReceipt);
+        toast.success(t("goods_receipt_updated_successfully"));
+      } else {
+        await addGoodsReceipt(receipt as GoodsReceipt);
+        toast.success(t("goods_receipt_created_successfully"));
+      }
+      setIsModalOpen(false);
+      setEditingReceipt(null);
+    } catch (error) {
+      console.error("Error saving goods receipt:", error);
+      toast.error(t("failed_to_save_goods_receipt"));
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const columns = [
-    { key: 'grNumber', header: t('gr_number') },
-    { 
-      key: 'items', 
-      header: t('items'),
-      render: (r: GoodsReceipt) => (
-        <div className="text-xs">
-          {r.items.map((item, idx) => (
-            <div key={idx}>{typeof item.productId === 'object' ? item.productId?.productName : 'Product'} ({item.receivedQuantity})</div>
-          ))}
-        </div>
-      )
-    },
-    { 
-      key: 'receiptDate', 
-      header: t('receipt_date'),
-      render: (r: GoodsReceipt) => new Date(r.receiptDate).toLocaleDateString()
-    },
-    { 
-      key: 'warehouseId', 
-      header: t('warehouse'),
-      render: (r: GoodsReceipt) => typeof r.warehouseId === 'object' ? r.warehouseId?.warehouseName : r.warehouseId
-    },
-    { key: 'totalQty', header: t('total_qty') },
-    { key: 'receivedBy', header: t('received_by') },
-    { 
-      key: 'totalValue', 
-      header: t('total_value'),
-      render: (r: GoodsReceipt) => r.totalValue.toLocaleString()
-    },
-    {
-      key: 'actions',
-      header: t('actions'),
-      render: (receipt: GoodsReceipt) => (
-        <div className="flex gap-2">
-          <button onClick={() => handleEdit(receipt)} className="p-1 text-gray-400 hover:text-primary border border-gray-200 rounded">
-            <Edit2 size={16} />
-          </button>
-          <button onClick={() => deleteGoodsReceipt(receipt._id || receipt.id)} className="p-1 text-gray-400 hover:text-red-500 border border-gray-200 rounded">
-            <Trash2 size={16} />
-          </button>
-        </div>
-      ),
-    },
-  ];
+  const handleEdit = useCallback((receipt: GoodsReceipt) => {
+    setEditingReceipt(receipt);
+    setIsModalOpen(true);
+  }, []);
+
+  const handleDelete = useCallback((id: string) => {
+    setDeleteId(id);
+  }, []);
+
+  const confirmDelete = useCallback(async () => {
+    if (deleteId) {
+      try {
+        await deleteGoodsReceipt(deleteId);
+        toast.success(t("goods_receipt_deleted_successfully"));
+        setDeleteId(null);
+        setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+      } catch (error) {
+        toast.error(t("failed_to_delete_goods_receipt"));
+      }
+    }
+  }, [deleteId, deleteGoodsReceipt, t]);
+
+  const handleBulkDelete = async () => {
+    try {
+      setIsLoading(true);
+      await Promise.all(selectedIds.map(id => deleteGoodsReceipt(id)));
+      toast.success(t("goods_receipts_deleted_successfully", { count: selectedIds.length }));
+      setSelectedIds([]);
+      setIsBulkConfirmOpen(false);
+    } catch (error) {
+      console.error("Bulk delete failed", error);
+      toast.error(t("failed_to_delete_goods_receipts"));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Helper functions
+  const getWarehouseName = (receipt: GoodsReceipt): string => {
+    if (!receipt.warehouseId) return "-";
+    if (typeof receipt.warehouseId === 'object') {
+      return (receipt.warehouseId as any)?.warehouseName || "-";
+    }
+    return receipt.warehouseId || "-";
+  };
+
+  const getReceivedByName = (receipt: GoodsReceipt): string => {
+    if (!receipt.receivedBy) return "-";
+    if (typeof receipt.receivedBy === 'object') {
+      return (receipt.receivedBy as any)?.username || (receipt.receivedBy as any)?.fullName || "-";
+    }
+    return receipt.receivedBy || "-";
+  };
+
+  // Apply filters
+  const filteredReceipts = useMemo(() => {
+    return goodsReceipts.filter(r => {
+      const matchesSearch = 
+        r.grnNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        r.items?.some(item => {
+          const productName = typeof item.productId === "object" ? (item.productId as any)?.productName : "";
+          return productName.toLowerCase().includes(searchTerm.toLowerCase());
+        });
+      
+      return matchesSearch;
+    });
+  }, [goodsReceipts, searchTerm]);
+
+  // Statistics
+  const totalReceipts = filteredReceipts.length;
+  const totalValue = filteredReceipts.reduce((sum, r) => sum + (r.totalValue || 0), 0);
+  const totalQty = filteredReceipts.reduce((sum, r) => sum + (r.totalQty || 0), 0);
+
+  const columns: Column<GoodsReceipt>[] = useMemo(
+    () => [
+      {
+        header: t("receipt_info"),
+        render: (r) => (
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2">
+              <FileText size={16} className="text-indigo-500" />
+              <span className="font-medium text-gray-900">{r.grnNumber}</span>
+            </div>
+            <span className="text-xs text-gray-500 ml-6">
+              {new Date(r.receiptDate).toLocaleDateString()}
+            </span>
+          </div>
+        )
+      },
+      {
+        header: t("items"),
+        render: (r) => (
+          <div className="flex flex-col gap-0.5">
+            {r.items?.slice(0, 2).map((item, idx) => {
+              const productName = typeof item.productId === "object" 
+                ? (item.productId as any)?.productName 
+                : item.sku || "Product";
+              return (
+                <div key={idx} className="flex items-center gap-2 text-sm">
+                  <Package size={12} className="text-gray-400" />
+                  <span className="text-gray-600">{productName}</span>
+                  <span className="text-gray-400">x{item.acceptedQuantity}</span>
+                </div>
+              );
+            })}
+            {r.items && r.items.length > 2 && (
+              <span className="text-xs text-gray-400">+{r.items.length - 2} more</span>
+            )}
+          </div>
+        )
+      },
+      {
+        header: t("warehouse"),
+        render: (r) => (
+          <div className="flex items-center gap-1.5">
+            <Warehouse size={14} className="text-gray-400" />
+            <span className="text-sm text-gray-600">{getWarehouseName(r)}</span>
+          </div>
+        )
+      },
+      {
+        header: t("received_by"),
+        render: (r) => (
+          <div className="flex items-center gap-1.5">
+            <User size={14} className="text-gray-400" />
+            <span className="text-sm text-gray-600">{getReceivedByName(r)}</span>
+          </div>
+        )
+      },
+      {
+        header: t("total_qty"),
+        render: (r) => (
+          <div className="flex items-center gap-1.5">
+            <Package size={14} className="text-gray-400" />
+            <span className="text-sm font-medium">{r.totalQty?.toLocaleString() || 0}</span>
+          </div>
+        )
+      },
+      {
+        header: t("total_value"),
+        render: (r) => (
+          <div className="flex items-center gap-1.5">
+            <DollarSign size={14} className="text-green-600" />
+            <span className="font-semibold text-green-600">{r.totalValue?.toLocaleString()} EGP</span>
+          </div>
+        )
+      },
+      {
+        header: t("actions"),
+        className: "text-center",
+        render: (r) => (
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={() => handleEdit(r)}
+              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+              title={t("edit")}
+            >
+              <Edit2 size={16} />
+            </button>
+            <button
+              onClick={() => handleDelete(r._id || r.id)}
+              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+              title={t("delete")}
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
+        )
+      }
+    ],
+    [t, handleEdit, handleDelete]
+  );
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold dark:text-white">{t('goods_receipts')}</h1>
-          <p className="text-gray-500 text-sm">{t('manage_your_goods_receipts')}</p>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {t("goods_receipts")}
+          </h1>
+          <p className="text-gray-500 mt-1">
+            {t("manage_your_goods_receipts")}
+          </p>
         </div>
         <div className="flex gap-3">
-          <Button variant="outline">
-            <FileText size={18} /> {t('export')}
-          </Button>
-          <Button onClick={() => { setReceiptToEdit(null); setIsModalOpen(true); }} className="bg-[#4361EE]">
-            <Plus size={18} /> {t('add_goods_receipt')}
+          {selectedIds.length > 0 && (
+            <Button
+              variant="danger"
+              onClick={() => setIsBulkConfirmOpen(true)}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              <Trash2 size={18} />
+              {t("delete_selected")} ({selectedIds.length})
+            </Button>
+          )}
+          <ExportDropdown data={filteredReceipts} filename="goods-receipts" />
+          <Button
+            variant="primary"
+            onClick={() => {
+              setEditingReceipt(null);
+              setIsModalOpen(true);
+            }}
+            className="bg-indigo-600 hover:bg-indigo-700"
+          >
+            <Plus size={18} />
+            {t("add_goods_receipt")}
           </Button>
         </div>
       </div>
 
-      <Card className="p-0 overflow-hidden">
-        <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex flex-wrap gap-4 justify-between items-center">
-          <div className="flex gap-4">
-            <Input type="date" className="w-40" />
-            <Select
-              options={[{ value: 'all', label: t('gr_number') }]}
-              className="w-40"
-            />
-          </div>
-          <div className="relative w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-            <Input
-              placeholder={t('search')}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center">
+              <FileText size={18} className="text-indigo-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">{t("total_receipts")}</p>
+              <p className="text-xl font-bold text-gray-900">{totalReceipts}</p>
+            </div>
           </div>
         </div>
-        <Table columns={columns} data={filteredReceipts} keyExtractor={(r) => r._id || r.id} />
-      </Card>
+        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center">
+              <Package size={18} className="text-green-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">{t("total_quantity")}</p>
+              <p className="text-xl font-bold text-green-600">{totalQty.toLocaleString()}</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+              <DollarSign size={18} className="text-blue-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">{t("total_value")}</p>
+              <p className="text-xl font-bold text-blue-600">{totalValue.toLocaleString()} EGP</p>
+            </div>
+          </div>
+        </div>
+      </div>
 
+      {/* Search */}
+      <div className="flex flex-wrap gap-4 items-center">
+        <div className="relative max-w-md">
+          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder={t("search_goods_receipts")}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+      </div>
+
+      {/* Table */}
+        <Table
+          data={filteredReceipts}
+          columns={columns}
+          keyExtractor={(item) => item._id || item.id}
+          isLoading={isLoading}
+          selectable
+          selectedIds={selectedIds}
+          onSelectionChange={setSelectedIds}
+        />
+
+      {/* Modal */}
       <GoodsReceiptModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingReceipt(null);
+        }}
         onSave={handleSave}
-        receiptToEdit={receiptToEdit}
+        receiptToEdit={editingReceipt}
+        isLoading={isLoading}
+      />
+
+      {/* Delete Confirmation */}
+      <ConfirmationModal
+        isOpen={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        onConfirm={confirmDelete}
+        title={t("delete_goods_receipt")}
+        message={t("are_you_sure_delete_goods_receipt")}
+      />
+
+      {/* Bulk Delete Confirmation */}
+      <ConfirmationModal
+        isOpen={isBulkConfirmOpen}
+        onClose={() => setIsBulkConfirmOpen(false)}
+        onConfirm={handleBulkDelete}
+        title={t("delete_goods_receipts")}
+        message={t("are_you_sure_delete_goods_receipts", { count: selectedIds.length })}
       />
     </div>
   );

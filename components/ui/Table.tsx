@@ -2,13 +2,13 @@
 import React from 'react';
 
 export interface Column<T> {
+  key?: string;
   header: string;
   accessorKey?: keyof T;
   render?: (item: T, index: number) => React.ReactNode;
   className?: string;
   headerClassName?: string;
 }
-
 interface TableProps<T> {
   data: T[];
   columns: Column<T>[];
@@ -58,9 +58,9 @@ export const Table = <T,>({
       <table className={`w-full ${minWidth} border-collapse`}>
         <thead>
           <tr className={`border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/50 ${headerClassName}`}>
-            {columns.map((col, idx) => (
+            {columns.map((col) => (
               <th 
-                key={idx} 
+                key={col.key} 
                 className={`px-6 py-5 text-left rtl:text-right text-[11px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-widest ${col.headerClassName || ''} ${col.className || ''}`}
               >
                 {col.header}
@@ -84,9 +84,9 @@ export const Table = <T,>({
                   key={id} 
                   className={`hover:bg-gray-50/60 dark:hover:bg-white/[0.02] transition-colors duration-200 group ${isSelected ? 'bg-blue-50/30 dark:bg-primary/5' : ''}`}
                 >
-                  {columns.map((col, idx) => (
+                  {columns.map((col) => (
                     <td 
-                      key={idx} 
+                      key={col.key} 
                       className={`px-6 py-4 text-[13px] font-medium ${isSelected ? 'text-primary' : 'text-gray-700 dark:text-gray-200'} ${col.className || ''}`}
                     >
                       {col.render ? col.render(item, index) : (col.accessorKey ? String(item[col.accessorKey] || '-') : '-')}

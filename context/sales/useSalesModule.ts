@@ -43,14 +43,14 @@ export const useSalesModule = (fetchAllData?: () => Promise<void>) => {
         salesService.getAllProducts(),
       ]);
 
-      setCustomers(customersRes);
-      setSalesOrders(ordersRes);
-      setSalesInvoices(invoicesRes);
-      setSalesReturns(returnsRes);
-      setDiscounts(discountsRes);
-      setPromotions(promotionsRes);
-      setQuotations(quotationsRes);
-      setProducts(productsRes);
+      setCustomers(Array.isArray(customersRes) ? customersRes : (customersRes?.data || []));
+      setSalesOrders(Array.isArray(ordersRes) ? ordersRes : (ordersRes?.data || []));
+      setSalesInvoices(Array.isArray(invoicesRes) ? invoicesRes : (invoicesRes?.data || []));
+      setSalesReturns(Array.isArray(returnsRes) ? returnsRes : (returnsRes?.data || []));
+      setDiscounts(Array.isArray(discountsRes) ? discountsRes : (discountsRes?.data || []));
+      setPromotions(Array.isArray(promotionsRes) ? promotionsRes : (promotionsRes?.data || []));
+      setQuotations(Array.isArray(quotationsRes) ? quotationsRes : (quotationsRes?.data || []));
+      setProducts(Array.isArray(productsRes) ? productsRes : (productsRes?.data || []));
     } catch (error) {
       console.error('Error fetching sales data:', error);
     }

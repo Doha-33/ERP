@@ -1,29 +1,45 @@
-
-import React, { useState, useMemo, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Plus, ChevronDown, Edit2, Trash2, Search, Filter, X } from 'lucide-react';
-import { Card, Button, Badge, Input, ExportDropdown } from '../../components/ui/Common';
-import { Table, Column } from '../../components/ui/Table';
-import { useData } from '../../context/DataContext';
-import { AccessCard } from '../../types';
-import { AccessCardModal } from '../../components/hr/AccessCardModal';
-import { ConfirmationModal } from '../../components/ui/ConfirmationModal';
+import React, { useState, useMemo, useCallback } from "react";
+import { useTranslation } from "react-i18next";
+import { Plus, Search, Edit2, Trash2, CreditCard, User, Calendar, UserCheck, Filter, X, ChevronDown } from "lucide-react";
+import { Card, Button, Input, Badge, ExportDropdown } from "../../components/ui/Common";
+import { Table, Column } from "../../components/ui/Table";
+import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
+import { AccessCardModal } from "../../components/hr/AccessCardModal";
+import { useData } from "../../context/DataContext";
+import { AccessCard } from "../../types";
+import { toast } from "sonner";
 
 export const AccessCardsPage: React.FC = () => {
   const { t } = useTranslation();
   const { accessCards, addAccessCard, updateAccessCard, deleteAccessCard } = useData();
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<AccessCard | null>(null);
-  
-  // Search and Filter States
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedEmployee, setSelectedEmployee] = useState('');
-  
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSave = (card: AccessCard) => {
-    if (editingCard) updateAccessCard(card);
-    else addAccessCard(card);
+  const handleSave = async (card: Partial<AccessCard>) => {
+    try {
+      setIsLoading(true);
+      if (editingCard) {
+        await updateAccessCard({ ...card, _id: editingCard._id, id: editingCard.id } as AccessCard);
+        toast.success(t("access_card_updated_successfully"));
+      } else {
+        await addAccessCard(card as AccessCard);
+        toast.success(t("access_card_created_successfully"));
+      }
+      setIsModalOpen(false);
+      setEditingCard(null);
+    } catch (error) {
+      console.error("Error saving access card:", error);
+      toast.error(t("failed_to_save_access_card"));
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleEdit = useCallback((card: AccessCard) => {
@@ -35,159 +51,303 @@ export const AccessCardsPage: React.FC = () => {
     setDeleteId(id);
   }, []);
 
-  const confirmDelete = useCallback(() => {
+  const confirmDelete = useCallback(async () => {
     if (deleteId) {
-      deleteAccessCard(deleteId);
-      setDeleteId(null);
+      try {
+        await deleteAccessCard(deleteId);
+        toast.success(t("access_card_deleted_successfully"));
+        setDeleteId(null);
+        setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+      } catch (error) {
+        toast.error(t("failed_to_delete_access_card"));
+      }
     }
-  }, [deleteId, deleteAccessCard]);
+  }, [deleteId, deleteAccessCard, t]);
 
-  // Extract unique employee names for the dropdown
-  const uniqueEmployeeNames = useMemo(() => {
-    const names = accessCards.map(c => c.empName).filter((n): n is string => Boolean(n));
-    return Array.from(new Set(names)).sort();
-  }, [accessCards]);
+  const handleBulkDelete = async () => {
+    try {
+      setIsLoading(true);
+      await Promise.all(selectedIds.map(id => deleteAccessCard(id)));
+      toast.success(t("access_cards_deleted_successfully", { count: selectedIds.length }));
+      setSelectedIds([]);
+      setIsBulkConfirmOpen(false);
+    } catch (error) {
+      console.error("Bulk delete failed", error);
+      toast.error(t("failed_to_delete_access_cards"));
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  // Combined filtration logic
-  const filtered = useMemo(() => {
+  // Helper functions
+  const getEmployeeName = (card: AccessCard): string => {
+    if (!card.employeeInfo) return card.empCode || "-";
+    if (typeof card.employeeInfo === "object") {
+      return (card.employeeInfo as any)?.fullName || card.empCode || "-";
+    }
+    return card.empCode || "-";
+  };
+
+  const getEmployeeCode = (card: AccessCard): string => {
+    if (typeof card.employeeInfo === "object") {
+      return (card.employeeInfo as any)?.employeeCode || card.empCode || "-";
+    }
+    return card.empCode || "-";
+  };
+
+  // Apply filters
+  const filteredCards = useMemo(() => {
     return accessCards.filter(c => {
-      const matchesSearch = (c.empName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           (c.cardNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           (c.empCode || '').toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesSelect = selectedEmployee === '' || c.empName === selectedEmployee;
-      return matchesSearch && matchesSelect;
+      const employeeName = getEmployeeName(c).toLowerCase();
+      const matchesSearch = 
+        employeeName.includes(searchTerm.toLowerCase()) ||
+        c.cardNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        getEmployeeCode(c).toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesStatus = !statusFilter || c.status === statusFilter;
+      
+      return matchesSearch && matchesStatus;
     });
-  }, [accessCards, searchTerm, selectedEmployee]);
+  }, [accessCards, searchTerm, statusFilter]);
 
-  const columns: Column<AccessCard>[] = useMemo(() => [
-    { header: t('emp_code'), accessorKey: 'empCode', className: 'text-gray-500 font-mono text-xs' },
-    { 
-      header: t('emp_name'), 
-      render: (c) => (
-        <div className="flex items-center gap-3">
-           <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-primary font-bold text-xs uppercase">
-              {(c.empName || 'U')[0]}
-           </div>
-           <span className="font-bold text-gray-900 dark:text-white">{c.empName}</span>
-        </div>
-      )
-    },
-    { header: t('card_number_id'), accessorKey: 'cardNumber', className: 'text-gray-500 font-mono text-xs' },
-    { header: t('done_at'), accessorKey: 'doneAt', className: 'text-gray-500' },
-    { header: t('done_by'), accessorKey: 'doneBy', className: 'text-gray-500' },
-    { 
-      header: t('status'), 
-      render: (c) => (
-        <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase border ${
-            c.status === 'Done' ? 'bg-green-50 text-green-600 border-green-100 dark:bg-green-900/20 dark:border-green-900/30' : 
-            'bg-orange-50 text-orange-600 border-orange-100 dark:bg-orange-900/20 dark:border-orange-900/30'
-        }`}>
-            {c.status}
-        </span>
-      )
-    },
-    {
-      header: t('actions'),
-      className: 'text-center',
-      render: (c) => (
-        <div className="flex items-center justify-center gap-2">
-           <button onClick={() => handleEdit(c)} className="p-1.5 text-gray-500 hover:text-primary hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded border border-gray-200 dark:border-gray-700 transition-colors"><Edit2 size={14} /></button>
-           <button onClick={() => handleDelete(c.id)} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded border border-gray-200 dark:border-gray-700 transition-colors"><Trash2 size={14} /></button>
-        </div>
-      )
-    }
-  ], [t, handleEdit, handleDelete]);
+  // Statistics
+  const totalCards = filteredCards.length;
+  const doneCards = filteredCards.filter(c => c.status === "Done").length;
+  const pendingCards = filteredCards.filter(c => c.status === "Pending").length;
+
+  const getStatusBadge = (status: string) => {
+    return (
+      <Badge variant={status === "Done" ? "success" : "warning"}>
+        {status === "Done" ? t("done") : t("pending")}
+      </Badge>
+    );
+  };
+
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return "-";
+    return new Date(dateStr).toLocaleDateString();
+  };
+
+  const statusOptions = [
+    { value: "", label: t("all_statuses") },
+    { value: "Done", label: t("done") },
+    { value: "Pending", label: t("pending") },
+  ];
+
+  const columns: Column<AccessCard>[] = useMemo(
+    () => [
+      {
+        header: t("employee"),
+        render: (c) => (
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
+              <User size={18} className="text-indigo-600" />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-medium text-gray-900">{getEmployeeName(c)}</span>
+              <span className="text-xs text-gray-500">{getEmployeeCode(c)}</span>
+            </div>
+          </div>
+        )
+      },
+      {
+        header: t("card_number"),
+        render: (c) => (
+          <div className="flex items-center gap-1.5">
+            <CreditCard size={14} className="text-gray-400" />
+            <span className="text-sm font-mono text-gray-600">{c.cardNumber}</span>
+          </div>
+        )
+      },
+      {
+        header: t("done_info"),
+        render: (c) => (
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-1.5">
+              <Calendar size={14} className="text-gray-400" />
+              <span className="text-sm text-gray-600">{formatDate(c.doneAt)}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <UserCheck size={14} className="text-gray-400" />
+              <span className="text-sm text-gray-500">{c.doneBy}</span>
+            </div>
+          </div>
+        )
+      },
+      {
+        header: t("status"),
+        render: (c) => getStatusBadge(c.status)
+      },
+      {
+        header: t("actions"),
+        className: "text-center",
+        render: (c) => (
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={() => handleEdit(c)}
+              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+              title={t("edit")}
+            >
+              <Edit2 size={16} />
+            </button>
+            <button
+              onClick={() => handleDelete(c._id || c.id)}
+              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+              title={t("delete")}
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
+        )
+      }
+    ],
+    [t, handleEdit, handleDelete]
+  );
 
   return (
     <div className="space-y-6">
-       {/* Header */}
-       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-           <div className="flex items-center gap-2 text-sm text-gray-400 font-medium mb-1 uppercase tracking-wider">
-              <span>Onboarding</span>
-              <ChevronDown size={14} className="-rotate-90" />
-              <span className="text-primary">{t('access_cards')}</span>
-           </div>
-           <h1 className="text-2xl font-bold dark:text-white">{t('manage_access_cards')}</h1>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {t("manage_access_cards")}
+          </h1>
+          <p className="text-gray-500 mt-1">
+            {t("manage_employee_access_cards")}
+          </p>
         </div>
         <div className="flex gap-3">
-           <ExportDropdown data={filtered} filename="access_cards_report" />
-           <Button onClick={() => { setEditingCard(null); setIsModalOpen(true); }} className="bg-[#4361EE] hover:bg-blue-700 shadow-lg shadow-primary/20">
-              <Plus size={18} /> {t('add_access_cards')}
-           </Button>
+          {selectedIds.length > 0 && (
+            <Button
+              variant="danger"
+              onClick={() => setIsBulkConfirmOpen(true)}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              <Trash2 size={18} />
+              {t("delete_selected")} ({selectedIds.length})
+            </Button>
+          )}
+          <ExportDropdown data={filteredCards} filename="access-cards" />
+          <Button
+            variant="primary"
+            onClick={() => {
+              setEditingCard(null);
+              setIsModalOpen(true);
+            }}
+            className="bg-indigo-600 hover:bg-indigo-700"
+          >
+            <Plus size={18} />
+            {t("add_access_card")}
+          </Button>
         </div>
       </div>
 
-      <Card className="min-h-[500px] border-none shadow-xl shadow-gray-200/50 dark:shadow-none">
-        {/* Toolbar */}
-        <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6 bg-gray-50 dark:bg-gray-800/30 p-4 rounded-2xl">
-           <div className="w-full md:w-80 relative">
-              <Input 
-                placeholder="Search by name, code or Card ID..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                icon={<Search size={18} />}
-                className="bg-white dark:bg-dark-surface border-gray-200 dark:border-gray-700"
-              />
-           </div>
-           
-           <div className="flex gap-3 w-full md:w-auto">
-              <div className="relative flex-1 md:w-64">
-                 <select 
-                    value={selectedEmployee}
-                    onChange={(e) => setSelectedEmployee(e.target.value)}
-                    className="w-full appearance-none bg-white dark:bg-dark-surface border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 py-2.5 px-10 pr-10 rounded-xl text-sm font-bold focus:ring-2 focus:ring-primary/20 outline-none transition-all cursor-pointer"
-                 >
-                    <option value="">{t('all')} {t('employees')}</option>
-                    {/* Comment above fix: Explicitly typing name as string to resolve 'unknown' Key error */}
-                    {uniqueEmployeeNames.map((name: string) => (
-                        <option key={name} value={name}>{name}</option>
-                    ))}
-                 </select>
-                 <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-gray-400">
-                    <Filter size={16} />
-                 </div>
-                 <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-400">
-                    <ChevronDown size={14} />
-                 </div>
-              </div>
-              
-              {(searchTerm || selectedEmployee) && (
-                <button 
-                  onClick={() => { setSearchTerm(''); setSelectedEmployee(''); }}
-                  className="p-2.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl border border-red-100 dark:border-red-900/30 transition-colors"
-                  title="Reset filters"
-                >
-                  <X size={18} />
-                </button>
-              )}
-           </div>
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <CreditCard size={18} className="text-indigo-600" />
+            <p className="text-xs text-gray-500">{t("total_cards")}</p>
+          </div>
+          <p className="text-xl font-bold text-gray-900 mt-1">{totalCards}</p>
         </div>
-        
-        <Table 
-           data={filtered} 
-           columns={columns} 
-           keyExtractor={c => c.id} 
-           selectable 
-           minWidth="min-w-[1200px]" 
-           emptyMessage="No access card records found matching your selection"
-        />
-      </Card>
+        <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <CheckCircle size={18} className="text-green-600" />
+            <p className="text-xs text-gray-500">{t("done")}</p>
+          </div>
+          <p className="text-xl font-bold text-green-600 mt-1">{doneCards}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <Clock size={18} className="text-orange-600" />
+            <p className="text-xs text-gray-500">{t("pending")}</p>
+          </div>
+          <p className="text-xl font-bold text-orange-600 mt-1">{pendingCards}</p>
+        </div>
+      </div>
 
-      <AccessCardModal 
-         isOpen={isModalOpen}
-         onClose={() => setIsModalOpen(false)}
-         onSave={handleSave}
-         cardToEdit={editingCard}
+      {/* Filters */}
+      <div className="flex flex-wrap gap-4 items-center">
+        <div className="relative max-w-md">
+          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder={t("search_access_cards")}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          {statusOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+
+        {(statusFilter || searchTerm) && (
+          <button
+            onClick={() => {
+              setStatusFilter("");
+              setSearchTerm("");
+            }}
+            className="text-sm text-red-600 hover:text-red-700"
+          >
+            {t("clear_filters")}
+          </button>
+        )}
+      </div>
+
+      {/* Table */}
+        <Table
+          data={filteredCards}
+          columns={columns}
+          keyExtractor={(item) => item._id || item.id}
+          isLoading={isLoading}
+          selectable
+          selectedIds={selectedIds}
+          onSelectionChange={setSelectedIds}
+        />
+
+      {/* Modal */}
+      <AccessCardModal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingCard(null);
+        }}
+        onSave={handleSave}
+        cardToEdit={editingCard}
+        isLoading={isLoading}
       />
 
+      {/* Delete Confirmation */}
       <ConfirmationModal
-         isOpen={!!deleteId}
-         onClose={() => setDeleteId(null)}
-         onConfirm={confirmDelete}
-         title={t('confirm_delete')}
-         message={t('are_you_sure_delete')}
+        isOpen={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        onConfirm={confirmDelete}
+        title={t("delete_access_card")}
+        message={t("are_you_sure_delete_access_card")}
+      />
+
+      {/* Bulk Delete Confirmation */}
+      <ConfirmationModal
+        isOpen={isBulkConfirmOpen}
+        onClose={() => setIsBulkConfirmOpen(false)}
+        onConfirm={handleBulkDelete}
+        title={t("delete_access_cards")}
+        message={t("are_you_sure_delete_access_cards", { count: selectedIds.length })}
       />
     </div>
   );
 };
+
+// Add missing imports
+import { CheckCircle, Clock } from "lucide-react";

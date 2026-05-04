@@ -12,7 +12,7 @@ export interface Role {
 const roleService = {
   async getAllRoles(): Promise<Role[]> {
     try {
-      const response = await apiClient.get<{ success: boolean; data: Role[] }>('/roles');
+      const response = await apiClient.get<{ success: boolean; data: Role[] }>('/roles/list');
       if (response.data.success) {
         return response.data.data;
       }
@@ -24,7 +24,7 @@ const roleService = {
 
   async createRole(roleData: { name: string; description: string }): Promise<Role> {
     try {
-      const response = await apiClient.post<{ success: boolean; data: Role }>('/roles', roleData);
+      const response = await apiClient.post<{ success: boolean; data: Role }>('/roles/create', roleData);
       if (response.data.success) {
         return response.data.data;
       }
@@ -36,7 +36,7 @@ const roleService = {
 
   async updateRole(roleId: string, roleData: Partial<Role>): Promise<Role> {
     try {
-      const response = await apiClient.put<{ success: boolean; data: Role }>(`/roles/${roleId}`, roleData);
+      const response = await apiClient.put<{ success: boolean; data: Role }>(`/roles/update/${roleId}`, roleData);
       if (response.data.success) {
         return response.data.data;
       }
@@ -48,7 +48,7 @@ const roleService = {
 
   async deleteRole(roleId: string): Promise<void> {
     try {
-      const response = await apiClient.delete<{ success: boolean }>(`/roles/${roleId}`);
+      const response = await apiClient.delete<{ success: boolean }>(`/roles/delete/${roleId}`);
       if (!response.data.success) {
         throw new Error('Failed to delete role');
       }

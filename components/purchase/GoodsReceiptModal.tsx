@@ -1,43 +1,28 @@
-
-import React from 'react';
-import { useTranslation } from 'react-i18next';
-import { useForm, useFieldArray } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { Plus, Trash2 } from 'lucide-react';
-import { Modal } from '../ui/Modal';
-import { Button, Input, Select } from '../ui/Common';
-import { GoodsReceipt } from '../../types';
-import { useData } from '../../context/DataContext';
-
-const goodsReceiptSchema = z.object({
-  grNumber: z.string().min(1, 'GR Number is required'),
-  purchaseOrderId: z.string().min(1, 'Purchase Order is required'),
-  receiptDate: z.string().min(1, 'Receipt date is required'),
-  warehouseId: z.string().min(1, 'Warehouse is required'),
-  companyId: z.string().min(1, 'Company is required'),
-  branchId: z.string().min(1, 'Branch is required'),
-  items: z.array(z.object({
-    productId: z.string().min(1, 'Product is required'),
-    sku: z.string().optional(),
-    orderedQuantity: z.number().min(1),
-    receivedQuantity: z.number().min(0),
-    acceptedQuantity: z.number().min(0),
-    rejectedQuantity: z.number().min(0),
-    unitCost: z.number().min(0),
-    totalValue: z.number().min(0),
-  })).min(1, 'At least one item is required'),
-  receivedBy: z.string().min(1, 'Received by is required'),
-  notes: z.string().optional(),
-});
-
-type GoodsReceiptFormData = z.infer<typeof goodsReceiptSchema>;
+import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { Plus, Edit2, Trash2, Package, DollarSign, Calendar, Building2, Users, Hash, Warehouse, Truck, User } from "lucide-react";
+import { Modal } from "../../components/ui/Modal";
+import { Button, Input, Select, TextArea } from "../../components/ui/Common";
+import { GoodsReceipt } from "../../types";
+import { useData } from "../../context/DataContext";
 
 interface GoodsReceiptModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: any) => void;
+  onSave: (data: Partial<GoodsReceipt>) => Promise<void>;
   receiptToEdit?: GoodsReceipt | null;
+  isLoading?: boolean;
+}
+
+interface ReceiptItem {
+  productId: string;
+  sku: string;
+  orderedQuantity: number;
+  receivedQuantity: number;
+  acceptedQuantity: number;
+  rejectedQuantity: number;
+  unitPrice: number;
+  total: number;
 }
 
 export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
@@ -45,250 +30,427 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
   onClose,
   onSave,
   receiptToEdit,
+  isLoading = false,
 }) => {
   const { t } = useTranslation();
-  const { products, companies, branches, purchaseOrders, warehouses } = useData();
+  const { products, companies, branches, purchaseOrders, warehouses, currentUserEmployee } = useData();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formData, setFormData] = useState({
+    grnNumber: "",
+    purchaseOrderId: "",
+    supplierId: "",
+    warehouseId: "",
+    receiptDate: new Date().toISOString().split("T")[0],
+    receivedBy: "",
+    notes: "",
+  });
   
-  const {
-    register,
-    control,
-    handleSubmit,
-    reset,
-    setValue,
-    watch,
-    formState: { errors },
-  } = useForm<GoodsReceiptFormData>({
-    resolver: zodResolver(goodsReceiptSchema),
-    defaultValues: {
-      grNumber: '',
-      receiptDate: new Date().toISOString().split('T')[0],
-      purchaseOrderId: '',
-      warehouseId: '',
-      companyId: '',
-      branchId: '',
-      items: [{ productId: '', sku: '', orderedQuantity: 1, receivedQuantity: 1, acceptedQuantity: 1, rejectedQuantity: 0, unitCost: 0, totalValue: 0 }],
-      receivedBy: '',
-    },
-  });
+  const [items, setItems] = useState<ReceiptItem[]>([
+    { productId: "", sku: "", orderedQuantity: 1, receivedQuantity: 1, acceptedQuantity: 1, rejectedQuantity: 0, unitPrice: 0, total: 0 }
+  ]);
 
-  const { fields, append, remove } = useFieldArray({
-    control,
-    name: 'items',
-  });
+  // Calculate total value
+  const totalQty = items.reduce((sum, item) => sum + (item.acceptedQuantity || 0), 0);
+  const totalValue = items.reduce((sum, item) => sum + (item.total || 0), 0);
 
-  React.useEffect(() => {
-    if (receiptToEdit) {
-      reset({
-        grNumber: receiptToEdit.grNumber,
-        receiptDate: new Date(receiptToEdit.receiptDate).toISOString().split('T')[0],
-        purchaseOrderId: typeof receiptToEdit.purchaseOrderId === 'object' ? receiptToEdit.purchaseOrderId?._id : receiptToEdit.purchaseOrderId,
-        warehouseId: typeof receiptToEdit.warehouseId === 'object' ? receiptToEdit.warehouseId?._id : receiptToEdit.warehouseId,
-        companyId: typeof receiptToEdit.companyId === 'object' ? receiptToEdit.companyId?._id : receiptToEdit.companyId,
-        branchId: typeof receiptToEdit.branchId === 'object' ? receiptToEdit.branchId?._id : receiptToEdit.branchId,
-        items: receiptToEdit.items.map(item => ({
-          productId: typeof item.productId === 'object' ? item.productId?._id : item.productId,
+  useEffect(() => {
+    if (receiptToEdit && isOpen) {
+      const poId = typeof receiptToEdit.purchaseOrderId === "object" 
+        ? (receiptToEdit.purchaseOrderId as any)?._id 
+        : receiptToEdit.purchaseOrderId;
+      const supplierId = typeof receiptToEdit.supplierId === "object" 
+        ? (receiptToEdit.supplierId as any)?._id 
+        : receiptToEdit.supplierId;
+      const warehouseId = typeof receiptToEdit.warehouseId === "object" 
+        ? (receiptToEdit.warehouseId as any)?._id 
+        : receiptToEdit.warehouseId;
+
+      setFormData({
+        grnNumber: receiptToEdit.grnNumber || "",
+        purchaseOrderId: poId || "",
+        supplierId: supplierId || "",
+        warehouseId: warehouseId || "",
+        receiptDate: receiptToEdit.receiptDate 
+          ? new Date(receiptToEdit.receiptDate).toISOString().split("T")[0] 
+          : new Date().toISOString().split("T")[0],
+        receivedBy: typeof receiptToEdit.receivedBy === "object" 
+          ? (receiptToEdit.receivedBy as any)?.username || (receiptToEdit.receivedBy as any)?.fullName || ""
+          : receiptToEdit.receivedBy || "",
+        notes: receiptToEdit.notes || "",
+      });
+      
+      if (receiptToEdit.items && receiptToEdit.items.length > 0) {
+        setItems(receiptToEdit.items.map(item => ({
+          productId: typeof item.productId === "object" ? (item.productId as any)?._id || "" : item.productId || "",
+          sku: item.sku || "",
+          orderedQuantity: item.orderedQuantity || 0,
+          receivedQuantity: item.receivedQuantity || 0,
+          acceptedQuantity: item.acceptedQuantity || item.receivedQuantity || 0,
+          rejectedQuantity: item.rejectedQuantity || 0,
+          unitPrice: item.unitPrice || 0,
+          total: item.total || (item.acceptedQuantity * item.unitPrice) || 0
+        })));
+      }
+    } else if (!receiptToEdit && isOpen) {
+      const randomNum = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+      const today = new Date().toISOString().split("T")[0];
+      setFormData({
+        grnNumber: `GRN-${today.replace(/-/g, '')}-${randomNum}`,
+        purchaseOrderId: "",
+        supplierId: "",
+        warehouseId: "",
+        receiptDate: today,
+        receivedBy: currentUserEmployee?.username || "",
+        notes: "",
+      });
+      setItems([{ productId: "", sku: "", orderedQuantity: 1, receivedQuantity: 1, acceptedQuantity: 1, rejectedQuantity: 0, unitPrice: 0, total: 0 }]);
+    }
+  }, [receiptToEdit, isOpen, currentUserEmployee]);
+
+  // Update items when PO is selected
+  const onPOChange = (poId: string) => {
+    const selectedPO = purchaseOrders.find(po => (po._id || po.id) === poId);
+    if (selectedPO) {
+      setFormData(prev => ({
+        ...prev,
+        supplierId: typeof selectedPO.supplierId === "object" 
+          ? (selectedPO.supplierId as any)?._id 
+          : selectedPO.supplierId || "",
+      }));
+      
+      if (selectedPO.items && selectedPO.items.length > 0) {
+        setItems(selectedPO.items.map(item => ({
+          productId: typeof item.productId === "object" ? (item.productId as any)?._id || "" : item.productId || "",
+          sku: item.sku || "",
+          orderedQuantity: item.quantity,
+          receivedQuantity: item.quantity,
+          acceptedQuantity: item.quantity,
+          rejectedQuantity: 0,
+          unitPrice: item.unitCost,
+          total: item.quantity * item.unitCost
+        })));
+      }
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    
+    try {
+      await onSave({
+        ...formData,
+        items: items.map(item => ({
+          productId: item.productId,
           sku: item.sku,
           orderedQuantity: item.orderedQuantity,
           receivedQuantity: item.receivedQuantity,
           acceptedQuantity: item.acceptedQuantity,
           rejectedQuantity: item.rejectedQuantity,
-          unitCost: item.unitCost,
-          totalValue: item.totalValue,
+          unitPrice: item.unitPrice,
+          total: item.total
         })),
-        receivedBy: receiptToEdit.receivedBy,
-        notes: receiptToEdit.notes,
+        totalQty,
+        totalValue,
       });
-    } else {
-      reset({
-        grNumber: `GR-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
-        receiptDate: new Date().toISOString().split('T')[0],
-        purchaseOrderId: '',
-        warehouseId: '',
-        companyId: '',
-        branchId: '',
-        items: [{ productId: '', sku: '', orderedQuantity: 1, receivedQuantity: 1, acceptedQuantity: 1, rejectedQuantity: 0, unitCost: 0, totalValue: 0 }],
-        receivedBy: '',
-      });
+      onClose();
+    } catch (error) {
+      console.error("Error in form submission:", error);
+    } finally {
+      setIsSubmitting(false);
     }
-  }, [receiptToEdit, reset]);
+  };
 
-  const onSubmit = (data: GoodsReceiptFormData) => {
-    const totalQty = data.items.reduce((sum, item) => sum + item.receivedQuantity, 0);
-    const totalValue = data.items.reduce((sum, item) => sum + item.totalValue, 0);
+  const handleChange = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleItemChange = (index: number, field: keyof ReceiptItem, value: any) => {
+    const newItems = [...items];
+    newItems[index] = { ...newItems[index], [field]: value };
     
-    onSave({ ...data, totalQty, totalValue });
-    onClose();
+    // If product is selected, auto-fill SKU
+    if (field === "productId" && value) {
+      const selectedProduct = products.find(p => (p._id || p.id) === value);
+      if (selectedProduct) {
+        newItems[index].sku = selectedProduct.sku;
+      }
+    }
+    
+    // Calculate rejected quantity
+    if (field === "acceptedQuantity" && newItems[index].receivedQuantity) {
+      newItems[index].rejectedQuantity = newItems[index].receivedQuantity - value;
+    }
+    if (field === "receivedQuantity") {
+      newItems[index].acceptedQuantity = value;
+      newItems[index].rejectedQuantity = 0;
+    }
+    
+    // Recalculate total
+    newItems[index].total = newItems[index].acceptedQuantity * newItems[index].unitPrice;
+    
+    setItems(newItems);
   };
 
-  const onPOChange = (poId: string) => {
-    const po = purchaseOrders.find(o => (o._id || o.id) === poId);
-    if (po) {
-      setValue('companyId', typeof po.companyId === 'object' ? po.companyId?._id : po.companyId);
-      setValue('branchId', typeof po.branchId === 'object' ? po.branchId?._id : po.branchId);
-      
-      const newItems = po.items.map(item => ({
-        productId: typeof item.productId === 'object' ? item.productId?._id : item.productId,
-        sku: item.sku,
-        orderedQuantity: item.quantity,
-        receivedQuantity: item.quantity,
-        acceptedQuantity: item.quantity,
-        rejectedQuantity: 0,
-        unitCost: item.unitCost,
-        totalValue: item.quantity * item.unitCost,
-      }));
-      setValue('items', newItems);
+  const addItem = () => {
+    setItems([...items, { productId: "", sku: "", orderedQuantity: 1, receivedQuantity: 1, acceptedQuantity: 1, rejectedQuantity: 0, unitPrice: 0, total: 0 }]);
+  };
+
+  const removeItem = (index: number) => {
+    if (items.length > 1) {
+      setItems(items.filter((_, i) => i !== index));
     }
   };
 
-  const calculateItemTotal = (index: number) => {
-    const qty = watch(`items.${index}.acceptedQuantity`);
-    const cost = watch(`items.${index}.unitCost`);
-    setValue(`items.${index}.totalValue`, qty * cost);
-  };
+  const poOptions = [
+    { value: "", label: t("select_po") },
+    ...purchaseOrders.map(po => ({ 
+      value: po._id || po.id, 
+      label: po.referenceNo 
+    }))
+  ];
+
+  const warehouseOptions = warehouses.map(w => ({ 
+    value: w._id || w.id, 
+    label: w.warehouseName 
+  }));
+
+  const productOptions = products.map(p => ({ 
+    value: p._id || p.id, 
+    label: `${p.productName} (${p.sku})` 
+  }));
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={receiptToEdit ? t('edit_goods_receipt') : t('add_goods_receipt')}
-      className="max-w-5xl"
+      title={
+        <div className="flex items-center gap-2">
+          {receiptToEdit ? <Edit2 size={20} /> : <Plus size={20} />}
+          {receiptToEdit ? t("edit_goods_receipt") : t("add_goods_receipt")}
+        </div>
+      }
+      size="xl"
     >
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Input
-            label={t('gr_number')}
-            {...register('grNumber')}
-            error={errors.grNumber?.message}
-            required
-          />
-          <Input
-            label={t('receipt_date')}
-            type="date"
-            {...register('receiptDate')}
-            error={errors.receiptDate?.message}
-            required
-          />
-          <Select
-            label={t('purchase_order')}
-            options={[
-              { value: '', label: t('select_po') },
-              ...purchaseOrders.map(po => ({ value: po._id || po.id, label: po.referenceNo }))
-            ]}
-            {...register('purchaseOrderId')}
-            onChange={(e) => onPOChange(e.target.value)}
-            error={errors.purchaseOrderId?.message}
-            required
-          />
-          <Select
-            label={t('warehouse')}
-            options={warehouses.map(w => ({ value: w._id || w.id, label: w.warehouseName }))}
-            {...register('warehouseId')}
-            error={errors.warehouseId?.message}
-            required
-          />
-          <Select
-            label={t('company')}
-            options={companies.map(c => ({ value: c._id || c.id, label: c.name }))}
-            {...register('companyId')}
-            error={errors.companyId?.message}
-            required
-          />
-          <Select
-            label={t('branch')}
-            options={branches.map(b => ({ value: b._id || b.id, label: b.name }))}
-            {...register('branchId')}
-            error={errors.branchId?.message}
-            required
-          />
-          <Input
-            label={t('received_by')}
-            {...register('receivedBy')}
-            error={errors.receivedBy?.message}
-            required
-          />
+      <form onSubmit={handleSubmit} className="space-y-6 max-h-[70vh] overflow-y-auto px-2">
+        {/* Receipt Information */}
+        <div className="border-b border-gray-100 pb-4">
+          <h3 className="text-md font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <FileText size={18} className="text-indigo-600" />
+            {t("receipt_information")}
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3">
+            <Input
+              label={t("grn_number")}
+              value={formData.grnNumber}
+              onChange={(e) => handleChange("grnNumber", e.target.value)}
+              placeholder="GRN-001"
+              required
+              fullWidth
+            />
+            <Input
+              label={t("receipt_date")}
+              type="date"
+              value={formData.receiptDate}
+              onChange={(e) => handleChange("receiptDate", e.target.value)}
+              required
+              fullWidth
+            />
+            <Select
+              label={t("purchase_order")}
+              value={formData.purchaseOrderId}
+              onChange={(e) => {
+                handleChange("purchaseOrderId", e.target.value);
+                onPOChange(e.target.value);
+              }}
+              options={poOptions}
+              placeholder={t("select_po")}
+              required
+              fullWidth
+            />
+            <Select
+              label={t("warehouse")}
+              value={formData.warehouseId}
+              onChange={(e) => handleChange("warehouseId", e.target.value)}
+              options={warehouseOptions}
+              placeholder={t("select_warehouse")}
+              required
+              fullWidth
+            />
+            <Input
+              label={t("received_by")}
+              value={formData.receivedBy}
+              onChange={(e) => handleChange("receivedBy", e.target.value)}
+              placeholder={t("enter_received_by")}
+              required
+              fullWidth
+            />
+          </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-medium">{t('items')}</h3>
-            <Button type="button" variant="outline" size="sm" onClick={() => append({ productId: '', sku: '', orderedQuantity: 1, receivedQuantity: 1, acceptedQuantity: 1, rejectedQuantity: 0, unitCost: 0, totalValue: 0 })}>
-              <Plus size={16} className="mr-1" /> {t('add_item')}
+        {/* Receipt Items */}
+        <div className="border-b border-gray-100 pb-4">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-md font-semibold text-gray-900 flex items-center gap-2">
+              <Package size={18} className="text-indigo-600" />
+              {t("receipt_items")}
+            </h3>
+            <Button type="button" variant="secondary" onClick={addItem} size="sm">
+              <Plus size={16} />
+              {t("add_item")}
             </Button>
           </div>
-
-          {fields.map((field, index) => (
-            <div key={field.id} className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 border border-gray-100 rounded-lg relative">
-              <div className="md:col-span-2">
-                <Select
-                  label={t('product')}
-                  options={products.map(p => ({ value: p._id || p.id, label: p.productName }))}
-                  {...register(`items.${index}.productId`)}
-                  error={errors.items?.[index]?.productId?.message}
-                  required
-                />
-              </div>
-              <Input
-                label={t('sku')}
-                {...register(`items.${index}.sku`)}
-                readOnly
-                className="bg-gray-50"
-              />
-              <Input
-                label={t('ordered_quantity')}
-                type="number"
-                {...register(`items.${index}.orderedQuantity`, { valueAsNumber: true })}
-                readOnly
-                className="bg-gray-50"
-              />
-              <Input
-                label={t('received_quantity')}
-                type="number"
-                {...register(`items.${index}.receivedQuantity`, { valueAsNumber: true })}
-                error={errors.items?.[index]?.receivedQuantity?.message}
-                required
-              />
-              <Input
-                label={t('accepted_quantity')}
-                type="number"
-                {...register(`items.${index}.acceptedQuantity`, { valueAsNumber: true })}
-                onChange={() => calculateItemTotal(index)}
-                error={errors.items?.[index]?.acceptedQuantity?.message}
-                required
-              />
-              <Input
-                label={t('rejected_quantity')}
-                type="number"
-                {...register(`items.${index}.rejectedQuantity`, { valueAsNumber: true })}
-                error={errors.items?.[index]?.rejectedQuantity?.message}
-                required
-              />
-              <div className="flex items-end gap-2">
-                <Input
-                  label={t('total_value')}
-                  type="number"
-                  {...register(`items.${index}.totalValue`, { valueAsNumber: true })}
-                  readOnly
-                  className="bg-gray-50"
-                />
-                {fields.length > 1 && (
-                  <button type="button" onClick={() => remove(index)} className="p-2 text-red-500 hover:bg-red-50 rounded mb-1">
-                    <Trash2 size={18} />
-                  </button>
-                )}
-              </div>
+          
+          <div className="space-y-3">
+            {/* Table Header */}
+            <div className="hidden md:grid grid-cols-12 gap-3 px-2 py-2 bg-gray-50 rounded-lg text-xs font-medium text-gray-500">
+              <div className="col-span-2">{t("product")}</div>
+              <div className="col-span-1">{t("sku")}</div>
+              <div className="col-span-1">{t("ordered")}</div>
+              <div className="col-span-1">{t("received")}</div>
+              <div className="col-span-1">{t("accepted")}</div>
+              <div className="col-span-1">{t("rejected")}</div>
+              <div className="col-span-2">{t("unit_price")}</div>
+              <div className="col-span-2">{t("total")}</div>
+              <div className="col-span-1"></div>
             </div>
-          ))}
+            
+            {items.map((item, index) => (
+              <div key={index} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end p-3 bg-gray-50 rounded-lg">
+                <div className="md:col-span-2">
+                  <Select
+                    label={index === 0 ? t("product") : ""}
+                    value={item.productId}
+                    onChange={(e) => handleItemChange(index, "productId", e.target.value)}
+                    options={productOptions}
+                    placeholder={t("select_product")}
+                    required
+                    fullWidth
+                  />
+                </div>
+                <div className="md:col-span-1">
+                  <Input
+                    label={index === 0 ? t("sku") : ""}
+                    value={item.sku}
+                    onChange={(e) => handleItemChange(index, "sku", e.target.value)}
+                    readOnly
+                    fullWidth
+                  />
+                </div>
+                <div className="md:col-span-1">
+                  <Input
+                    label={index === 0 ? t("ordered_qty") : ""}
+                    type="number"
+                    value={item.orderedQuantity}
+                    readOnly
+                    className="bg-gray-100"
+                    fullWidth
+                  />
+                </div>
+                <div className="md:col-span-1">
+                  <Input
+                    label={index === 0 ? t("received_qty") : ""}
+                    type="number"
+                    value={item.receivedQuantity}
+                    onChange={(e) => handleItemChange(index, "receivedQuantity", Number(e.target.value))}
+                    min="0"
+                    required
+                    fullWidth
+                  />
+                </div>
+                <div className="md:col-span-1">
+                  <Input
+                    label={index === 0 ? t("accepted_qty") : ""}
+                    type="number"
+                    value={item.acceptedQuantity}
+                    onChange={(e) => handleItemChange(index, "acceptedQuantity", Number(e.target.value))}
+                    min="0"
+                    required
+                    fullWidth
+                  />
+                </div>
+                <div className="md:col-span-1">
+                  <Input
+                    label={index === 0 ? t("rejected_qty") : ""}
+                    type="number"
+                    value={item.rejectedQuantity}
+                    readOnly
+                    className="bg-gray-100 text-red-600"
+                    fullWidth
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <Input
+                    label={index === 0 ? t("unit_price") : ""}
+                    type="number"
+                    value={item.unitPrice}
+                    onChange={(e) => handleItemChange(index, "unitPrice", Number(e.target.value))}
+                    min="0"
+                    required
+                    fullWidth
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <div className="text-sm font-semibold text-indigo-600 mt-2 pt-2">
+                    {item.total.toLocaleString()} EGP
+                  </div>
+                </div>
+                <div className="md:col-span-1 flex justify-end">
+                  {items.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeItem(index)}
+                      className="p-1 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
-        <div className="flex justify-end gap-3 pt-4">
-          <Button type="button" variant="outline" onClick={onClose} className="bg-gray-600 text-white border-none hover:bg-gray-700">
-            {t('cancel')}
+        {/* Summary */}
+        <div className="bg-gray-50 rounded-xl p-4 space-y-2">
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-gray-600">{t("total_quantity")}</span>
+            <span className="text-sm font-medium">{totalQty.toLocaleString()}</span>
+          </div>
+          <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+            <span className="text-base font-bold text-gray-900">{t("total_value")}</span>
+            <span className="text-lg font-bold text-indigo-600">{totalValue.toLocaleString()} EGP</span>
+          </div>
+        </div>
+
+        {/* Notes */}
+        <TextArea
+          label={t("notes")}
+          value={formData.notes}
+          onChange={(e) => handleChange("notes", e.target.value)}
+          placeholder={t("enter_notes")}
+          rows={3}
+          fullWidth
+        />
+
+        <div className="flex justify-end gap-3 mt-8">
+          <Button variant="secondary" onClick={onClose} disabled={isSubmitting || isLoading}>
+            {t("cancel")}
           </Button>
-          <Button type="submit" variant="primary">
-            {receiptToEdit ? t('submit') : t('add_goods_receipt')}
+          <Button
+            variant="primary"
+            type="submit"
+            className="bg-indigo-600 hover:bg-indigo-700 px-8"
+            isLoading={isSubmitting || isLoading}
+            disabled={isSubmitting || isLoading}
+          >
+            {receiptToEdit ? t("save") : t("add_goods_receipt")}
           </Button>
         </div>
       </form>
     </Modal>
   );
 };
+
+// Add this import at the top
+import { FileText } from "lucide-react";

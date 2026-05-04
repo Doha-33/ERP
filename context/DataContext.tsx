@@ -55,6 +55,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const hrFinanceFetchRef = useRef<(() => Promise<void>) | null>(null);
   const accountingFetchRef = useRef<(() => Promise<void>) | null>(null);
   const requestFetchRef = useRef<(() => Promise<void>) | null>(null);
+  const onboardingFetchRef = useRef<(() => Promise<void>) | null>(null);
   const inventoryFetchRef = useRef<(() => Promise<void>) | null>(null);
   const purchaseFetchRef = useRef<(() => Promise<void>) | null>(null);
   const assetsFetchRef = useRef<(() => Promise<void>) | null>(null);
@@ -69,6 +70,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         hrFinanceFetchRef.current?.(),
         accountingFetchRef.current?.(),
         requestFetchRef.current?.(),
+        onboardingFetchRef.current?.(),
         inventoryFetchRef.current?.(),
         purchaseFetchRef.current?.(),
         assetsFetchRef.current?.(),
@@ -87,9 +89,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const accountingModule = useAccountingModule(fetchAllDataCentral);
   const requestModule = useRequestModule(fetchAllDataCentral);
   const onboardingModule = useOnboardingModule(fetchAllDataCentral);
-  const salesModule = useSalesModule(fetchAllDataCentral);
-  const inventoryModule = useInventoryModule(fetchAllDataCentral);
-  const purchaseModule = usePurchaseModule(fetchAllDataCentral);
+  const salesModule = useSalesModule();
+  const inventoryModule = useInventoryModule();
+  const purchaseModule = usePurchaseModule();
   const assetsModule = useAssetsModule(fetchAllDataCentral);
 
   useEffect(() => {
@@ -99,6 +101,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     hrFinanceFetchRef.current = hrFinanceModule.fetchFinanceData;
     accountingFetchRef.current = accountingModule.fetchAccountingData;
     requestFetchRef.current = requestModule.fetchRequestData;
+    onboardingFetchRef.current = onboardingModule.fetchOnboardingData;
     inventoryFetchRef.current = inventoryModule.fetchInventoryData;
     purchaseFetchRef.current = purchaseModule.fetchPurchaseData;
     assetsFetchRef.current = assetsModule.fetchAssetsData;
@@ -109,6 +112,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     hrFinanceModule.fetchFinanceData,
     accountingModule.fetchAccountingData,
     requestModule.fetchRequestData,
+    onboardingModule.fetchOnboardingData,
     inventoryModule.fetchInventoryData,
     purchaseModule.fetchPurchaseData,
     assetsModule.fetchAssetsData

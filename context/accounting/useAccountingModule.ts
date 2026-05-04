@@ -35,7 +35,7 @@ export const useAccountingModule = (fetchAllData?: () => Promise<void>) => {
         incomeData, expenseData, budgetData,
         currencyData, exchangeRateData, closingData,
         bankData
-      ] = await Promise.all([
+      ]: any[] = await Promise.all([
         financeService.getAccounts(),
         financeService.getJournalEntries(),
         financeService.getAccountsReceivable(),
@@ -51,20 +51,20 @@ export const useAccountingModule = (fetchAllData?: () => Promise<void>) => {
         financeService.getClosings(),
         financeService.getBankAccounts()
       ]);
-      setAccounts(accountsData);
-      setJournalEntries(journalsData);
-      setAccountsReceivable(arData);
-      setAccountsPayable(apData);
-      setARPayments(arPayData);
-      setAPPayments(apPayData);
-      setTaxes(taxData);
-      setIncomes(incomeData);
-      setExpenses(expenseData);
-      setBudgets(budgetData);
-      setCurrencies(currencyData);
-      setExchangeRates(exchangeRateData);
-      setClosings(closingData);
-      setBankAccounts(bankData);
+      setAccounts(Array.isArray(accountsData) ? accountsData : (accountsData?.data || []));
+      setJournalEntries(Array.isArray(journalsData) ? journalsData : (journalsData?.data || []));
+      setAccountsReceivable(Array.isArray(arData) ? arData : (arData?.data || []));
+      setAccountsPayable(Array.isArray(apData) ? apData : (apData?.data || []));
+      setARPayments(Array.isArray(arPayData) ? arPayData : (arPayData?.data || []));
+      setAPPayments(Array.isArray(apPayData) ? apPayData : (apPayData?.data || []));
+      setTaxes(Array.isArray(taxData) ? taxData : (taxData?.data || []));
+      setIncomes(Array.isArray(incomeData) ? incomeData : (incomeData?.data || []));
+      setExpenses(Array.isArray(expenseData) ? expenseData : (expenseData?.data || []));
+      setBudgets(Array.isArray(budgetData) ? budgetData : (budgetData?.data || []));
+      setCurrencies(Array.isArray(currencyData) ? currencyData : (currencyData?.data || []));
+      setExchangeRates(Array.isArray(exchangeRateData) ? exchangeRateData : (exchangeRateData?.data || []));
+      setClosings(Array.isArray(closingData) ? closingData : (closingData?.data || []));
+      setBankAccounts(Array.isArray(bankData) ? bankData : (bankData?.data || []));
     } catch (error) {
       console.error('Error fetching accounting data:', error);
     } finally {

@@ -1,31 +1,45 @@
-
-import React, { useState, useMemo, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Plus, Search, Edit2, Trash2, Filter as FilterIcon, ChevronDown } from 'lucide-react';
-import { Card, Button, Badge, ExportDropdown } from '../../components/ui/Common';
-import { Table, Column } from '../../components/ui/Table';
-import { Customer } from '../../types';
-import { CustomerModal } from '../../components/sales/CustomerModal';
-import { ConfirmationModal } from '../../components/ui/ConfirmationModal';
-import { useData } from '../../context/DataContext';
+import React, { useState, useMemo, useCallback } from "react";
+import { useTranslation } from "react-i18next";
+import { Plus, Search, Edit2, Trash2, User, Mail, Phone, MapPin, Building2, Filter, X, ChevronDown } from "lucide-react";
+import { Card, Button, Input, Badge, ExportDropdown } from "../../components/ui/Common";
+import { Table, Column } from "../../components/ui/Table";
+import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
+import { CustomerModal } from "../../components/sales/CustomerModal";
+import { useData } from "../../context/DataContext";
+import { Customer } from "../../types";
+import { toast } from "sonner";
 
 export const Customers: React.FC = () => {
   const { t } = useTranslation();
   const { customers, addCustomer, updateCustomer, deleteCustomer } = useData();
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedState, setSelectedState] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSave = async (customer: Customer) => {
-    if (editingCustomer) {
-      await updateCustomer(customer);
-    } else {
-      await addCustomer(customer);
+  const handleSave = async (customer: Partial<Customer>) => {
+    try {
+      setIsLoading(true);
+      if (editingCustomer) {
+        await updateCustomer({ ...customer, _id: editingCustomer._id, id: editingCustomer.id } as Customer);
+        toast.success(t("customer_updated_successfully"));
+      } else {
+        await addCustomer(customer as Customer);
+        toast.success(t("customer_created_successfully"));
+      }
+      setIsModalOpen(false);
+      setEditingCustomer(null);
+    } catch (error) {
+      console.error("Error saving customer:", error);
+      toast.error(t("failed_to_save_customer"));
+    } finally {
+      setIsLoading(false);
     }
-    setIsModalOpen(false);
   };
 
   const handleEdit = useCallback((customer: Customer) => {
@@ -39,109 +53,302 @@ export const Customers: React.FC = () => {
 
   const confirmDelete = useCallback(async () => {
     if (deleteId) {
-      await deleteCustomer(deleteId);
-      setDeleteId(null);
+      try {
+        await deleteCustomer(deleteId);
+        toast.success(t("customer_deleted_successfully"));
+        setDeleteId(null);
+        setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+      } catch (error) {
+        toast.error(t("failed_to_delete_customer"));
+      }
     }
-  }, [deleteId, deleteCustomer]);
+  }, [deleteId, deleteCustomer, t]);
 
-  const filtered = useMemo(() => {
+  const handleBulkDelete = async () => {
+    try {
+      setIsLoading(true);
+      await Promise.all(selectedIds.map(id => deleteCustomer(id)));
+      toast.success(t("customers_deleted_successfully", { count: selectedIds.length }));
+      setSelectedIds([]);
+      setIsBulkConfirmOpen(false);
+    } catch (error) {
+      console.error("Bulk delete failed", error);
+      toast.error(t("failed_to_delete_customers"));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    return (
+      <Badge variant={status === "ACTIVE" ? "success" : "danger"}>
+        {status === "ACTIVE" ? t("active") : t("inactive")}
+      </Badge>
+    );
+  };
+
+  // Apply filters
+  const filteredCustomers = useMemo(() => {
     return customers.filter(c => {
-      const matchesSearch = c.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           c.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           c.customerCode.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesState = selectedState === '' || c.status === selectedState;
-      return matchesSearch && matchesState;
+      const matchesSearch = 
+        c.customerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.customerCode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.phoneNumber?.includes(searchTerm);
+      
+      const matchesStatus = !statusFilter || c.status === statusFilter;
+      
+      return matchesSearch && matchesStatus;
     });
-  }, [customers, searchTerm, selectedState]);
+  }, [customers, searchTerm, statusFilter]);
 
-  const columns: Column<Customer>[] = useMemo(() => [
-    { header: t('code'), accessorKey: 'customerCode', className: 'text-gray-600 dark:text-gray-300' },
-    { 
-      header: t('customer_info'), 
-      render: (c) => (
-        <div className="flex items-center gap-3">
-           <img src={`https://ui-avatars.com/api/?name=${c.customerName}&background=random`} alt={c.customerName} className="w-8 h-8 rounded-lg object-cover" />
-           <span className="font-medium text-gray-900 dark:text-white">{c.customerName}</span>
-        </div>
-      )
-    },
-    { header: t('email'), accessorKey: 'email', className: 'text-gray-500' },
-    { header: t('phone'), accessorKey: 'phoneNumber', className: 'text-gray-500' },
-    { header: t('address'), accessorKey: 'address', className: 'text-gray-500' },
-    { header: t('company_name'), accessorKey: 'companyName', className: 'text-gray-500' },
-    { 
-      header: t('state'), 
-      render: (c) => (
-        <Badge status={c.status === 'ACTIVE' ? 'Active' : 'Inactive'}>{t(c.status.toLowerCase())}</Badge>
-      )
-    },
-    {
-      header: t('actions'),
-      className: 'text-center',
-      render: (c) => (
-        <div className="flex items-center justify-center gap-2">
-           <button onClick={() => handleEdit(c)} className="p-1.5 text-gray-500 hover:text-primary hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 transition-colors">
+  // Statistics
+  const totalCustomers = filteredCustomers.length;
+  const activeCustomers = filteredCustomers.filter(c => c.status === "ACTIVE").length;
+  const inactiveCustomers = filteredCustomers.filter(c => c.status === "INACTIVE").length;
+
+  const statusOptions = [
+    { value: "", label: t("all_statuses") },
+    { value: "ACTIVE", label: t("active") },
+    { value: "INACTIVE", label: t("inactive") },
+  ];
+
+  const columns: Column<Customer>[] = useMemo(
+    () => [
+      {
+        header: t("customer_info"),
+        render: (c) => (
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
+              <User size={18} className="text-indigo-600" />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-medium text-gray-900">{c.customerName}</span>
+              <span className="text-xs text-gray-500">{c.customerCode}</span>
+            </div>
+          </div>
+        )
+      },
+      {
+        header: t("contact"),
+        render: (c) => (
+          <div className="flex flex-col gap-1">
+            {c.email && (
+              <div className="flex items-center gap-1.5">
+                <Mail size={14} className="text-gray-400" />
+                <span className="text-sm text-gray-600">{c.email}</span>
+              </div>
+            )}
+            {c.phoneNumber && (
+              <div className="flex items-center gap-1.5">
+                <Phone size={14} className="text-gray-400" />
+                <span className="text-sm text-gray-600">{c.phoneNumber}</span>
+              </div>
+            )}
+          </div>
+        )
+      },
+      {
+        header: t("location"),
+        render: (c) => (
+          <div className="flex items-center gap-1.5">
+            <MapPin size={14} className="text-gray-400" />
+            <span className="text-sm text-gray-600 line-clamp-1">{c.address || "-"}</span>
+          </div>
+        )
+      },
+      {
+        header: t("company"),
+        render: (c) => (
+          <div className="flex items-center gap-1.5">
+            <Building2 size={14} className="text-gray-400" />
+            <span className="text-sm text-gray-600">{c.companyName || "-"}</span>
+          </div>
+        )
+      },
+      {
+        header: t("status"),
+        render: (c) => getStatusBadge(c.status)
+      },
+      {
+        header: t("actions"),
+        className: "text-center",
+        render: (c) => (
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={() => handleEdit(c)}
+              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+              title={t("edit")}
+            >
               <Edit2 size={16} />
-           </button>
-           <button onClick={() => handleDelete(c.id)} className="p-1.5 text-gray-500 hover:text-red-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 transition-colors">
+            </button>
+            <button
+              onClick={() => handleDelete(c._id || c.id)}
+              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+              title={t("delete")}
+            >
               <Trash2 size={16} />
-           </button>
-        </div>
-      )
-    }
-  ], [t, handleEdit, handleDelete]);
+            </button>
+          </div>
+        )
+      }
+    ],
+    [t, handleEdit, handleDelete]
+  );
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-           <h1 className="text-2xl font-bold dark:text-white">{t('customers')}</h1>
-           <p className="text-gray-500 dark:text-gray-400 text-sm">Manage your Customers</p>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {t("customers")}
+          </h1>
+          <p className="text-gray-500 mt-1">
+            {t("manage_your_customers")}
+          </p>
         </div>
         <div className="flex gap-3">
-           <ExportDropdown data={customers} filename="customers_list" />
-           <Button onClick={() => { setEditingCustomer(null); setIsModalOpen(true); }} className="bg-[#4361EE] hover:bg-blue-700">
-              <Plus size={18} /> {t('add_customer')}
-           </Button>
+          {selectedIds.length > 0 && (
+            <Button
+              variant="danger"
+              onClick={() => setIsBulkConfirmOpen(true)}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              <Trash2 size={18} />
+              {t("delete_selected")} ({selectedIds.length})
+            </Button>
+          )}
+          <ExportDropdown data={filteredCustomers} filename="customers" />
+          <Button
+            variant="primary"
+            onClick={() => {
+              setEditingCustomer(null);
+              setIsModalOpen(true);
+            }}
+            className="bg-indigo-600 hover:bg-indigo-700"
+          >
+            <Plus size={18} />
+            {t("add_customer")}
+          </Button>
         </div>
       </div>
 
-        <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-           <div className="flex items-center gap-3 w-full md:w-auto">
-              <div className="relative">
-                  <select value={selectedState} onChange={(e) => setSelectedState(e.target.value)} className="appearance-none pl-10 pr-10 py-2 bg-white dark:bg-dark-surface border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium focus:ring-2 focus:ring-primary/20 outline-none min-w-[120px]">
-                      <option value="">{t('states')}</option>
-                      <option value="Active">{t('active')}</option>
-                      <option value="Inactive">{t('inactive')}</option>
-                  </select>
-                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-              </div>
-              <div className="px-4 py-2 bg-white dark:bg-dark-surface border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium text-gray-400">
-                Company
-              </div>
-              <div className="px-4 py-2 bg-white dark:bg-dark-surface border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium text-gray-400">
-                Employee name
-              </div>
-           </div>
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center">
+              <User size={18} className="text-indigo-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">{t("total_customers")}</p>
+              <p className="text-xl font-bold text-gray-900">{totalCustomers}</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center">
+              <User size={18} className="text-green-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">{t("active")}</p>
+              <p className="text-xl font-bold text-green-600">{activeCustomers}</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center">
+              <User size={18} className="text-red-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">{t("inactive")}</p>
+              <p className="text-xl font-bold text-red-600">{inactiveCustomers}</p>
+            </div>
+          </div>
+        </div>
+      </div>
 
-           <div className="w-full md:w-64 relative">
-             <input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-800 border-none rounded-lg text-sm focus:ring-1 focus:ring-primary" />
-             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-           </div>
+      {/* Filters */}
+      <div className="flex flex-wrap gap-4 items-center">
+        <div className="relative max-w-md">
+          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder={t("search_customers")}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
         </div>
 
-        <Table 
-          data={filtered}
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          {statusOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+
+        {(statusFilter || searchTerm) && (
+          <button
+            onClick={() => {
+              setStatusFilter("");
+              setSearchTerm("");
+            }}
+            className="text-sm text-red-600 hover:text-red-700"
+          >
+            {t("clear_filters")}
+          </button>
+        )}
+      </div>
+
+      {/* Table */}
+        <Table
+          data={filteredCustomers}
           columns={columns}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item._id || item.id}
+          isLoading={isLoading}
           selectable
           selectedIds={selectedIds}
           onSelectionChange={setSelectedIds}
-          className="border-none"
         />
 
-      <CustomerModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSave} customerToEdit={editingCustomer} />
-      <ConfirmationModal isOpen={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={confirmDelete} />
+      {/* Modal */}
+      <CustomerModal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingCustomer(null);
+        }}
+        onSave={handleSave}
+        customerToEdit={editingCustomer}
+        isLoading={isLoading}
+      />
+
+      {/* Delete Confirmation */}
+      <ConfirmationModal
+        isOpen={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        onConfirm={confirmDelete}
+        title={t("delete_customer")}
+        message={t("are_you_sure_delete_customer")}
+      />
+
+      {/* Bulk Delete Confirmation */}
+      <ConfirmationModal
+        isOpen={isBulkConfirmOpen}
+        onClose={() => setIsBulkConfirmOpen(false)}
+        onConfirm={handleBulkDelete}
+        title={t("delete_customers")}
+        message={t("are_you_sure_delete_customers", { count: selectedIds.length })}
+      />
     </div>
   );
 };

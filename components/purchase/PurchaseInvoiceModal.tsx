@@ -1,44 +1,26 @@
-
-import React from 'react';
-import { useTranslation } from 'react-i18next';
-import { useForm, useFieldArray } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { Plus, Trash2 } from 'lucide-react';
-import { Modal } from '../ui/Modal';
-import { Button, Input, Select } from '../ui/Common';
-import { PurchaseInvoice } from '../../types';
-import { useData } from '../../context/DataContext';
-
-const purchaseInvoiceSchema = z.object({
-  invoiceNo: z.string().min(1, 'Invoice No is required'),
-  supplierId: z.string().min(1, 'Supplier is required'),
-  purchaseOrderId: z.string().min(1, 'Purchase Order is required'),
-  invoiceDate: z.string().min(1, 'Invoice date is required'),
-  dueDate: z.string().min(1, 'Due date is required'),
-  warehouseId: z.string().optional().nullable(),
-  companyId: z.string().min(1, 'Company is required'),
-  branchId: z.string().min(1, 'Branch is required'),
-  items: z.array(z.object({
-    productId: z.string().min(1, 'Product is required'),
-    sku: z.string().optional(),
-    quantity: z.number().min(1),
-    unitCost: z.number().min(0),
-    tax: z.number().min(0),
-    total: z.number().min(0),
-  })).min(1, 'At least one item is required'),
-  paymentStatus: z.enum(['PAID', 'UNPAID', 'PARTIAL']),
-  deliveryStatus: z.enum(['PENDING', 'DELIVERED', 'PROCESSING', 'CANCELLED']),
-  notes: z.string().optional(),
-});
-
-type PurchaseInvoiceFormData = z.infer<typeof purchaseInvoiceSchema>;
+import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { Plus, Edit2, Trash2, Package, DollarSign, Calendar, Building2, Users, Hash, Truck, CreditCard, Warehouse } from "lucide-react";
+import { Modal } from "../../components/ui/Modal";
+import { Button, Input, Select, TextArea } from "../../components/ui/Common";
+import { PurchaseInvoice } from "../../types";
+import { useData } from "../../context/DataContext";
 
 interface PurchaseInvoiceModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: any) => void;
+  onSave: (data: Partial<PurchaseInvoice>) => Promise<void>;
   invoiceToEdit?: PurchaseInvoice | null;
+  isLoading?: boolean;
+}
+
+interface InvoiceItem {
+  productId: string;
+  sku: string;
+  quantity: number;
+  unitCost: number;
+  tax: number;
+  total: number;
 }
 
 export const PurchaseInvoiceModal: React.FC<PurchaseInvoiceModalProps> = ({
@@ -46,287 +28,504 @@ export const PurchaseInvoiceModal: React.FC<PurchaseInvoiceModalProps> = ({
   onClose,
   onSave,
   invoiceToEdit,
+  isLoading = false,
 }) => {
   const { t } = useTranslation();
   const { suppliers, products, companies, branches, purchaseOrders, warehouses } = useData();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formData, setFormData] = useState({
+    invoiceNo: "",
+    supplierId: "",
+    purchaseOrderId: "",
+    invoiceDate: new Date().toISOString().split("T")[0],
+    dueDate: new Date().toISOString().split("T")[0],
+    warehouseId: "",
+    companyId: "",
+    branchId: "",
+    paymentStatus: "UNPAID",
+    deliveryStatus: "PENDING",
+    discountAmount: 0,
+    notes: "",
+  });
   
-  const {
-    register,
-    control,
-    handleSubmit,
-    reset,
-    watch,
-    setValue,
-    formState: { errors },
-  } = useForm<PurchaseInvoiceFormData>({
-    resolver: zodResolver(purchaseInvoiceSchema),
-    defaultValues: {
-      invoiceNo: '',
-      invoiceDate: new Date().toISOString().split('T')[0],
-      dueDate: new Date().toISOString().split('T')[0],
-      supplierId: '',
-      purchaseOrderId: '',
-      companyId: '',
-      branchId: '',
-      items: [{ productId: '', sku: '', quantity: 1, unitCost: 0, tax: 0, total: 0 }],
-      paymentStatus: 'UNPAID',
-      deliveryStatus: 'PENDING',
-    },
-  });
+  const [items, setItems] = useState<InvoiceItem[]>([
+    { productId: "", sku: "", quantity: 1, unitCost: 0, tax: 0, total: 0 }
+  ]);
 
-  const { fields, append, remove } = useFieldArray({
-    control,
-    name: 'items',
-  });
+  // Calculate totals
+  const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.unitCost), 0);
+  const taxAmount = items.reduce((sum, item) => sum + (item.tax || 0), 0);
+  const totalAmount = subtotal + taxAmount - formData.discountAmount;
 
-  React.useEffect(() => {
-    if (invoiceToEdit) {
-      reset({
-        invoiceNo: invoiceToEdit.invoiceNo,
-        invoiceDate: new Date(invoiceToEdit.invoiceDate).toISOString().split('T')[0],
-        dueDate: new Date(invoiceToEdit.dueDate).toISOString().split('T')[0],
-        supplierId: typeof invoiceToEdit.supplierId === 'object' ? invoiceToEdit.supplierId?._id : invoiceToEdit.supplierId,
-        purchaseOrderId: typeof invoiceToEdit.purchaseOrderId === 'object' ? invoiceToEdit.purchaseOrderId?._id : invoiceToEdit.purchaseOrderId,
-        warehouseId: typeof invoiceToEdit.warehouseId === 'object' ? invoiceToEdit.warehouseId?._id : invoiceToEdit.warehouseId,
-        companyId: typeof invoiceToEdit.companyId === 'object' ? invoiceToEdit.companyId?._id : invoiceToEdit.companyId,
-        branchId: typeof invoiceToEdit.branchId === 'object' ? invoiceToEdit.branchId?._id : invoiceToEdit.branchId,
-        items: invoiceToEdit.items.map(item => ({
-          productId: typeof item.productId === 'object' ? item.productId?._id : item.productId,
+  useEffect(() => {
+    if (invoiceToEdit && isOpen) {
+      const supplierId = typeof invoiceToEdit.supplierId === "object" 
+        ? (invoiceToEdit.supplierId as any)?._id 
+        : invoiceToEdit.supplierId;
+      const poId = typeof invoiceToEdit.purchaseOrderId === "object" 
+        ? (invoiceToEdit.purchaseOrderId as any)?._id 
+        : invoiceToEdit.purchaseOrderId;
+      const companyId = typeof invoiceToEdit.companyId === "object" 
+        ? (invoiceToEdit.companyId as any)?._id 
+        : invoiceToEdit.companyId;
+      const branchId = typeof invoiceToEdit.branchId === "object" 
+        ? (invoiceToEdit.branchId as any)?._id 
+        : invoiceToEdit.branchId;
+      const warehouseId = typeof invoiceToEdit.warehouseId === "object" 
+        ? (invoiceToEdit.warehouseId as any)?._id 
+        : invoiceToEdit.warehouseId;
+
+      setFormData({
+        invoiceNo: invoiceToEdit.invoiceNo || "",
+        supplierId: supplierId || "",
+        purchaseOrderId: poId || "",
+        invoiceDate: invoiceToEdit.invoiceDate 
+          ? new Date(invoiceToEdit.invoiceDate).toISOString().split("T")[0] 
+          : new Date().toISOString().split("T")[0],
+        dueDate: invoiceToEdit.dueDate 
+          ? new Date(invoiceToEdit.dueDate).toISOString().split("T")[0] 
+          : new Date().toISOString().split("T")[0],
+        warehouseId: warehouseId || "",
+        companyId: companyId || "",
+        branchId: branchId || "",
+        paymentStatus: invoiceToEdit.paymentStatus || "UNPAID",
+        deliveryStatus: invoiceToEdit.deliveryStatus || "PENDING",
+        discountAmount: invoiceToEdit.discountAmount || 0,
+        notes: invoiceToEdit.notes || "",
+      });
+      
+      if (invoiceToEdit.items && invoiceToEdit.items.length > 0) {
+        setItems(invoiceToEdit.items.map(item => ({
+          productId: typeof item.productId === "object" ? (item.productId as any)?._id || "" : item.productId || "",
+          sku: item.sku || "",
+          quantity: item.quantity,
+          unitCost: item.unitCost,
+          tax: item.tax || 0,
+          total: item.total || (item.quantity * item.unitCost + (item.tax || 0))
+        })));
+      }
+    } else if (!invoiceToEdit && isOpen) {
+      const randomNum = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+      setFormData({
+        invoiceNo: `PINV-${randomNum}`,
+        supplierId: "",
+        purchaseOrderId: "",
+        invoiceDate: new Date().toISOString().split("T")[0],
+        dueDate: new Date().toISOString().split("T")[0],
+        warehouseId: "",
+        companyId: "",
+        branchId: "",
+        paymentStatus: "UNPAID",
+        deliveryStatus: "PENDING",
+        discountAmount: 0,
+        notes: "",
+      });
+      setItems([{ productId: "", sku: "", quantity: 1, unitCost: 0, tax: 0, total: 0 }]);
+    }
+  }, [invoiceToEdit, isOpen]);
+
+  // Update items when PO is selected
+  const onPOChange = (poId: string) => {
+    const selectedPO = purchaseOrders.find(po => (po._id || po.id) === poId);
+    if (selectedPO) {
+      setFormData(prev => ({
+        ...prev,
+        supplierId: typeof selectedPO.supplierId === "object" 
+          ? (selectedPO.supplierId as any)?._id 
+          : selectedPO.supplierId || "",
+        companyId: typeof selectedPO.companyId === "object" 
+          ? (selectedPO.companyId as any)?._id 
+          : selectedPO.companyId || "",
+        branchId: typeof selectedPO.branchId === "object" 
+          ? (selectedPO.branchId as any)?._id 
+          : selectedPO.branchId || "",
+      }));
+      
+      if (selectedPO.items && selectedPO.items.length > 0) {
+        setItems(selectedPO.items.map(item => ({
+          productId: typeof item.productId === "object" ? (item.productId as any)?._id || "" : item.productId || "",
+          sku: item.sku || "",
+          quantity: item.quantity,
+          unitCost: item.unitCost,
+          tax: item.tax || 0,
+          total: (item.quantity * item.unitCost) + (item.tax || 0)
+        })));
+      }
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    
+    try {
+      await onSave({
+        ...formData,
+        items: items.map(item => ({
+          productId: item.productId,
           sku: item.sku,
           quantity: item.quantity,
           unitCost: item.unitCost,
           tax: item.tax,
-          total: item.total,
+          total: item.total
         })),
-        paymentStatus: invoiceToEdit.paymentStatus as any,
-        deliveryStatus: invoiceToEdit.deliveryStatus as any,
-        notes: invoiceToEdit.notes,
+        subtotal,
+        taxAmount,
+        totalAmount,
       });
-    } else {
-      reset({
-        invoiceNo: `PINV-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
-        invoiceDate: new Date().toISOString().split('T')[0],
-        dueDate: new Date().toISOString().split('T')[0],
-        supplierId: '',
-        purchaseOrderId: '',
-        companyId: '',
-        branchId: '',
-        items: [{ productId: '', sku: '', quantity: 1, unitCost: 0, tax: 0, total: 0 }],
-        paymentStatus: 'UNPAID',
-        deliveryStatus: 'PENDING',
-      });
+      onClose();
+    } catch (error) {
+      console.error("Error in form submission:", error);
+    } finally {
+      setIsSubmitting(false);
     }
-  }, [invoiceToEdit, reset]);
+  };
 
-  const onSubmit = (data: PurchaseInvoiceFormData) => {
-    const subtotal = data.items.reduce((sum, item) => sum + (item.quantity * item.unitCost), 0);
-    const taxAmount = data.items.reduce((sum, item) => sum + item.tax, 0);
-    const totalAmount = subtotal + taxAmount;
+  const handleChange = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleItemChange = (index: number, field: keyof InvoiceItem, value: any) => {
+    const newItems = [...items];
+    newItems[index] = { ...newItems[index], [field]: value };
     
-    onSave({ ...data, subtotal, taxAmount, totalAmount });
-    onClose();
+    // If product is selected, auto-fill SKU and unit cost
+    if (field === "productId" && value) {
+      const selectedProduct = products.find(p => (p._id || p.id) === value);
+      if (selectedProduct) {
+        newItems[index].sku = selectedProduct.sku;
+        newItems[index].unitCost = selectedProduct.cost;
+      }
+    }
+    
+    // Recalculate total
+    newItems[index].total = (newItems[index].quantity * newItems[index].unitCost) + (newItems[index].tax || 0);
+    
+    setItems(newItems);
   };
 
-  const onProductChange = (index: number, productId: string) => {
-    const product = products.find(p => (p._id || p.id) === productId);
-    if (product) {
-      setValue(`items.${index}.sku`, product.sku);
-      setValue(`items.${index}.unitCost`, product.cost);
-      calculateItemTotal(index);
+  const addItem = () => {
+    setItems([...items, { productId: "", sku: "", quantity: 1, unitCost: 0, tax: 0, total: 0 }]);
+  };
+
+  const removeItem = (index: number) => {
+    if (items.length > 1) {
+      setItems(items.filter((_, i) => i !== index));
     }
   };
 
-  const calculateItemTotal = (index: number) => {
-    const qty = watch(`items.${index}.quantity`);
-    const cost = watch(`items.${index}.unitCost`);
-    const tax = watch(`items.${index}.tax`);
-    setValue(`items.${index}.total`, (qty * cost) + tax);
-  };
+  const supplierOptions = suppliers.map(s => ({ 
+    value: s._id || s.id, 
+    label: s.supplierName 
+  }));
 
-  const onPOChange = (poId: string) => {
-    const po = purchaseOrders.find(o => (o._id || o.id) === poId);
-    if (po) {
-      setValue('supplierId', typeof po.supplierId === 'object' ? po.supplierId?._id : po.supplierId);
-      setValue('companyId', typeof po.companyId === 'object' ? po.companyId?._id : po.companyId);
-      setValue('branchId', typeof po.branchId === 'object' ? po.branchId?._id : po.branchId);
-      
-      const newItems = po.items.map(item => ({
-        productId: typeof item.productId === 'object' ? item.productId?._id : item.productId,
-        sku: item.sku,
-        quantity: item.quantity,
-        unitCost: item.unitCost,
-        tax: item.tax,
-        total: (item.quantity * item.unitCost) + item.tax,
-      }));
-      setValue('items', newItems);
-    }
-  };
+  const companyOptions = companies.map(c => ({ 
+    value: c._id || c.id, 
+    label: c.name 
+  }));
+
+  const branchOptions = branches.map(b => ({ 
+    value: b._id || b.id, 
+    label: b.name 
+  }));
+
+  const warehouseOptions = warehouses.map(w => ({ 
+    value: w._id || w.id, 
+    label: w.warehouseName 
+  }));
+
+  const productOptions = products.map(p => ({ 
+    value: p._id || p.id, 
+    label: `${p.productName} (${p.sku})` 
+  }));
+
+  const poOptions = [
+    { value: "", label: t("select_po") },
+    ...purchaseOrders.map(po => ({ 
+      value: po._id || po.id, 
+      label: po.referenceNo 
+    }))
+  ];
+
+  const paymentStatusOptions = [
+    { value: "UNPAID", label: t("unpaid") },
+    { value: "PARTIAL", label: t("partial") },
+    { value: "PAID", label: t("paid") },
+  ];
+
+  const deliveryStatusOptions = [
+    { value: "PENDING", label: t("pending") },
+    { value: "PROCESSING", label: t("processing") },
+    { value: "DELIVERED", label: t("delivered") },
+    { value: "CANCELLED", label: t("cancelled") },
+  ];
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={invoiceToEdit ? t('edit_purchase_invoice') : t('add_purchase_invoice')}
-      className="max-w-5xl"
+      title={
+        <div className="flex items-center gap-2">
+          {invoiceToEdit ? <Edit2 size={20} /> : <Plus size={20} />}
+          {invoiceToEdit ? t("edit_purchase_invoice") : t("add_purchase_invoice")}
+        </div>
+      }
+      size="xl"
     >
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Input
-            label={t('invoice_no')}
-            {...register('invoiceNo')}
-            error={errors.invoiceNo?.message}
-            required
-          />
-          <Input
-            label={t('invoice_date')}
-            type="date"
-            {...register('invoiceDate')}
-            error={errors.invoiceDate?.message}
-            required
-          />
-          <Input
-            label={t('due_date')}
-            type="date"
-            {...register('dueDate')}
-            error={errors.dueDate?.message}
-            required
-          />
-          <Select
-            label={t('purchase_order')}
-            options={[
-              { value: '', label: t('select_po') },
-              ...purchaseOrders.map(po => ({ value: po._id || po.id, label: po.referenceNo }))
-            ]}
-            {...register('purchaseOrderId')}
-            onChange={(e) => onPOChange(e.target.value)}
-            error={errors.purchaseOrderId?.message}
-            required
-          />
-          <Select
-            label={t('supplier')}
-            options={suppliers.map(s => ({ value: s._id || s.id, label: s.supplierName }))}
-            {...register('supplierId')}
-            error={errors.supplierId?.message}
-            required
-          />
-          <Select
-            label={t('warehouse')}
-            options={warehouses.map(w => ({ value: w._id || w.id, label: w.warehouseName }))}
-            {...register('warehouseId')}
-            error={errors.warehouseId?.message}
-          />
-          <Select
-            label={t('company')}
-            options={companies.map(c => ({ value: c._id || c.id, label: c.name }))}
-            {...register('companyId')}
-            error={errors.companyId?.message}
-            required
-          />
-          <Select
-            label={t('branch')}
-            options={branches.map(b => ({ value: b._id || b.id, label: b.name }))}
-            {...register('branchId')}
-            error={errors.branchId?.message}
-            required
-          />
+      <form onSubmit={handleSubmit} className="space-y-6 max-h-[70vh] overflow-y-auto px-2">
+        {/* Invoice Information */}
+        <div className="border-b border-gray-100 pb-4">
+          <h3 className="text-md font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <FileText size={18} className="text-indigo-600" />
+            {t("invoice_information")}
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3">
+            <Input
+              label={t("invoice_number")}
+              value={formData.invoiceNo}
+              onChange={(e) => handleChange("invoiceNo", e.target.value)}
+              placeholder="PINV-001"
+              required
+              fullWidth
+            />
+            <Input
+              label={t("invoice_date")}
+              type="date"
+              value={formData.invoiceDate}
+              onChange={(e) => handleChange("invoiceDate", e.target.value)}
+              required
+              fullWidth
+            />
+            <Input
+              label={t("due_date")}
+              type="date"
+              value={formData.dueDate}
+              onChange={(e) => handleChange("dueDate", e.target.value)}
+              required
+              fullWidth
+            />
+            <Select
+              label={t("purchase_order")}
+              value={formData.purchaseOrderId}
+              onChange={(e) => {
+                handleChange("purchaseOrderId", e.target.value);
+                onPOChange(e.target.value);
+              }}
+              options={poOptions}
+              placeholder={t("select_po")}
+              required
+              fullWidth
+            />
+            <Select
+              label={t("supplier")}
+              value={formData.supplierId}
+              onChange={(e) => handleChange("supplierId", e.target.value)}
+              options={supplierOptions}
+              placeholder={t("select_supplier")}
+              required
+              fullWidth
+            />
+            <Select
+              label={t("warehouse")}
+              value={formData.warehouseId}
+              onChange={(e) => handleChange("warehouseId", e.target.value)}
+              options={warehouseOptions}
+              placeholder={t("select_warehouse")}
+              fullWidth
+            />
+            <Select
+              label={t("company")}
+              value={formData.companyId}
+              onChange={(e) => handleChange("companyId", e.target.value)}
+              options={companyOptions}
+              placeholder={t("select_company")}
+              required
+              fullWidth
+            />
+            <Select
+              label={t("branch")}
+              value={formData.branchId}
+              onChange={(e) => handleChange("branchId", e.target.value)}
+              options={branchOptions}
+              placeholder={t("select_branch")}
+              required
+              fullWidth
+            />
+          </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-medium">{t('items')}</h3>
-            <Button type="button" variant="outline" size="sm" onClick={() => append({ productId: '', sku: '', quantity: 1, unitCost: 0, tax: 0, total: 0 })}>
-              <Plus size={16} className="mr-1" /> {t('add_item')}
+        {/* Invoice Items */}
+        <div className="border-b border-gray-100 pb-4">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-md font-semibold text-gray-900 flex items-center gap-2">
+              <Package size={18} className="text-indigo-600" />
+              {t("invoice_items")}
+            </h3>
+            <Button type="button" variant="secondary" onClick={addItem} size="sm">
+              <Plus size={16} />
+              {t("add_item")}
             </Button>
           </div>
-
-          {fields.map((field, index) => (
-            <div key={field.id} className="grid grid-cols-1 md:grid-cols-6 gap-4 p-4 border border-gray-100 rounded-lg relative">
-              <div className="md:col-span-2">
-                <Select
-                  label={t('product')}
-                  options={products.map(p => ({ value: p._id || p.id, label: p.productName }))}
-                  {...register(`items.${index}.productId`)}
-                  onChange={(e) => onProductChange(index, e.target.value)}
-                  error={errors.items?.[index]?.productId?.message}
-                  required
-                />
-              </div>
-              <Input
-                label={t('sku')}
-                {...register(`items.${index}.sku`)}
-                readOnly
-                className="bg-gray-50"
-              />
-              <Input
-                label={t('quantity')}
-                type="number"
-                {...register(`items.${index}.quantity`, { valueAsNumber: true })}
-                onChange={() => calculateItemTotal(index)}
-                error={errors.items?.[index]?.quantity?.message}
-                required
-              />
-              <Input
-                label={t('unit_cost')}
-                type="number"
-                {...register(`items.${index}.unitCost`, { valueAsNumber: true })}
-                onChange={() => calculateItemTotal(index)}
-                error={errors.items?.[index]?.unitCost?.message}
-                required
-              />
-              <div className="flex items-end gap-2">
-                <Input
-                  label={t('tax')}
-                  type="number"
-                  {...register(`items.${index}.tax`, { valueAsNumber: true })}
-                  onChange={() => calculateItemTotal(index)}
-                  error={errors.items?.[index]?.tax?.message}
-                  required
-                />
-                {fields.length > 1 && (
-                  <button type="button" onClick={() => remove(index)} className="p-2 text-red-500 hover:bg-red-50 rounded mb-1">
-                    <Trash2 size={18} />
-                  </button>
-                )}
-              </div>
+          
+          <div className="space-y-3">
+            {/* Table Header */}
+            <div className="hidden md:grid grid-cols-12 gap-3 px-2 py-2 bg-gray-50 rounded-lg text-xs font-medium text-gray-500">
+              <div className="col-span-3">{t("product")}</div>
+              <div className="col-span-2">{t("sku")}</div>
+              <div className="col-span-1">{t("quantity")}</div>
+              <div className="col-span-2">{t("unit_cost")}</div>
+              <div className="col-span-1">{t("tax")}</div>
+              <div className="col-span-2">{t("total")}</div>
+              <div className="col-span-1"></div>
             </div>
-          ))}
+            
+            {items.map((item, index) => (
+              <div key={index} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end p-3 bg-gray-50 rounded-lg">
+                <div className="md:col-span-3">
+                  <Select
+                    label={index === 0 ? t("product") : ""}
+                    value={item.productId}
+                    onChange={(e) => handleItemChange(index, "productId", e.target.value)}
+                    options={productOptions}
+                    placeholder={t("select_product")}
+                    required
+                    fullWidth
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <Input
+                    label={index === 0 ? t("sku") : ""}
+                    value={item.sku}
+                    onChange={(e) => handleItemChange(index, "sku", e.target.value)}
+                    readOnly
+                    fullWidth
+                  />
+                </div>
+                <div className="md:col-span-1">
+                  <Input
+                    label={index === 0 ? t("quantity") : ""}
+                    type="number"
+                    value={item.quantity}
+                    onChange={(e) => handleItemChange(index, "quantity", Number(e.target.value))}
+                    min="1"
+                    required
+                    fullWidth
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <Input
+                    label={index === 0 ? t("unit_cost") : ""}
+                    type="number"
+                    value={item.unitCost}
+                    onChange={(e) => handleItemChange(index, "unitCost", Number(e.target.value))}
+                    min="0"
+                    required
+                    fullWidth
+                  />
+                </div>
+                <div className="md:col-span-1">
+                  <Input
+                    label={index === 0 ? t("tax") : ""}
+                    type="number"
+                    value={item.tax}
+                    onChange={(e) => handleItemChange(index, "tax", Number(e.target.value))}
+                    min="0"
+                    fullWidth
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <div className="text-sm font-semibold text-indigo-600 mt-2 pt-2">
+                    {item.total.toLocaleString()} EGP
+                  </div>
+                </div>
+                <div className="md:col-span-1 flex justify-end">
+                  {items.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeItem(index)}
+                      className="p-1 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Summary */}
+        <div className="bg-gray-50 rounded-xl p-4 space-y-2">
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-gray-600">{t("subtotal")}</span>
+            <span className="text-sm font-medium">{subtotal.toLocaleString()} EGP</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-gray-600">{t("tax_amount")}</span>
+            <span className="text-sm font-medium">+ {taxAmount.toLocaleString()} EGP</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-gray-600">{t("discount")}</span>
+            <Input
+              type="number"
+              value={formData.discountAmount}
+              onChange={(e) => handleChange("discountAmount", Number(e.target.value))}
+              min="0"
+              className="w-32 text-right"
+            />
+          </div>
+          <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+            <span className="text-base font-bold text-gray-900">{t("total")}</span>
+            <span className="text-lg font-bold text-indigo-600">{totalAmount.toLocaleString()} EGP</span>
+          </div>
+        </div>
+
+        {/* Status & Notes */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
           <Select
-            label={t('payment_status')}
-            options={[
-              { value: 'UNPAID', label: t('unpaid') },
-              { value: 'PARTIAL', label: t('partial') },
-              { value: 'PAID', label: t('paid') },
-            ]}
-            {...register('paymentStatus')}
-            error={errors.paymentStatus?.message}
+            label={t("payment_status")}
+            value={formData.paymentStatus}
+            onChange={(e) => handleChange("paymentStatus", e.target.value)}
+            options={paymentStatusOptions}
             required
+            fullWidth
           />
           <Select
-            label={t('delivery_status')}
-            options={[
-              { value: 'PENDING', label: t('pending') },
-              { value: 'PROCESSING', label: t('processing') },
-              { value: 'DELIVERED', label: t('delivered') },
-              { value: 'CANCELLED', label: t('cancelled') },
-            ]}
-            {...register('deliveryStatus')}
-            error={errors.deliveryStatus?.message}
+            label={t("delivery_status")}
+            value={formData.deliveryStatus}
+            onChange={(e) => handleChange("deliveryStatus", e.target.value)}
+            options={deliveryStatusOptions}
             required
+            fullWidth
+          />
+          <TextArea
+            label={t("notes")}
+            value={formData.notes}
+            onChange={(e) => handleChange("notes", e.target.value)}
+            placeholder={t("enter_notes")}
+            rows={3}
+            fullWidth
           />
         </div>
 
-        <div className="flex justify-end gap-3 pt-4">
-          <Button type="button" variant="outline" onClick={onClose} className="bg-gray-600 text-white border-none hover:bg-gray-700">
-            {t('cancel')}
+        <div className="flex justify-end gap-3 mt-8">
+          <Button variant="secondary" onClick={onClose} disabled={isSubmitting || isLoading}>
+            {t("cancel")}
           </Button>
-          <Button type="submit" variant="primary">
-            {invoiceToEdit ? t('submit') : t('add_purchase_invoice')}
+          <Button
+            variant="primary"
+            type="submit"
+            className="bg-indigo-600 hover:bg-indigo-700 px-8"
+            isLoading={isSubmitting || isLoading}
+            disabled={isSubmitting || isLoading}
+          >
+            {invoiceToEdit ? t("save") : t("add_purchase_invoice")}
           </Button>
         </div>
       </form>
     </Modal>
   );
 };
+
+// Add this import at the top
+import { FileText } from "lucide-react";

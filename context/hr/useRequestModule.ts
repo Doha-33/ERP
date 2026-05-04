@@ -7,11 +7,8 @@ export const useRequestModule = (fetchAllDataCentral?: () => Promise<void>) => {
   const [leaves, setLeaves] = useState<Leave[]>([]);
   const [requests, setRequests] = useState<HRRequest[]>([]);
   const [endOfServices, setEndOfServices] = useState<EndOfService[]>([]);
+  const [responses, setResponses] = useState<any[]>([]);
   const [actionHistory, setActionHistory] = useState<ActionHistory[]>([]);
-
-  const fetchActionHistory = useCallback(async () => {
-    // In a real app, this would fetch data.
-  }, []);
 
   // Leaves
   const addLeave = useCallback(async (leave: Leave) => {
@@ -69,10 +66,12 @@ export const useRequestModule = (fetchAllDataCentral?: () => Promise<void>) => {
   }, [fetchAllDataCentral]);
 
   const updateEndOfService = useCallback(async (eos: EndOfService) => {
+    await hrService.updateEndOfService(eos.id, eos);
     if (fetchAllDataCentral) await fetchAllDataCentral();
   }, [fetchAllDataCentral]);
 
   const deleteEndOfService = useCallback(async (id: string) => {
+    await hrService.deleteEndOfService(id);
     if (fetchAllDataCentral) await fetchAllDataCentral();
   }, [fetchAllDataCentral]);
 
@@ -84,14 +83,37 @@ export const useRequestModule = (fetchAllDataCentral?: () => Promise<void>) => {
     if (fetchAllDataCentral) await fetchAllDataCentral();
   }, [fetchAllDataCentral]);
 
+  const fetchResponses = useCallback(async (type: string) => {
+    try {
+      const data = await hrService.getResponses(type);
+      setResponses(data || []);
+      return data;
+    } catch (error) {
+      console.error('Error fetching responses:', error);
+      return [];
+    }
+  }, []);
+
+  const fetchActionHistory = useCallback(async () => {
+    try {
+      // Assuming hrService has a method or just using responses as history
+      const data = await hrService.getResponses('history');
+      setActionHistory(data || []);
+    } catch (error) {
+      console.error('Error fetching action history:', error);
+    }
+  }, []);
+
   const fetchRequestData = useCallback(async () => {
     try {
-      const [leavesRes, requestsRes] = await Promise.all([
+      const [leavesRes, requestsRes, eosRes] = await Promise.all([
         hrService.getLeaves(),
         hrService.getRequests(),
+        hrService.getEndOfServices(),
       ]);
-      setLeaves(leavesRes);
-      setRequests(requestsRes);
+      setLeaves(Array.isArray(leavesRes) ? leavesRes : (leavesRes?.data || []));
+      setRequests(Array.isArray(requestsRes) ? requestsRes : (requestsRes?.data || []));
+      setEndOfServices(Array.isArray(eosRes) ? eosRes : (eosRes?.data || []));
     } catch (error) {
       console.error('Error fetching request data:', error);
     }
@@ -101,13 +123,14 @@ export const useRequestModule = (fetchAllDataCentral?: () => Promise<void>) => {
     leaves, setLeaves,
     requests, setRequests,
     endOfServices, setEndOfServices,
+    responses, setResponses, fetchResponses,
     actionHistory, setActionHistory, fetchActionHistory,
     fetchRequestData,
     addLeave, updateLeave, deleteLeave, toggleLeaveWorkflow, rejectLeave,
     addRequest, updateRequest, deleteRequest, toggleRequestWorkflow, rejectRequest,
     addEndOfService, updateEndOfService, deleteEndOfService, approveEndOfService, rejectEndOfService
   }), [
-    leaves, requests, endOfServices, actionHistory, fetchActionHistory,
+    leaves, requests, endOfServices, responses, fetchResponses, actionHistory, fetchActionHistory,
     addLeave, updateLeave, deleteLeave, toggleLeaveWorkflow, rejectLeave,
     addRequest, updateRequest, deleteRequest, toggleRequestWorkflow, rejectRequest,
     addEndOfService, updateEndOfService, deleteEndOfService, approveEndOfService, rejectEndOfService

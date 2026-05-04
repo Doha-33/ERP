@@ -763,12 +763,6 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
         ...(isAdmin
           ? [
               {
-                id: "media-archive",
-                label: "أرشيف الصور",
-                path: "/hr/media-archive",
-                icon: ImageIcon,
-              },
-              {
                 id: "21",
                 label: "company_page_title",
                 path: "/hr/company",
@@ -855,19 +849,7 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
                 label: "end_of_service",
                 path: "/hr/end-of-service",
                 icon: UserMinus,
-              },
-              {
-                id: "fix-errors",
-                label: "Fix System Errors",
-                path: "/hr/fix",
-                icon: Wrench,
-              },
-              {
-                id: "sync-data",
-                label: "Sync Data",
-                path: "/hr/sync",
-                icon: RefreshCcw,
-              },
+              }
             ]
           : []),
       ],

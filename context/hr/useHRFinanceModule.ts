@@ -46,20 +46,23 @@ export const useHRFinanceModule = (fetchAllData?: () => Promise<void>) => {
   }, [fetchAllData]);
 
   // --- Deductions ---
-  const addDeductionRecord = useCallback(async (record: DeductionRecord) => {
+  const addDeductionRecord = useCallback(async (record: any) => {
     try {
+      await hrService.addDeduction(record);
       if (fetchAllData) await fetchAllData();
     } catch (error) { console.error(error); }
   }, [fetchAllData]);
 
-  const updateDeductionRecord = useCallback(async (record: DeductionRecord) => {
+  const updateDeductionRecord = useCallback(async (record: any) => {
     try {
+      await hrService.updateDeduction(record.id, record);
       if (fetchAllData) await fetchAllData();
     } catch (error) { console.error(error); }
   }, [fetchAllData]);
 
   const deleteDeductionRecord = useCallback(async (id: string) => {
     try {
+      await hrService.deleteDeduction(id);
       if (fetchAllData) await fetchAllData();
     } catch (error) { console.error(error); }
   }, [fetchAllData]);
@@ -101,12 +104,16 @@ export const useHRFinanceModule = (fetchAllData?: () => Promise<void>) => {
 
   const fetchFinanceData = useCallback(async () => {
     try {
-      const [payrollsRes, logsRes] = await Promise.all([
+      const [payrollsRes, logsRes, loansRes, deductionsRes] = await Promise.all([
         hrService.getPayrolls(),
         hrService.getPayrollLogs(),
+        hrService.getLoans(),
+        hrService.getDeductions(),
       ]);
-      setPayrollRecords(payrollsRes);
-      setPayrollLogs(logsRes);
+      setPayrollRecords(Array.isArray(payrollsRes) ? payrollsRes : (payrollsRes?.data || []));
+      setPayrollLogs(Array.isArray(logsRes) ? logsRes : (logsRes?.data || []));
+      setLoans(Array.isArray(loansRes) ? loansRes : (loansRes?.data || []));
+      setDeductionRecords(Array.isArray(deductionsRes) ? deductionsRes : (deductionsRes?.data || []));
     } catch (error) {
       console.error('Error fetching finance data:', error);
     }

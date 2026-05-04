@@ -86,6 +86,16 @@ export interface Employee {
   email: string;
   address: string;
   employeeStatus: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'RESIGNED' | 'CONTRACT_ENDED' | string;
+  code?: string; // Legacy
+  avatar?: string; // Legacy
+  phone?: string; // Legacy
+  position?: string; // Legacy
+  department?: string; // Legacy
+  departmentName?: string; // Legacy
+  joinDate?: string; // Legacy
+  company?: string; // Legacy
+  branch?: string; // Legacy
+  username?: string; // Legacy
   companyId: any; // populated
   branchId: any; // populated
   departmentId: any; // populated
@@ -127,23 +137,27 @@ export interface ActionHistory {
 
 export interface Loan {
   id: string;
-  loanId: string;
-  createdAt: string;
-  employeeId: string;
-  employeeName: string;
-  empCode?: string;
-  avatar: string;
-  loanAmount: string;
-  remainingAmount: string;
-  deductionType: 'SINGLE' | 'INSTALLMENTS' | null;
-  installmentAmount: string | null;
-  startMonth: string | null;
+  _id?: string;
+  employeeInfo: any;
+  loanAmount: number;
+  date: string;
+  loanDetails?: string;
+  loanType: string;
   reason: string;
-  status: 'Pending' | 'Active' | 'Completed' | 'Rejected' | string;
-  rejectedReason?: string;
-  approved_by_manager: boolean;
-  approved_by_hr: boolean;
-  workflowStatus: {
+  status: string;
+  createdAt?: string;
+  updatedAt?: string;
+  // Legacy fields for UI compatibility
+  employeeId?: string;
+  employeeName?: string;
+  empCode?: string;
+  avatar?: string;
+  loanId?: string;
+  remainingAmount?: string | number;
+  deductionType?: 'SINGLE' | 'INSTALLMENTS' | string | null;
+  installmentAmount?: string | number | null;
+  startMonth?: string | null;
+  workflowStatus?: {
     hr: boolean;
     manager: boolean;
   };
@@ -203,6 +217,10 @@ export interface Payroll {
   totalDeductions: number;
   grossSalary: number;
   netSalary: number;
+  amount?: number; // Legacy
+  employeeName?: string; // Legacy
+  overtime?: number; // Legacy
+  totals?: number; // Legacy
   status: 'DRAFT' | 'PAID' | string;
   notes?: string;
   deductions: {
@@ -227,20 +245,42 @@ export interface PayrollRule {
   state: 'Active' | 'Inactive';
 }
 
+export interface Deduction {
+  id: string;
+  _id?: string;
+  employeeInfo?: any;
+  company?: any;
+  branch?: any;
+  date: string;
+  absence: number;
+  lateArrival: number;
+  earlyLeave: number;
+  loan: number;
+  penaltiesDeduction: number;
+  isDeleted: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface DeductionRecord {
   id: string;
   employeeId: string;
   employeeName: string;
+  employeeInfo?: any;
   avatar?: string;
   month?: number;
   year?: number;
+  date?: string;
   absence: string;
   lateArrival: string;
   earlyLeave: string;
   loan: string;
   penalties: string;
+  penaltiesDeduction?: string | number;
   company: string;
   branch: string;
+  _companyId?: string;
+  _branchId?: string;
   granularIds?: Record<string, string>;
 }
 
@@ -280,6 +320,10 @@ export interface HRRequest {
   notes?: string;
   attachment?: string;
   requestDate: string;
+  date?: string; // Legacy
+  employeeName?: string; // Legacy
+  avatar?: string; // Legacy
+  requestId?: string; // Legacy
   createdAt?: string;
   updatedAt?: string;
 }
@@ -308,30 +352,49 @@ export interface Contract {
 
 export interface Penalty {
   id: string;
-  penaltyId: string;
-  employeeId: string;
-  employeeName: string;
-  avatar?: string;
+  _id?: string;
+  employeeInfo: any;
+  company?: any;
+  branch?: any;
   penaltyType: string;
-  amount: string;
+  penaltyAmount: number;
   date: string;
-  decisionMaker: string;
-  status: 'Pending' | 'Approved' | 'Rejected';
+  decisionMaker?: string;
+  status: string;
   reason: string;
   attachment?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  // Legacy
+  employeeId?: string;
+  employeeName?: string;
+  avatar?: string;
+  amount?: any;
+  penaltyId?: string;
 }
 
 export interface Reward {
   id: string;
-  rewardId: string;
-  employeeId: string;
-  employeeName: string;
-  avatar?: string;
+  _id?: string;
+  employeeInfo: any;
+  company?: any;
+  branch?: any;
   rewardType: string;
-  amount: string;
+  rewardAmount: number;
   date: string;
-  bonus?: string;
-  commission?: string;
+  bonusAmount?: number;
+  commissionAmount?: number;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  // Legacy
+  employeeId?: string;
+  employeeName?: string;
+  avatar?: string;
+  amount?: any;
+  bonus?: any;
+  commission?: any;
+  rewardId?: string;
 }
 
 export interface Performance {
@@ -340,6 +403,11 @@ export interface Performance {
   employeeId: any; // populated
   period: string;
   evaluationScore: number;
+  attendance?: number; // Legacy
+  productivity?: number; // Legacy
+  teamwork?: number; // Legacy
+  communication?: number; // Legacy
+  skillDevelopment?: number; // Legacy
   status: 'COMPLETED' | 'DRAFT' | 'APPROVED' | string;
   notes?: string;
   createdAt?: string;
@@ -382,25 +450,36 @@ export interface CareerHistory {
 
 export interface Insurance {
   id: string;
-  employeeId: string;
-  employeeName: string;
-  avatar?: string;
+  _id?: string;
+  employeeInfo: any;
+  company?: any;
+  branch?: any;
   policyNumber: string;
   insuranceCompany: string;
   planName: string;
-  startDate: string;
-  endDate: string;
-  totalCost: string;
+  totalCost: number;
+  policyStartDate: string;
+  policyEndDate: string;
+  coverageExpiryDate: string;
+  membershipId: string;
   policyPlan: string;
   familyMembers: string;
-  coverageExpiry: string;
-  membershipId: string;
+  createdAt?: string;
+  updatedAt?: string;
+  // Legacy
+  employeeId?: string;
+  employeeName?: string;
+  avatar?: string;
+  startDate?: string;
+  endDate?: string;
+  coverageExpiry?: string;
 }
 
 export interface Company {
   id: string;
   _id?: string;
   name: string;
+  companyName?: string; // Legacy
   taxNumber: string;
   email: string;
   defaultCurrency: string;
@@ -424,6 +503,7 @@ export interface Department {
   id: string;
   _id: string;
   departmentName: string;
+  name?: string; // Legacy
   companyId: any; // populated
   managerName: string;
   state: 'ACTIVE' | 'INACTIVE';
@@ -435,6 +515,7 @@ export interface Job {
   id: string;
   _id: string;
   jobName: string;
+  name?: string; // Legacy
   description: string;
   departmentId: any; // populated
   state: 'ACTIVE' | 'INACTIVE';
@@ -444,63 +525,93 @@ export interface Job {
 
 export interface AssignLaptop {
   id: string;
-  empCode: string;
-  employeeId?: string; 
-  empName: string;
+  _id?: string;
+  employeeInfo: any;
   deviceType: string;
   serialNumber: string;
-  doneAt: string;
-  doneBy: string;
-  status: 'Done' | 'Pending';
+  assignmentDate: string;
+  status: string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  // Legacy
+  employeeId?: string;
+  empCode?: string;
+  empName?: string;
+  doneAt?: string;
+  doneBy?: string;
 }
 
 export interface AccessCard {
   id: string;
-  employeeId?: string; 
-  empCode: string;
-  empName: string;
+  _id?: string;
+  employeeInfo: any;
   cardNumber: string;
-  doneAt: string;
-  doneBy: string;
-  status: 'Done' | 'Pending';
+  issueDate: string;
+  status: string;
+  accessLevel: string;
+  createdAt?: string;
+  updatedAt?: string;
+  // Legacy
+  employeeId?: string;
+  empCode?: string;
+  empName?: string;
+  doneAt?: string;
+  doneBy?: string;
 }
 
 export interface InitialTraining {
   id: string;
-  employeeId?: string; 
-  empCode: string;
-  empName: string;
-  trainingType: string;
-  trainer: string;
-  departmentId?: string; 
-  department: string;
-  doneAt: string;
-  doneBy: string;
-  status: 'Paid' | 'Unpaid' | 'Pending';
+  _id?: string;
+  employeeInfo: any;
+  trainingName: string;
+  trainingDate: string;
+  status: string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  // Legacy
+  employeeId?: string;
+  empCode?: string;
+  empName?: string;
+  trainingType?: string;
+  trainer?: string;
+  departmentId?: string;
+  department?: string;
+  doneAt?: string;
+  doneBy?: string;
 }
 
 export interface EndOfService {
   id: string;
-  empCode?: string;
-  employeeId: string;
-  employeeName: string;
-  avatar?: string;
-  eosType: string;
-  jobId?: string; 
-  jobTitle: string;
-  departmentId?: string; 
-  department: string;
-  startDate: string;
-  endDate: string;
-  yearsOfService: string;
-  requestDate: string;
-  collectLaptop: string;
-  collectAccessCards: string;
-  finalSettlement: string;
+  _id?: string;
+  employeeInfo: any;
   lastWorkingDay: string;
-  reason: string;
-  attachment?: string; 
-  status: 'Pending' | 'Approved' | 'Rejected';
+  reasonForLeaving: string;
+  endOfServiceBenefits: number;
+  status: string;
+  notes?: string;
+  attachment?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  // Legacy
+  employeeId?: string;
+  employeeName?: string;
+  empCode?: string;
+  avatar?: string;
+  eosType?: string;
+  jobId?: string;
+  jobTitle?: string;
+  departmentId?: string;
+  department?: string;
+  startDate?: string;
+  endDate?: string;
+  yearsOfService?: any;
+  requestDate?: string;
+  collectLaptop?: any;
+  collectAccessCards?: any;
+  finalSettlement?: any;
+  reason?: string;
   approved_by_manager?: boolean;
   approved_by_hr?: boolean;
   rejected_reason?: string;
@@ -508,8 +619,10 @@ export interface EndOfService {
 
 export interface Customer {
   id: string;
+  _id?: string; // Added
   customerCode: string;
   customerName: string;
+  name?: string; // Legacy
   phoneNumber: string;
   email: string;
   address: string;
@@ -533,6 +646,7 @@ export interface SalesOrderItem {
 
 export interface SalesOrder {
   id: string;
+  _id?: string; // Added
   orderNo: string;
   customerId: any;
   orderDate: string;
@@ -545,9 +659,9 @@ export interface SalesOrder {
   discountAmount: number;
   taxAmount: number;
   totalAmount: number;
-  paymentStatus: 'PAID' | 'UNPAID' | 'PARTIALLY_PAID';
-  deliveryStatus: 'PENDING' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED';
-  status: 'DRAFT' | 'CONFIRMED' | 'CANCELLED';
+  paymentStatus: 'PAID' | 'UNPAID' | 'PARTIALLY_PAID' | string;
+  deliveryStatus: 'PENDING' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED' | string;
+  status: 'DRAFT' | 'CONFIRMED' | 'CANCELLED' | string;
   notes?: string;
   promoCode?: string;
   createdAt?: string;
@@ -566,6 +680,7 @@ export interface SalesInvoiceItem {
 
 export interface SalesInvoice {
   id: string;
+  _id?: string; // Added
   invoiceNumber: string;
   salesOrderId: any;
   customerId: any;
@@ -629,12 +744,14 @@ export interface POSProduct {
 
 export interface PricingRule {
   id: string;
+  _id?: string;
   ruleName: string;
   customer: string;
   product: string;
   condition: string;
   priceChange: string;
-  status: 'Active' | 'Inactive';
+  appliesTo: 'PRODUCT' | 'CATEGORY' | 'CUSTOMER' | 'ORDER_TOTAL';
+  status: 'ACTIVE' | 'INACTIVE';
 }
 
 export interface Discount {
@@ -656,6 +773,7 @@ export interface Discount {
 
 export interface Promotion {
   id: string;
+  _id?: string;
   promotionName: string;
   type: 'PERCENTAGE' | 'FIXED' | 'BUY_X_GET_Y' | 'FREE_SHIPPING';
   conditionType: 'ORDER_TOTAL' | 'PROMO_CODE' | 'PRODUCT' | 'CUSTOMER_TYPE';
@@ -666,8 +784,8 @@ export interface Promotion {
   minQty?: number;
   value: number;
   benefitDescription: string;
-  startDate?: string | null;
-  endDate?: string | null;
+  startDate?: string;
+  endDate?: string;
   status: 'ACTIVE' | 'SCHEDULED' | 'EXPIRED';
   createdAt?: string;
   updatedAt?: string;
@@ -676,6 +794,7 @@ export interface Promotion {
 export interface QuotationItem {
   productId: any;
   productName: string;
+  sku?: string; // Added
   qty: number;
   unitPrice: number;
   discount: number;
@@ -685,6 +804,7 @@ export interface QuotationItem {
 
 export interface Quotation {
   id: string;
+  _id?: string; // Added
   quotationNo: string;
   customerId: any;
   quotationDate: string;
@@ -699,7 +819,7 @@ export interface Quotation {
   totalAmount: number;
   notes?: string;
   termsAndConditions?: string;
-  status: 'DRAFT' | 'SENT' | 'EXPIRED';
+  status: 'DRAFT' | 'SENT' | 'EXPIRED' | string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -754,7 +874,7 @@ export interface Supplier {
   companyName: string;
   companyId: any;
   branchId: any;
-  status: 'ACTIVE' | 'INACTIVE';
+  status: 'ACTIVE' | 'INACTIVE' | string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -790,10 +910,11 @@ export interface PurchaseOrder {
 export interface GoodsReceipt {
   id: string;
   _id?: string;
-  grNumber: string;
+  grnNumber: string;
   purchaseOrderId: any;
   receiptDate: string;
   warehouseId: any;
+  supplierId: any;
   companyId: any;
   branchId: any;
   items: {
@@ -803,8 +924,11 @@ export interface GoodsReceipt {
     receivedQuantity: number;
     acceptedQuantity: number;
     rejectedQuantity: number;
-    unitCost: number;
-    totalValue: number;
+    unitCost?: number;
+    totalValue?: number;
+    price?: number; // Legacy/Compat
+    unitPrice?: number; // Legacy/Compat
+    total?: number; // Legacy/Compat
   }[];
   totalQty: number;
   receivedBy: string;
@@ -891,9 +1015,10 @@ export interface Product {
   id: string;
   _id?: string;
   sku: string;
+  image: string;
   productName: string;
   category: string;
-  productType: 'STOCKABLE' | 'SERVICE' | 'CONSUMABLE';
+  productType: 'STOCKABLE' | 'SERVICE' | 'CONSUMABLE' | string;
   salesPrice: number;
   cost: number;
   description: string;
@@ -903,8 +1028,14 @@ export interface Product {
   companyId?: any | null;
   branchId?: any | null;
   hasExpiry: boolean;
-  status: 'ACTIVE' | 'INACTIVE';
+  status: 'ACTIVE' | 'INACTIVE' | string;
   quantityOnHand?: number;
+  currentStock?: number;
+  reorderLevel?: number;
+  defaultUnit?: string;
+  sellingPrice?: number;
+  expired: boolean;
+  purchasePrice?: number;
   forecastedQuantity?: number;
   lastSoldDate?: string;
   totalSold?: number;
@@ -935,7 +1066,7 @@ export interface Warehouse {
   managerName: string;
   phoneNumber: string;
   location: string;
-  state: 'ACTIVE' | 'INACTIVE';
+  state: 'ACTIVE' | 'INACTIVE' | string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -1478,6 +1609,7 @@ export interface FleetKPIs {
   totalFuelCost: number;
   averageFuelConsumption: number;
   maintenanceCosts: number;
+  summary?: string; // Added
 }
 
 

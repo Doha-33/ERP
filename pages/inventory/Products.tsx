@@ -9,7 +9,7 @@ import { Product } from '../../types';
 
 export const InventoryProducts: React.FC = () => {
   const { t } = useTranslation();
-  const { products, addProduct, updateProduct, deleteProduct } = useData();
+  const { inventoryProducts: products, addProduct, updateProduct, deleteProduct } = useData();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -21,18 +21,18 @@ export const InventoryProducts: React.FC = () => {
     },
     {
       header: t('product_name'),
-      accessor: 'name' as keyof Product,
+      accessor: 'productName' as keyof Product,
       render: (product: Product) => (
         <div className="flex items-center gap-3">
           {product.image && (
             <img 
               src={product.image} 
-              alt={product.name} 
+              alt={product.productName} 
               className="w-10 h-10 rounded-lg object-cover"
               referrerPolicy="no-referrer"
             />
           )}
-          <span className="font-medium">{product.name}</span>
+          <span className="font-medium">{product.productName}</span>
         </div>
       )
     },
@@ -48,7 +48,7 @@ export const InventoryProducts: React.FC = () => {
       header: t('current_stock'),
       accessor: 'currentStock' as keyof Product,
       render: (product: Product) => (
-        <span className={`font-medium ${product.currentStock <= product.reorderLevel ? 'text-red-600' : 'text-green-600'}`}>
+        <span className={`font-medium`}>
           {product.currentStock} {product.defaultUnit}
         </span>
       )
@@ -65,11 +65,11 @@ export const InventoryProducts: React.FC = () => {
       accessor: 'expired' as keyof Product,
       render: (product: Product) => (
         <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-          product.expired === 'Expired' ? 'bg-red-100 text-red-700' :
-          product.expired === 'Near Expiry' ? 'bg-yellow-100 text-yellow-700' :
-          'bg-green-100 text-green-700'
+          product.expired === true ? 'bg-red-100 text-red-700' :
+          product.expired === false ? 'bg-green-100 text-green-700' :
+          'bg-yellow-100 text-yellow-700'
         }`}>
-          {t(product.expired.toLowerCase().replace(' ', '_')) || product.expired}
+          {t(product.expired === true ? 'expired' : product.expired === false ? 'not_expired' : 'near_expiry').replace(' ', '_')} || product.expired
         </span>
       )
     },
@@ -102,7 +102,7 @@ export const InventoryProducts: React.FC = () => {
   ];
 
   const filteredProducts = products.filter(p => 
-    p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    p.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.sku.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -163,7 +163,7 @@ export const InventoryProducts: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">{t('product_name')}</label>
-              <input type="text" className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent" defaultValue={selectedProduct?.name} />
+              <input type="text" className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent" defaultValue={selectedProduct?.productName} />
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">{t('sku')}</label>

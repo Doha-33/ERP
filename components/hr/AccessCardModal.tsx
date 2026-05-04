@@ -1,146 +1,225 @@
-
-import React, { useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { Button, Input, Select } from '../ui/Common';
-import { Modal } from '../ui/Modal';
-import { AccessCard } from '../../types';
-import { useData } from '../../context/DataContext';
+import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { Plus, Edit2, CreditCard, User, Calendar, UserCheck, Shield } from "lucide-react";
+import { Modal } from "../../components/ui/Modal";
+import { Button, Input, Select, TextArea } from "../../components/ui/Common";
+import { AccessCard, Employee } from "../../types";
+import { useData } from "../../context/DataContext";
 
 interface AccessCardModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (card: AccessCard) => void;
+  onSave: (data: Partial<AccessCard>) => Promise<void>;
   cardToEdit?: AccessCard | null;
+  isLoading?: boolean;
 }
 
-const cardSchema = z.object({
-  employeeId: z.string().min(1, 'Required'),
-  cardNumber: z.string().min(1, 'Required'),
-  doneAt: z.string().min(1, 'Required'),
-  doneBy: z.string().min(1, 'Required'),
-  status: z.enum(['Done', 'Pending']),
-});
-
-type CardFormInputs = z.infer<typeof cardSchema>;
-
-export const AccessCardModal: React.FC<AccessCardModalProps> = ({ isOpen, onClose, onSave, cardToEdit }) => {
+export const AccessCardModal: React.FC<AccessCardModalProps> = ({
+  isOpen,
+  onClose,
+  onSave,
+  cardToEdit,
+  isLoading = false,
+}) => {
   const { t } = useTranslation();
   const { employees } = useData();
-  
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors },
-  } = useForm<CardFormInputs>({
-    resolver: zodResolver(cardSchema),
-    defaultValues: {
-      status: 'Pending'
-    }
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formData, setFormData] = useState({
+    employeeInfo: "",
+    cardNumber: "",
+    doneAt: new Date().toISOString().split("T")[0],
+    doneBy: "",
+    status: "Pending",
   });
 
   useEffect(() => {
-    if (cardToEdit) {
-      reset({
-        employeeId: cardToEdit.employeeId || '', // Using employeeId instead of empName
-        cardNumber: cardToEdit.cardNumber,
-        doneAt: cardToEdit.doneAt,
-        doneBy: cardToEdit.doneBy,
-        status: cardToEdit.status,
+    if (cardToEdit && isOpen) {
+      // Handle employeeInfo mapping
+      let employeeId = "";
+      if (typeof cardToEdit.employeeInfo === "object" && cardToEdit.employeeInfo !== null) {
+        employeeId = (cardToEdit.employeeInfo as any)._id || (cardToEdit.employeeInfo as any).id || "";
+      } else if (typeof cardToEdit.employeeInfo === "string") {
+        employeeId = cardToEdit.employeeInfo;
+      } else if (cardToEdit.employeeId) {
+        employeeId = cardToEdit.employeeId;
+      }
+
+      // Handle doneAt date
+      let doneAtDate = new Date().toISOString().split("T")[0];
+      if (cardToEdit.doneAt) {
+        doneAtDate = new Date(cardToEdit.doneAt).toISOString().split("T")[0];
+      } else if (cardToEdit.issueDate) {
+        doneAtDate = new Date(cardToEdit.issueDate).toISOString().split("T")[0];
+      }
+
+      // Handle doneBy
+      let doneByName = cardToEdit.doneBy || "";
+      if (!doneByName && cardToEdit.accessLevel) {
+        doneByName = cardToEdit.accessLevel;
+      }
+
+      // Handle status
+      let status = cardToEdit.status || "Pending";
+      if (status === "Active") status = "Done";
+
+      setFormData({
+        employeeInfo: employeeId,
+        cardNumber: cardToEdit.cardNumber || "",
+        doneAt: doneAtDate,
+        doneBy: doneByName,
+        status: status,
       });
-    } else {
-      reset({
-        employeeId: '',
-        cardNumber: '',
-        doneAt: new Date().toISOString().split('T')[0],
-        doneBy: '',
-        status: 'Pending',
+    } else if (!cardToEdit && isOpen) {
+      setFormData({
+        employeeInfo: "",
+        cardNumber: "",
+        doneAt: new Date().toISOString().split("T")[0],
+        doneBy: "",
+        status: "Pending",
       });
     }
-  }, [cardToEdit, isOpen, reset]);
+  }, [cardToEdit, isOpen]);
 
-  const onSubmit = (data: CardFormInputs) => {
-    const selectedEmp = employees.find(e => e.id === data.employeeId);
+  const employeeOptions = employees.map(emp => ({
+    value: emp._id || emp.id,
+    label: `${emp.fullName} (${emp.employeeCode})`,
+  }));
+
+  const statusOptions = [
+    { value: "Pending", label: t("pending") },
+    { value: "Done", label: t("done") },
+  ];
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSubmitting(true);
     
-    const newCard: AccessCard = {
-      id: cardToEdit ? cardToEdit.id : '', // Handled by API/DataContext
-      employeeId: data.employeeId,
-      empCode: selectedEmp?.code || '',
-      empName: selectedEmp?.fullName || '', 
-      ...data,
-    };
-    onSave(newCard);
-    onClose();
+    try {
+      // Find selected employee to get employee code
+      const selectedEmp = employees.find(emp => (emp._id || emp.id) === formData.employeeInfo);
+      
+      await onSave({
+        employeeInfo: formData.employeeInfo,
+        cardNumber: formData.cardNumber,
+        doneAt: formData.doneAt,
+        doneBy: formData.doneBy,
+        status: formData.status,
+        empCode: selectedEmp?.employeeCode || "",
+      });
+      onClose();
+    } catch (error) {
+      console.error("Error in form submission:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const title = (
-    <>
-      <span className="text-lg">{cardToEdit ? '✎' : '⊕'}</span> {cardToEdit ? t('edit_access_cards') : t('add_access_cards')}
-    </>
-  );
-
-  const footer = (
-    <>
-       <Button type="button" variant="ghost" className="bg-gray-700 text-white hover:bg-gray-800" onClick={onClose}>{t('cancel')}</Button>
-       <Button type="submit" form="card-form" className="bg-[#4361EE] hover:bg-blue-700">{cardToEdit ? t('save') : t('add_access_cards')}</Button>
-    </>
-  );
+  const handleChange = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={title}
-      footer={footer}
-      className="max-w-4xl"
+      title={
+        <div className="flex items-center gap-2">
+          {cardToEdit ? <Edit2 size={20} /> : <Plus size={20} />}
+          <span className="text-lg font-semibold text-gray-900">
+            {cardToEdit ? t("edit_access_card") : t("add_access_card")}
+          </span>
+        </div>
+      }
+      size="4xl"
     >
-      <form id="card-form" onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-             <div className="space-y-6">
-                <Select 
-                  label={t('employee_info') + ' *'} 
-                  options={employees.map(e => ({ value: e.id, label: e.fullName }))}
-                  {...register('employeeId')}
-                  error={errors.employeeId?.message}
-                />
-                
-                <Input 
-                   type="date"
-                   label={t('done_at') + ' *'} 
-                   {...register('doneAt')} 
-                   error={errors.doneAt?.message} 
-                />
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+          {/* Employee Selection */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("employee")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.employeeInfo}
+              onChange={(e) => handleChange("employeeInfo", e.target.value)}
+              options={employeeOptions}
+              placeholder={t("select_employee")}
+              required
+              fullWidth
+            />
+          </div>
 
-                <Select 
-                   label={t('state') + ' *'} 
-                   options={[
-                     {value: 'Pending', label: t('pending')},
-                     {value: 'Done', label: t('done')}
-                   ]}
-                   {...register('status')}
-                   error={errors.status?.message}
-                />
-             </div>
-             
-             <div className="space-y-6">
-                <Input 
-                   label={t('card_number_id') + ' *'} 
-                   placeholder="AC-00123" 
-                   {...register('cardNumber')} 
-                   error={errors.cardNumber?.message} 
-                />
-                
-                <Input 
-                   label={t('done_by') + ' *'} 
-                   placeholder="Admin Name" 
-                   {...register('doneBy')} 
-                   error={errors.doneBy?.message} 
-                />
-             </div>
-         </div>
+          {/* Card Number */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("card_number")} <span className="text-red-500">*</span>
+            </label>
+            <Input
+              value={formData.cardNumber}
+              onChange={(e) => handleChange("cardNumber", e.target.value)}
+              placeholder="CARD-001"
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Done Date */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("issue_date")} <span className="text-red-500">*</span>
+            </label>
+            <Input
+              type="date"
+              value={formData.doneAt}
+              onChange={(e) => handleChange("doneAt", e.target.value)}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Done By */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("issued_by")} <span className="text-red-500">*</span>
+            </label>
+            <Input
+              value={formData.doneBy}
+              onChange={(e) => handleChange("doneBy", e.target.value)}
+              placeholder={t("enter_issued_by")}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Status */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("status")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.status}
+              onChange={(e) => handleChange("status", e.target.value)}
+              options={statusOptions}
+              required
+              fullWidth
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-3 mt-8">
+          <Button variant="secondary" onClick={onClose} disabled={isSubmitting || isLoading}>
+            {t("cancel")}
+          </Button>
+          <Button
+            variant="primary"
+            type="submit"
+            className="bg-indigo-600 hover:bg-indigo-700 px-8"
+            isLoading={isSubmitting || isLoading}
+            disabled={isSubmitting || isLoading}
+          >
+            {cardToEdit ? t("save") : t("add_access_card")}
+          </Button>
+        </div>
       </form>
     </Modal>
   );

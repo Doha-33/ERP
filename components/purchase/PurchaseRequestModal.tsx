@@ -1,37 +1,25 @@
-
-import React from 'react';
-import { useTranslation } from 'react-i18next';
-import { useForm, useFieldArray } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { Plus, Trash2 } from 'lucide-react';
-import { Modal } from '../ui/Modal';
-import { Button, Input, Select } from '../ui/Common';
-import { PurchaseRequest } from '../../types';
-import { useData } from '../../context/DataContext';
-
-const purchaseRequestSchema = z.object({
-  prNumber: z.string().min(1, 'PR Number is required'),
-  requestDate: z.string().min(1, 'Request date is required'),
-  department: z.string().min(1, 'Department is required'),
-  items: z.array(z.object({
-    productId: z.string().optional().nullable(),
-    itemName: z.string().min(1, 'Item name is required'),
-    requiredQuantity: z.number().min(1),
-    estimatedUnitCost: z.number().min(0),
-    totalCost: z.number().min(0),
-  })).min(1, 'At least one item is required'),
-  status: z.enum(['PENDING', 'APPROVED', 'REJECTED']),
-  notes: z.string().optional(),
-});
-
-type PurchaseRequestFormData = z.infer<typeof purchaseRequestSchema>;
+import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { Plus, Edit2, Trash2, Package, DollarSign, Calendar, Building2, Users, Hash } from "lucide-react";
+import { Modal } from "../../components/ui/Modal";
+import { Button, Input, Select, TextArea } from "../../components/ui/Common";
+import { PurchaseRequest } from "../../types";
+import { useData } from "../../context/DataContext";
 
 interface PurchaseRequestModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: any) => void;
+  onSave: (data: Partial<PurchaseRequest>) => Promise<void>;
   requestToEdit?: PurchaseRequest | null;
+  isLoading?: boolean;
+}
+
+interface RequestItem {
+  productId: string;
+  itemName: string;
+  requiredQuantity: number;
+  estimatedUnitCost: number;
+  totalCost: number;
 }
 
 export const PurchaseRequestModal: React.FC<PurchaseRequestModalProps> = ({
@@ -39,185 +27,354 @@ export const PurchaseRequestModal: React.FC<PurchaseRequestModalProps> = ({
   onClose,
   onSave,
   requestToEdit,
+  isLoading = false,
 }) => {
   const { t } = useTranslation();
-  const { departments, products } = useData();
+  const { departments, products, companies, branches } = useData();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formData, setFormData] = useState({
+    prNumber: "",
+    requestDate: new Date().toISOString().split("T")[0],
+    department: "",
+    companyId: "",
+    branchId: "",
+    status: "PENDING",
+    notes: "",
+  });
   
-  const {
-    register,
-    control,
-    handleSubmit,
-    reset,
-    watch,
-    setValue,
-    formState: { errors },
-  } = useForm<PurchaseRequestFormData>({
-    resolver: zodResolver(purchaseRequestSchema),
-    defaultValues: {
-      prNumber: '',
-      requestDate: new Date().toISOString().split('T')[0],
-      department: '',
-      items: [{ itemName: '', requiredQuantity: 1, estimatedUnitCost: 0, totalCost: 0 }],
-      status: 'PENDING',
-    },
-  });
+  const [items, setItems] = useState<RequestItem[]>([
+    { productId: "", itemName: "", requiredQuantity: 1, estimatedUnitCost: 0, totalCost: 0 }
+  ]);
+  
+  useEffect(() => {
+    if (requestToEdit && isOpen) {
+      const companyId = typeof requestToEdit.companyId === "object" 
+        ? (requestToEdit.companyId as any)?._id 
+        : requestToEdit.companyId;
+      const branchId = typeof requestToEdit.branchId === "object" 
+        ? (requestToEdit.branchId as any)?._id 
+        : requestToEdit.branchId;
 
-  const { fields, append, remove } = useFieldArray({
-    control,
-    name: 'items',
-  });
-
-  React.useEffect(() => {
-    if (requestToEdit) {
-      reset({
-        prNumber: requestToEdit.prNumber,
-        requestDate: new Date(requestToEdit.requestDate).toISOString().split('T')[0],
-        department: requestToEdit.department,
-        items: requestToEdit.items.map(item => ({
-          productId: typeof item.productId === 'object' ? item.productId?._id : item.productId,
+      setFormData({
+        prNumber: requestToEdit.prNumber || "",
+        requestDate: requestToEdit.requestDate 
+          ? new Date(requestToEdit.requestDate).toISOString().split("T")[0] 
+          : new Date().toISOString().split("T")[0],
+        department: requestToEdit.department || "",
+        companyId: companyId || "",
+        branchId: branchId || "",
+        status: requestToEdit.status || "PENDING",
+        notes: requestToEdit.notes || "",
+      });
+      
+      if (requestToEdit.items && requestToEdit.items.length > 0) {
+        setItems(requestToEdit.items.map(item => ({
+          productId: typeof item.productId === "object" ? (item.productId as any)?._id || "" : item.productId || "",
           itemName: item.itemName,
           requiredQuantity: item.requiredQuantity,
           estimatedUnitCost: item.estimatedUnitCost,
-          totalCost: item.totalCost,
-        })),
-        status: requestToEdit.status as any,
-        notes: requestToEdit.notes,
+          totalCost: item.totalCost || (item.requiredQuantity * item.estimatedUnitCost)
+        })));
+      }
+    } else if (!requestToEdit && isOpen) {
+      const randomNum = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+      setFormData({
+        prNumber: `PR-${randomNum}`,
+        requestDate: new Date().toISOString().split("T")[0],
+        department: "",
+        companyId: "",
+        branchId: "",
+        status: "PENDING",
+        notes: "",
       });
-    } else {
-      reset({
-        prNumber: `PR-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
-        requestDate: new Date().toISOString().split('T')[0],
-        department: '',
-        items: [{ itemName: '', requiredQuantity: 1, estimatedUnitCost: 0, totalCost: 0 }],
-        status: 'PENDING',
-      });
+      setItems([{ productId: "", itemName: "", requiredQuantity: 1, estimatedUnitCost: 0, totalCost: 0 }]);
     }
-  }, [requestToEdit, reset]);
+  }, [requestToEdit, isOpen]);
 
-  const onSubmit = (data: PurchaseRequestFormData) => {
-    onSave(data);
-    onClose();
+  const departmentOptions = departments.map(d => ({ 
+    value: d.departmentName || d.name, 
+    label: d.departmentName || d.name 
+  }));
+
+  const companyOptions = companies.map(c => ({ 
+    value: c._id || c.id, 
+    label: c.name 
+  }));
+
+  const branchOptions = branches.map(b => ({ 
+    value: b._id || b.id, 
+    label: b.name 
+  }));
+
+  const productOptions = products.map(p => ({ 
+    value: p._id || p.id, 
+    label: `${p.productName} (${p.sku})` 
+  }));
+
+  const statusOptions = [
+    { value: "PENDING", label: t("pending") },
+    { value: "APPROVED", label: t("approved") },
+    { value: "REJECTED", label: t("rejected") },
+  ];
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    
+    try {
+      await onSave({
+        ...formData,
+        items: items.map(item => ({
+          productId: item.productId,
+          itemName: item.itemName,
+          requiredQuantity: item.requiredQuantity,
+          estimatedUnitCost: item.estimatedUnitCost,
+          totalCost: item.totalCost
+        })),
+      });
+      onClose();
+    } catch (error) {
+      console.error("Error in form submission:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const calculateTotal = (index: number) => {
-    const qty = watch(`items.${index}.requiredQuantity`);
-    const cost = watch(`items.${index}.estimatedUnitCost`);
-    setValue(`items.${index}.totalCost`, qty * cost);
+  const handleChange = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
+
+  const handleItemChange = (index: number, field: keyof RequestItem, value: any) => {
+    const newItems = [...items];
+    newItems[index] = { ...newItems[index], [field]: value };
+    
+    // If product is selected, auto-fill item name
+    if (field === "productId" && value) {
+      const selectedProduct = products.find(p => (p._id || p.id) === value);
+      if (selectedProduct) {
+        newItems[index].itemName = selectedProduct.productName;
+      }
+    }
+    
+    // Recalculate total
+    if (field === "requiredQuantity" || field === "estimatedUnitCost") {
+      newItems[index].totalCost = newItems[index].requiredQuantity * newItems[index].estimatedUnitCost;
+    }
+    
+    setItems(newItems);
+  };
+
+  const addItem = () => {
+    setItems([...items, { productId: "", itemName: "", requiredQuantity: 1, estimatedUnitCost: 0, totalCost: 0 }]);
+  };
+
+  const removeItem = (index: number) => {
+    if (items.length > 1) {
+      setItems(items.filter((_, i) => i !== index));
+    }
+  };
+
+  const totalRequestValue = items.reduce((sum, item) => sum + item.totalCost, 0);
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={requestToEdit ? t('edit_purchase_request') : t('add_purchase_request')}
-      className="max-w-4xl"
+      title={
+        <div className="flex items-center gap-2">
+          {requestToEdit ? <Edit2 size={20} /> : <Plus size={20} />}
+          {requestToEdit ? t("edit_purchase_request") : t("add_purchase_request")}
+        </div>
+      }
+      size="xl"
     >
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Input
-            label={t('pr_number')}
-            {...register('prNumber')}
-            error={errors.prNumber?.message}
-            required
-          />
-          <Input
-            label={t('request_date')}
-            type="date"
-            {...register('requestDate')}
-            error={errors.requestDate?.message}
-            required
-          />
-          <Select
-            label={t('department')}
-            options={departments.map(d => ({ value: d.departmentName, label: d.departmentName }))}
-            {...register('department')}
-            error={errors.department?.message}
-            required
-          />
+      <form onSubmit={handleSubmit} className="space-y-6 max-h-[70vh] overflow-y-auto px-2">
+        {/* Request Information */}
+        <div className="border-b border-gray-100 pb-4">
+          <h3 className="text-md font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <FileText size={18} className="text-indigo-600" />
+            {t("request_information")}
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3">
+            <Input
+              label={t("pr_number")}
+              value={formData.prNumber}
+              onChange={(e) => handleChange("prNumber", e.target.value)}
+              placeholder="PR-001"
+              required
+              fullWidth
+            />
+            <Input
+              label={t("request_date")}
+              type="date"
+              value={formData.requestDate}
+              onChange={(e) => handleChange("requestDate", e.target.value)}
+              required
+              fullWidth
+            />
+            <Select
+              label={t("department")}
+              value={formData.department}
+              onChange={(e) => handleChange("department", e.target.value)}
+              options={departmentOptions}
+              placeholder={t("select_department")}
+              required
+              fullWidth
+            />
+            <Select
+              label={t("company")}
+              value={formData.companyId}
+              onChange={(e) => handleChange("companyId", e.target.value)}
+              options={companyOptions}
+              placeholder={t("select_company")}
+              fullWidth
+            />
+            <Select
+              label={t("branch")}
+              value={formData.branchId}
+              onChange={(e) => handleChange("branchId", e.target.value)}
+              options={branchOptions}
+              placeholder={t("select_branch")}
+              fullWidth
+            />
+          </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h3 className="text-lg font-medium">{t('items')}</h3>
-            <Button type="button" variant="outline" size="sm" onClick={() => append({ itemName: '', requiredQuantity: 1, estimatedUnitCost: 0, totalCost: 0 })}>
-              <Plus size={16} className="mr-1" /> {t('add_item')}
+        {/* Request Items */}
+        <div className="border-b border-gray-100 pb-4">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-md font-semibold text-gray-900 flex items-center gap-2">
+              <Package size={18} className="text-indigo-600" />
+              {t("request_items")}
+            </h3>
+            <Button type="button" variant="secondary" onClick={addItem} size="sm">
+              <Plus size={16} />
+              {t("add_item")}
             </Button>
           </div>
-
-          {fields.map((field, index) => (
-            <div key={field.id} className="grid grid-cols-1 md:grid-cols-5 gap-4 p-4 border border-gray-100 rounded-lg relative">
-              <div className="md:col-span-2">
-                <Input
-                  label={t('item_name')}
-                  {...register(`items.${index}.itemName`)}
-                  error={errors.items?.[index]?.itemName?.message}
-                  required
-                />
-              </div>
-              <Input
-                label={t('quantity')}
-                type="number"
-                {...register(`items.${index}.requiredQuantity`, { valueAsNumber: true })}
-                onChange={() => calculateTotal(index)}
-                error={errors.items?.[index]?.requiredQuantity?.message}
-                required
-              />
-              <Input
-                label={t('unit_cost')}
-                type="number"
-                {...register(`items.${index}.estimatedUnitCost`, { valueAsNumber: true })}
-                onChange={() => calculateTotal(index)}
-                error={errors.items?.[index]?.estimatedUnitCost?.message}
-                required
-              />
-              <div className="flex items-end gap-2">
-                <Input
-                  label={t('total')}
-                  type="number"
-                  {...register(`items.${index}.totalCost`, { valueAsNumber: true })}
-                  readOnly
-                  className="bg-gray-50"
-                />
-                {fields.length > 1 && (
-                  <button type="button" onClick={() => remove(index)} className="p-2 text-red-500 hover:bg-red-50 rounded mb-1">
-                    <Trash2 size={18} />
-                  </button>
-                )}
-              </div>
+          
+          <div className="space-y-3">
+            {/* Table Header */}
+            <div className="hidden md:grid grid-cols-12 gap-3 px-2 py-2 bg-gray-50 rounded-lg text-xs font-medium text-gray-500">
+              <div className="col-span-4">{t("product_item")}</div>
+              <div className="col-span-2">{t("quantity")}</div>
+              <div className="col-span-2">{t("unit_cost")}</div>
+              <div className="col-span-2">{t("total")}</div>
+              <div className="col-span-2"></div>
             </div>
-          ))}
+            
+            {items.map((item, index) => (
+              <div key={index} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end p-3 bg-gray-50 rounded-lg">
+                <div className="md:col-span-4">
+                  <Select
+                    label={index === 0 ? t("product") : ""}
+                    value={item.productId}
+                    onChange={(e) => handleItemChange(index, "productId", e.target.value)}
+                    options={productOptions}
+                    placeholder={t("select_product")}
+                    fullWidth
+                  />
+                  <Input
+                    label={index === 0 ? t("item_name") : ""}
+                    value={item.itemName}
+                    onChange={(e) => handleItemChange(index, "itemName", e.target.value)}
+                    placeholder={t("enter_item_name")}
+                    required
+                    fullWidth
+                    className="mt-2"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <Input
+                    label={index === 0 ? t("quantity") : ""}
+                    type="number"
+                    value={item.requiredQuantity}
+                    onChange={(e) => handleItemChange(index, "requiredQuantity", Number(e.target.value))}
+                    min="1"
+                    required
+                    fullWidth
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <Input
+                    label={index === 0 ? t("unit_cost") : ""}
+                    type="number"
+                    value={item.estimatedUnitCost}
+                    onChange={(e) => handleItemChange(index, "estimatedUnitCost", Number(e.target.value))}
+                    min="0"
+                    required
+                    fullWidth
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <div className="text-sm font-semibold text-indigo-600 mt-2 pt-2">
+                    {item.totalCost.toLocaleString()} EGP
+                  </div>
+                </div>
+                <div className="md:col-span-2 flex justify-end">
+                  {items.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeItem(index)}
+                      className="p-1 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-4">
-          <Input
-            label={t('notes')}
-            {...register('notes')}
-            error={errors.notes?.message}
+        {/* Summary */}
+        <div className="bg-gray-50 rounded-xl p-4">
+          <div className="flex justify-between items-center">
+            <span className="text-base font-semibold text-gray-900">{t("total_request_value")}</span>
+            <span className="text-xl font-bold text-indigo-600">{totalRequestValue.toLocaleString()} EGP</span>
+          </div>
+        </div>
+
+        {/* Notes & Status */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+          <TextArea
+            label={t("notes")}
+            value={formData.notes}
+            onChange={(e) => handleChange("notes", e.target.value)}
+            placeholder={t("enter_notes")}
+            rows={3}
+            fullWidth
           />
           {requestToEdit && (
             <Select
-              label={t('status')}
-              options={[
-                { value: 'PENDING', label: t('pending') },
-                { value: 'APPROVED', label: t('approved') },
-                { value: 'REJECTED', label: t('rejected') },
-              ]}
-              {...register('status')}
-              error={errors.status?.message}
+              label={t("status")}
+              value={formData.status}
+              onChange={(e) => handleChange("status", e.target.value)}
+              options={statusOptions}
               required
+              fullWidth
             />
           )}
         </div>
 
-        <div className="flex justify-end gap-3 pt-4">
-          <Button type="button" variant="outline" onClick={onClose} className="bg-gray-600 text-white border-none hover:bg-gray-700">
-            {t('cancel')}
+        <div className="flex justify-end gap-3 mt-8">
+          <Button variant="secondary" onClick={onClose} disabled={isSubmitting || isLoading}>
+            {t("cancel")}
           </Button>
-          <Button type="submit" variant="primary">
-            {requestToEdit ? t('submit') : t('add_purchase_request')}
+          <Button
+            variant="primary"
+            type="submit"
+            className="bg-indigo-600 hover:bg-indigo-700 px-8"
+            isLoading={isSubmitting || isLoading}
+            disabled={isSubmitting || isLoading}
+          >
+            {requestToEdit ? t("save") : t("add_purchase_request")}
           </Button>
         </div>
       </form>
     </Modal>
   );
 };
+
+// Add this import at the top
+import { FileText } from "lucide-react";

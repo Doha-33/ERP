@@ -1,118 +1,176 @@
-
-import React, { useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { Button, Input, Select } from '../ui/Common';
-import { Modal } from '../ui/Modal';
-import { Job } from '../../types';
-import { useData } from '../../context/DataContext';
+import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { Plus, Edit2, Briefcase, Building2, FileText } from "lucide-react";
+import { Modal } from "../../components/ui/Modal";
+import { Button, Input, Select, TextArea } from "../../components/ui/Common";
+import { Job } from "../../types";
+import { useData } from "../../context/DataContext";
 
 interface JobModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (job: Job) => void;
+  onSave: (data: Partial<Job>) => Promise<void>;
   jobToEdit?: Job | null;
+  isLoading?: boolean;
 }
 
-const jobSchema = z.object({
-  departmentId: z.string().min(1, 'Required'),
-  jobName: z.string().min(1, 'Required'),
-  description: z.string().min(1, 'Required'),
-});
-
-type JobFormInputs = z.infer<typeof jobSchema>;
-
-export const JobModal: React.FC<JobModalProps> = ({ isOpen, onClose, onSave, jobToEdit }) => {
+export const JobModal: React.FC<JobModalProps> = ({
+  isOpen,
+  onClose,
+  onSave,
+  jobToEdit,
+  isLoading = false,
+}) => {
   const { t } = useTranslation();
   const { departments } = useData();
-  
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors },
-  } = useForm<JobFormInputs>({
-    resolver: zodResolver(jobSchema),
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formData, setFormData] = useState({
+    departmentId: "",
+    jobName: "",
+    description: "",
+    state: "ACTIVE",
   });
 
   useEffect(() => {
-    if (jobToEdit) {
-      reset({
-        departmentId: typeof jobToEdit.departmentId === 'object' ? jobToEdit.departmentId._id : jobToEdit.departmentId,
-        jobName: jobToEdit.jobName,
-        description: jobToEdit.description,
+    if (jobToEdit && isOpen) {
+      const departmentId = typeof jobToEdit.departmentId === "object"
+        ? (jobToEdit.departmentId as any)?._id
+        : jobToEdit.departmentId;
+
+      setFormData({
+        departmentId: departmentId || "",
+        jobName: jobToEdit.jobName || "",
+        description: jobToEdit.description || "",
+        state: jobToEdit.state || "ACTIVE",
       });
-    } else {
-      reset({
-        departmentId: departments.length > 0 ? departments[0]._id : '',
-        jobName: '',
-        description: '',
+    } else if (!jobToEdit && isOpen) {
+      const defaultDepartmentId = departments.length > 0 ? (departments[0]._id || departments[0].id) : "";
+      setFormData({
+        departmentId: defaultDepartmentId,
+        jobName: "",
+        description: "",
+        state: "ACTIVE",
       });
     }
-  }, [jobToEdit, isOpen, reset, departments]);
+  }, [jobToEdit, isOpen, departments]);
 
-  const onSubmit = (data: JobFormInputs) => {
-    const newJob: any = {
-      _id: jobToEdit ? jobToEdit._id : undefined,
-      ...data,
-      state: 'ACTIVE'
-    };
-    onSave(newJob);
-    onClose();
+  const departmentOptions = departments.map(d => ({
+    value: d._id || d.id,
+    label: d.departmentName,
+  }));
+
+  const statusOptions = [
+    { value: "ACTIVE", label: t("active") },
+    { value: "INACTIVE", label: t("inactive") },
+  ];
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    
+    try {
+      await onSave(formData);
+      onClose();
+    } catch (error) {
+      console.error("Error in form submission:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const title = (
-    <>
-      <span className="text-lg">{jobToEdit ? '✎' : '⊕'}</span> {jobToEdit ? t('edit_jobs') : t('add_jobs')}
-    </>
-  );
-
-  const footer = (
-    <>
-       <Button type="button" variant="ghost" className="bg-gray-700 text-white hover:bg-gray-800" onClick={onClose}>{t('cancel')}</Button>
-       <Button type="submit" form="job-form" className="bg-[#4361EE] hover:bg-blue-700">{jobToEdit ? t('save') : t('add_jobs')}</Button>
-    </>
-  );
+  const handleChange = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={title}
-      footer={footer}
-      className="max-w-4xl"
+      title={
+        <div className="flex items-center gap-2">
+          {jobToEdit ? <Edit2 size={20} /> : <Plus size={20} />}
+          {jobToEdit ? t("edit_job") : t("add_job")}
+        </div>
+      }
+      size="4xl"
     >
-      <form id="job-form" onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-             <div className="space-y-6">
-                <Select 
-                   label={t('department') + ' *'} 
-                   options={departments.map(d => ({ value: d._id, label: d.departmentName }))}
-                   {...register('departmentId')} 
-                   error={errors.departmentId?.message} 
-                />
-             </div>
-             
-             <div className="space-y-6">
-                <Input 
-                   label={t('job_name') + ' *'} 
-                   placeholder="Job Name" 
-                   {...register('jobName')} 
-                   error={errors.jobName?.message} 
-                />
-             </div>
-         </div>
-         
-         <div className="space-y-6">
-            <Input 
-               label={t('description') + ' *'} 
-               placeholder="Description" 
-               {...register('description')} 
-               error={errors.description?.message} 
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+          {/* Department */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("department")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.departmentId}
+              onChange={(e) => handleChange("departmentId", e.target.value)}
+              options={departmentOptions}
+              placeholder={t("select_department")}
+              required
+              fullWidth
             />
-         </div>
+          </div>
+
+          {/* Job Name */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("job_name")} <span className="text-red-500">*</span>
+            </label>
+            <Input
+              value={formData.jobName}
+              onChange={(e) => handleChange("jobName", e.target.value)}
+              placeholder={t("enter_job_name")}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Status (only for edit) */}
+          {jobToEdit && (
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-gray-700">
+                {t("status")} <span className="text-red-500">*</span>
+              </label>
+              <Select
+                value={formData.state}
+                onChange={(e) => handleChange("state", e.target.value)}
+                options={statusOptions}
+                required
+                fullWidth
+              />
+            </div>
+          )}
+
+          {/* Description */}
+          <div className="col-span-2 space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("description")} <span className="text-red-500">*</span>
+            </label>
+            <TextArea
+              value={formData.description}
+              onChange={(e) => handleChange("description", e.target.value)}
+              placeholder={t("enter_job_description")}
+              rows={4}
+              required
+              fullWidth
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-3 mt-8">
+          <Button variant="secondary" onClick={onClose} disabled={isSubmitting || isLoading}>
+            {t("cancel")}
+          </Button>
+          <Button
+            variant="primary"
+            type="submit"
+            className="bg-indigo-600 hover:bg-indigo-700 px-8"
+            isLoading={isSubmitting || isLoading}
+            disabled={isSubmitting || isLoading}
+          >
+            {jobToEdit ? t("save") : t("add_job")}
+          </Button>
+        </div>
       </form>
     </Modal>
   );

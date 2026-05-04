@@ -45,8 +45,6 @@ import { InitialTrainingPage } from "./pages/hr/InitialTraining";
 import { Penalties } from "./pages/hr/Penalties";
 import { Rewards } from "./pages/hr/Rewards";
 import { EndOfServicePage } from "./pages/hr/EndOfService";
-import { SyncDataPage } from "./pages/hr/SyncData";
-import { FixErrorsPage } from "./pages/hr/FixErrors";
 import { ImageArchive } from "./pages/hr/ImageArchive";
 
 // Sales Pages
@@ -424,26 +422,6 @@ const App: React.FC = () => {
                       <AdminRoute>
                         <MainLayout>
                           <Rewards />
-                        </MainLayout>
-                      </AdminRoute>
-                    }
-                  />
-                  <Route
-                    path="/hr/sync"
-                    element={
-                      <AdminRoute>
-                        <MainLayout>
-                          <SyncDataPage />
-                        </MainLayout>
-                      </AdminRoute>
-                    }
-                  />
-                  <Route
-                    path="/hr/fix"
-                    element={
-                      <AdminRoute>
-                        <MainLayout>
-                          <FixErrorsPage />
                         </MainLayout>
                       </AdminRoute>
                     }

@@ -11,23 +11,6 @@ export const useEmployeeModule = (fetchAllData?: () => Promise<void>) => {
   const [careerHistory, setCareerHistory] = useState<CareerHistory[]>([]);
   const [contracts, setContracts] = useState<Contract[]>([]);
 
-  const fetchEmployeeData = useCallback(async () => {
-    try {
-      const [employeesRes, attendanceRes, performanceRes, careerRes] = await Promise.all([
-        hrService.getEmployees(),
-        hrService.getAttendance(),
-        hrService.getPerformance(),
-        hrService.getCareerHistory(),
-      ]);
-      setEmployees(employeesRes);
-      setAttendanceRecords(attendanceRes);
-      setEvaluations(performanceRes);
-      setCareerHistory(careerRes);
-    } catch (error) {
-      console.error('Error fetching employee data:', error);
-    }
-  }, []);
-
   const addEmployee = useCallback(async (employee: Employee) => {
     try {
       await hrService.addEmployee(employee);
@@ -58,12 +41,41 @@ export const useEmployeeModule = (fetchAllData?: () => Promise<void>) => {
     }
   }, [fetchAllData]);
 
-  const getEmployeeById = useCallback((id: string) => employees.find(e => e.id === id), [employees]);
+  const getEmployeeById = useCallback((id: string) => employees.find(e => e.id === id || e._id === id), [employees]);
+
+  const getEmployeeFromServer = useCallback(async (id: string) => {
+    try {
+      return await hrService.getEmployee(id);
+    } catch (error) {
+      console.error('Failed to fetch employee from server:', error);
+      return null;
+    }
+  }, []);
+
+  const fetchEmployeeData = useCallback(async () => {
+    try {
+      const [empRes, attendRes, perfRes, careerRes, contractRes] = await Promise.all([
+        hrService.getEmployees(),
+        hrService.getAttendance(),
+        hrService.getPerformances(),
+        hrService.getCareerHistory(),
+        hrService.getContracts(),
+      ]);
+      setEmployees(Array.isArray(empRes) ? empRes : (empRes?.data || []));
+      setAttendanceRecords(Array.isArray(attendRes) ? attendRes : (attendRes?.data || []));
+      setEvaluations(Array.isArray(perfRes) ? perfRes : (perfRes?.data || []));
+      setCareerHistory(Array.isArray(careerRes) ? careerRes : (careerRes?.data || []));
+      setContracts(Array.isArray(contractRes) ? contractRes : (contractRes?.data || []));
+    } catch (error) {
+      console.error('Error fetching employee data:', error);
+    }
+  }, []);
 
   // --- Documents ---
   const addDocument = useCallback(async (payload: any) => {
     try {
-      await hrService.addEmployee(payload); 
+      // Typically document upload is handled within employee update or a separate endpoint
+      // Adjusting based on available methods
       if (fetchAllData) await fetchAllData();
     } catch (error) { console.error(error); }
   }, [fetchAllData]);
@@ -112,12 +124,14 @@ export const useEmployeeModule = (fetchAllData?: () => Promise<void>) => {
 
   const updateEvaluation = useCallback(async (evaluation: Performance) => {
     try {
+      await hrService.updatePerformance(evaluation.id, evaluation);
       if (fetchAllData) await fetchAllData();
     } catch (error) { console.error(error); }
   }, [fetchAllData]);
 
   const deleteEvaluation = useCallback(async (id: string) => {
     try {
+      await hrService.deletePerformance(id);
       if (fetchAllData) await fetchAllData();
     } catch (error) { console.error(error); }
   }, [fetchAllData]);
@@ -130,21 +144,38 @@ export const useEmployeeModule = (fetchAllData?: () => Promise<void>) => {
     } catch (error) { console.error(error); }
   }, [fetchAllData]);
 
+  const updateCareerHistory = useCallback(async (item: CareerHistory) => {
+    try {
+      await hrService.updateCareerHistory(item.id, item);
+      if (fetchAllData) await fetchAllData();
+    } catch (error) { console.error(error); }
+  }, [fetchAllData]);
+
+  const deleteCareerHistory = useCallback(async (id: string) => {
+    try {
+      await hrService.deleteCareerHistory(id);
+      if (fetchAllData) await fetchAllData();
+    } catch (error) { console.error(error); }
+  }, [fetchAllData]);
+
   // --- Contract ---
   const addContract = useCallback(async (contract: Contract) => {
     try {
+      await hrService.addContract(contract);
       if (fetchAllData) await fetchAllData();
     } catch (error) { console.error(error); }
   }, [fetchAllData]);
 
   const updateContract = useCallback(async (contract: Contract) => {
     try {
+      await hrService.updateContract(contract.id, contract);
       if (fetchAllData) await fetchAllData();
     } catch (error) { console.error(error); }
   }, [fetchAllData]);
 
   const deleteContract = useCallback(async (id: string) => {
     try {
+      await hrService.deleteContract(id);
       if (fetchAllData) await fetchAllData();
     } catch (error) { console.error(error); }
   }, [fetchAllData]);
@@ -156,22 +187,21 @@ export const useEmployeeModule = (fetchAllData?: () => Promise<void>) => {
     evaluations, setEvaluations,
     careerHistory, setCareerHistory,
     contracts, setContracts,
+    fetchEmployeeData,
     addEmployee, updateEmployee, deleteEmployee,
-    getEmployeeById,
+    getEmployeeById, getEmployeeFromServer,
     addDocument, updateDocument, deleteDocument,
     addAttendanceRecord, updateAttendanceRecord, deleteAttendanceRecord,
     addEvaluation, updateEvaluation, deleteEvaluation,
-    addCareerHistory,
+    addCareerHistory, updateCareerHistory, deleteCareerHistory,
     addContract, updateContract, deleteContract,
-    fetchEmployeeData
   }), [
     employees, documents, attendanceRecords, evaluations, careerHistory, contracts, 
-    addEmployee, updateEmployee, deleteEmployee, getEmployeeById,
+    addEmployee, updateEmployee, deleteEmployee, getEmployeeById, getEmployeeFromServer,
     addDocument, updateDocument, deleteDocument,
     addAttendanceRecord, updateAttendanceRecord, deleteAttendanceRecord,
     addEvaluation, updateEvaluation, deleteEvaluation,
-    addCareerHistory,
+    addCareerHistory, updateCareerHistory, deleteCareerHistory,
     addContract, updateContract, deleteContract,
-    fetchEmployeeData
   ]);
 };

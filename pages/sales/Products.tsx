@@ -335,7 +335,6 @@ export const Products: React.FC = () => {
       </div>
 
       {/* Table */}
-      <Card className="bg-white">
         <Table
           data={filteredProducts}
           columns={columns}
@@ -345,7 +344,6 @@ export const Products: React.FC = () => {
           selectedIds={selectedIds}
           onSelectionChange={setSelectedIds}
         />
-      </Card>
 
       {/* Modal */}
       <ProductModal

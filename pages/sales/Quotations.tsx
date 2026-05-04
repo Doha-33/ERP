@@ -327,24 +327,6 @@ export const Quotations: React.FC = () => {
           ))}
         </select>
 
-        <Input
-          type="date"
-          value={dateFrom}
-          onChange={(e) => setDateFrom(e.target.value)}
-          placeholder={t("from_date")}
-          className="w-36"
-          fullWidth={false}
-        />
-
-        <Input
-          type="date"
-          value={dateTo}
-          onChange={(e) => setDateTo(e.target.value)}
-          placeholder={t("to_date")}
-          className="w-36"
-          fullWidth={false}
-        />
-
         {(statusFilter || customerFilter || dateFrom || dateTo || searchTerm) && (
           <button
             onClick={() => {

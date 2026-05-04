@@ -1,154 +1,339 @@
-
-import React, { useState, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Plus, Search, Filter, Download, Edit2, Trash2 } from 'lucide-react';
-import { Card, Button, Input, Select, Badge } from '../../components/ui/Common';
-import { Table, Column } from '../../components/ui/Table';
-import { PricingRule } from '../../types';
-import { useData } from '../../context/DataContext';
-import { PricingRuleModal } from '../../components/sales/PricingRuleModal';
+import React, { useState, useMemo, useCallback } from "react";
+import { useTranslation } from "react-i18next";
+import { Plus, Search, Edit2, Trash2, Tag, DollarSign, Percent, Filter, X, Users, Package } from "lucide-react";
+import { Card, Button, Input, Badge, ExportDropdown } from "../../components/ui/Common";
+import { Table, Column } from "../../components/ui/Table";
+import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
+import { PricingRuleModal } from "../../components/sales/PricingRuleModal";
+import { useData } from "../../context/DataContext";
+import { PricingRule } from "../../types";
+import { toast } from "sonner";
 
 export const PricingRules: React.FC = () => {
   const { t } = useTranslation();
   const { pricingRules, addPricingRule, updatePricingRule, deletePricingRule } = useData();
-  const [searchTerm, setSearchTerm] = useState('');
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<PricingRule | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const filtered = useMemo(() => {
-    return pricingRules.filter(rule => 
-      rule.ruleName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rule.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rule.product.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [pricingRules, searchTerm]);
-
-  const columns: Column<PricingRule>[] = [
-    { header: t('rule_name'), accessorKey: 'ruleName' },
-    { 
-      header: t('customer'), 
-      render: (item) => (
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-full bg-orange-500 flex items-center justify-center text-[10px] text-white">
-            {item.customer.charAt(0)}
-          </div>
-          <span>{item.customer}</span>
-        </div>
-      )
-    },
-    { 
-      header: t('product'), 
-      render: (item) => (
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-            <div className="w-4 h-4 bg-blue-500 rounded-sm" />
-          </div>
-          <span>{item.product}</span>
-        </div>
-      )
-    },
-    { header: t('condition'), accessorKey: 'condition' },
-    { header: t('price_change'), accessorKey: 'priceChange' },
-    { 
-      header: t('state'), 
-      render: (item) => (
-        <Badge variant={item.status === 'Active' ? 'success' : 'secondary'}>
-          {item.status}
-        </Badge>
-      )
-    },
-    {
-      header: t('actions'),
-      render: (item) => (
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={() => { setEditingRule(item); setIsModalOpen(true); }}
-            className="p-1.5 text-gray-400 hover:text-primary transition-colors border border-gray-200 dark:border-gray-700 rounded-lg"
-          >
-            <Edit2 size={16} />
-          </button>
-          <button 
-            onClick={() => deletePricingRule(item.id)}
-            className="p-1.5 text-gray-400 hover:text-red-500 transition-colors border border-gray-200 dark:border-gray-700 rounded-lg"
-          >
-            <Trash2 size={16} />
-          </button>
-        </div>
-      )
+  const handleSave = async (rule: Partial<PricingRule>) => {
+    try {
+      setIsLoading(true);
+      if (editingRule) {
+        await updatePricingRule({ ...rule, _id: editingRule._id, id: editingRule.id } as PricingRule);
+        toast.success(t("pricing_rule_updated_successfully"));
+      } else {
+        await addPricingRule(rule as PricingRule);
+        toast.success(t("pricing_rule_created_successfully"));
+      }
+      setIsModalOpen(false);
+      setEditingRule(null);
+    } catch (error) {
+      console.error("Error saving pricing rule:", error);
+      toast.error(t("failed_to_save_pricing_rule"));
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  const handleEdit = useCallback((rule: PricingRule) => {
+    setEditingRule(rule);
+    setIsModalOpen(true);
+  }, []);
+
+  const handleDelete = useCallback((id: string) => {
+    setDeleteId(id);
+  }, []);
+
+  const confirmDelete = useCallback(async () => {
+    if (deleteId) {
+      try {
+        await deletePricingRule(deleteId);
+        toast.success(t("pricing_rule_deleted_successfully"));
+        setDeleteId(null);
+        setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+      } catch (error) {
+        toast.error(t("failed_to_delete_pricing_rule"));
+      }
+    }
+  }, [deleteId, deletePricingRule, t]);
+
+  const handleBulkDelete = async () => {
+    try {
+      setIsLoading(true);
+      await Promise.all(selectedIds.map(id => deletePricingRule(id)));
+      toast.success(t("pricing_rules_deleted_successfully", { count: selectedIds.length }));
+      setSelectedIds([]);
+      setIsBulkConfirmOpen(false);
+    } catch (error) {
+      console.error("Bulk delete failed", error);
+      toast.error(t("failed_to_delete_pricing_rules"));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    return (
+      <Badge variant={status === "Active" ? "success" : "danger"}>
+        {status === "Active" ? t("active") : t("inactive")}
+      </Badge>
+    );
+  };
+
+  // Apply filters
+  const filteredRules = useMemo(() => {
+    return pricingRules.filter(r => {
+      const matchesSearch = 
+        r.ruleName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        r.customer?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        r.product?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesStatus = !statusFilter || r.status === statusFilter;
+      
+      return matchesSearch && matchesStatus;
+    });
+  }, [pricingRules, searchTerm, statusFilter]);
+
+  // Statistics
+  const totalRules = filteredRules.length;
+  const activeRules = filteredRules.filter(r => r.status === "ACTIVE").length;
+  const inactiveRules = filteredRules.filter(r => r.status === "INACTIVE").length;
+
+  const statusOptions = [
+    { value: "", label: t("all_statuses") },
+    { value: "Active", label: t("active") },
+    { value: "Inactive", label: t("inactive") },
   ];
+
+  const columns: Column<PricingRule>[] = useMemo(
+    () => [
+      {
+        header: t("rule_info"),
+        render: (r) => (
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center">
+              <Tag size={18} className="text-indigo-600" />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-medium text-gray-900">{r.ruleName}</span>
+              <span className="text-xs text-gray-500">{r.condition}</span>
+            </div>
+          </div>
+        )
+      },
+      {
+        header: t("applies_to"),
+        render: (r) => (
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-1.5">
+              <Package size={14} className="text-gray-400" />
+              <span className="text-sm text-gray-600">{r.product || t("all_products")}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Users size={14} className="text-gray-400" />
+              <span className="text-sm text-gray-600">{r.customer || t("all_customers")}</span>
+            </div>
+          </div>
+        )
+      },
+      {
+        header: t("price_change"),
+        render: (r) => (
+          <div className="flex items-center gap-1.5">
+            <Percent size={14} className="text-green-600" />
+            <span className="text-sm font-medium text-green-600">{r.priceChange}</span>
+          </div>
+        )
+      },
+      {
+        header: t("status"),
+        render: (r) => getStatusBadge(r.status)
+      },
+      {
+        header: t("actions"),
+        className: "text-center",
+        render: (r) => (
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={() => handleEdit(r)}
+              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+              title={t("edit")}
+            >
+              <Edit2 size={16} />
+            </button>
+            <button
+              onClick={() => handleDelete(r._id || r.id)}
+              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+              title={t("delete")}
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
+        )
+      }
+    ],
+    [t, handleEdit, handleDelete]
+  );
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('pricing_rules')}</h1>
-          <p className="text-gray-500 dark:text-gray-400">{t('manage_your_pricing_rules')}</p>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {t("pricing_rules")}
+          </h1>
+          <p className="text-gray-500 mt-1">
+            {t("manage_your_pricing_rules")}
+          </p>
         </div>
-        <div className="flex items-center gap-3">
-          <Button variant="secondary" className="flex items-center gap-2">
-            <Download size={18} />
-            {t('export')}
-          </Button>
-          <Button onClick={() => { setEditingRule(null); setIsModalOpen(true); }} className="flex items-center gap-2">
+        <div className="flex gap-3">
+          {selectedIds.length > 0 && (
+            <Button
+              variant="danger"
+              onClick={() => setIsBulkConfirmOpen(true)}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              <Trash2 size={18} />
+              {t("delete_selected")} ({selectedIds.length})
+            </Button>
+          )}
+          <ExportDropdown data={filteredRules} filename="pricing-rules" />
+          <Button
+            variant="primary"
+            onClick={() => {
+              setEditingRule(null);
+              setIsModalOpen(true);
+            }}
+            className="bg-indigo-600 hover:bg-indigo-700"
+          >
             <Plus size={18} />
-            {t('add_pricing_rules')}
+            {t("add_pricing_rule")}
           </Button>
         </div>
       </div>
 
-      <Card className="p-0 overflow-hidden">
-        <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-4 flex-1 min-w-[300px]">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <Input 
-                placeholder={t('search')} 
-                className="pl-10" 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center">
+              <Tag size={18} className="text-indigo-600" />
             </div>
-            <div className="flex items-center gap-2">
-              <Select 
-                options={[
-                  { value: 'all', label: t('product') },
-                  { value: 'laptop', label: 'Laptop' },
-                ]}
-                className="w-32"
-              />
-              <Select 
-                options={[
-                  { value: 'all', label: t('customer') },
-                  { value: 'mohamed', label: 'Mohamed' },
-                ]}
-                className="w-32"
-              />
+            <div>
+              <p className="text-xs text-gray-500">{t("total_rules")}</p>
+              <p className="text-xl font-bold text-gray-900">{totalRules}</p>
             </div>
           </div>
         </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center">
+              <Tag size={18} className="text-green-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">{t("active")}</p>
+              <p className="text-xl font-bold text-green-600">{activeRules}</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center">
+              <Tag size={18} className="text-red-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">{t("inactive")}</p>
+              <p className="text-xl font-bold text-red-600">{inactiveRules}</p>
+            </div>
+          </div>
+        </div>
+      </div>
 
-        <Table 
-          data={filtered}
+      {/* Filters */}
+      <div className="flex flex-wrap gap-4 items-center">
+        <div className="relative max-w-md">
+          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder={t("search_pricing_rules")}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          {statusOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+
+        {(statusFilter || searchTerm) && (
+          <button
+            onClick={() => {
+              setStatusFilter("");
+              setSearchTerm("");
+            }}
+            className="text-sm text-red-600 hover:text-red-700"
+          >
+            {t("clear_filters")}
+          </button>
+        )}
+      </div>
+
+      {/* Table */}
+        <Table
+          data={filteredRules}
           columns={columns}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item._id || item.id}
+          isLoading={isLoading}
           selectable
           selectedIds={selectedIds}
           onSelectionChange={setSelectedIds}
-          className="border-none"
         />
-      </Card>
 
-      <PricingRuleModal 
+      {/* Modal */}
+      <PricingRuleModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSave={(rule) => {
-          if (editingRule) updatePricingRule(rule);
-          else addPricingRule(rule);
+        onClose={() => {
           setIsModalOpen(false);
+          setEditingRule(null);
         }}
+        onSave={handleSave}
         ruleToEdit={editingRule}
+        isLoading={isLoading}
+      />
+
+      {/* Delete Confirmation */}
+      <ConfirmationModal
+        isOpen={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        onConfirm={confirmDelete}
+        title={t("delete_pricing_rule")}
+        message={t("are_you_sure_delete_pricing_rule")}
+      />
+
+      {/* Bulk Delete Confirmation */}
+      <ConfirmationModal
+        isOpen={isBulkConfirmOpen}
+        onClose={() => setIsBulkConfirmOpen(false)}
+        onConfirm={handleBulkDelete}
+        title={t("delete_pricing_rules")}
+        message={t("are_you_sure_delete_pricing_rules", { count: selectedIds.length })}
       />
     </div>
   );

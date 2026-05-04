@@ -1,75 +1,90 @@
 import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Edit2, Building2, Phone, Mail, MapPin, CreditCard, Users } from "lucide-react";
+import { Plus, Edit2, Building2, MapPin, User, Phone, Hash, Layers } from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
-import { Button, Input, Select, TextArea } from "../../components/ui/Common";
-import { Supplier } from "../../types";
+import { Button, Input, Select } from "../../components/ui/Common";
+import { Warehouse } from "../../types";
 import { useData } from "../../context/DataContext";
 
-interface SupplierModalProps {
+interface WarehouseModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: Partial<Supplier>) => Promise<void>;
-  supplierToEdit?: Supplier | null;
+  onSave: (data: Partial<Warehouse>) => Promise<void>;
+  warehouseToEdit?: Warehouse | null;
   isLoading?: boolean;
 }
 
-export const SupplierModal: React.FC<SupplierModalProps> = ({
+export const WarehouseModal: React.FC<WarehouseModalProps> = ({
   isOpen,
   onClose,
   onSave,
-  supplierToEdit,
+  warehouseToEdit,
   isLoading = false,
 }) => {
   const { t } = useTranslation();
   const { companies, branches } = useData();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
-    supplierCode: "",
-    supplierName: "",
+    code: "",
+    warehouseName: "",
+    type: "MAIN_WAREHOUSE",
     companyId: "",
     branchId: "",
-    email: "",
+    managerName: "",
     phoneNumber: "",
-    address: "",
-    paymentTerms: "",
-    companyName: "",
-    status: "ACTIVE",
+    location: "",
+    state: "ACTIVE",
   });
 
   useEffect(() => {
-    if (supplierToEdit && isOpen) {
+    if (warehouseToEdit && isOpen) {
+      const companyId = typeof warehouseToEdit.companyId === "object" 
+        ? (warehouseToEdit.companyId as any)?._id 
+        : warehouseToEdit.companyId;
+      const branchId = typeof warehouseToEdit.branchId === "object" 
+        ? (warehouseToEdit.branchId as any)?._id 
+        : warehouseToEdit.branchId;
+
       setFormData({
-        supplierCode: supplierToEdit.supplierCode || "",
-        supplierName: supplierToEdit.supplierName || "",
-        companyId: typeof supplierToEdit.companyId === "object" 
-          ? (supplierToEdit.companyId as any)._id 
-          : supplierToEdit.companyId || "",
-        branchId: typeof supplierToEdit.branchId === "object" 
-          ? (supplierToEdit.branchId as any)._id 
-          : supplierToEdit.branchId || "",
-        email: supplierToEdit.email || "",
-        phoneNumber: supplierToEdit.phoneNumber || "",
-        address: supplierToEdit.address || "",
-        paymentTerms: supplierToEdit.paymentTerms || "",
-        companyName: supplierToEdit.companyName || "",
-        status: supplierToEdit.status || "ACTIVE",
+        code: warehouseToEdit.code || "",
+        warehouseName: warehouseToEdit.warehouseName || "",
+        type: warehouseToEdit.type || "MAIN_WAREHOUSE",
+        companyId: companyId || "",
+        branchId: branchId || "",
+        managerName: warehouseToEdit.managerName || "",
+        phoneNumber: warehouseToEdit.phoneNumber || "",
+        location: warehouseToEdit.location || "",
+        state: warehouseToEdit.state || "ACTIVE",
       });
-    } else if (!supplierToEdit && isOpen) {
+    } else if (!warehouseToEdit && isOpen) {
       setFormData({
-        supplierCode: "",
-        supplierName: "",
+        code: "",
+        warehouseName: "",
+        type: "MAIN_WAREHOUSE",
         companyId: "",
         branchId: "",
-        email: "",
+        managerName: "",
         phoneNumber: "",
-        address: "",
-        paymentTerms: "",
-        companyName: "",
-        status: "ACTIVE",
+        location: "",
+        state: "ACTIVE",
       });
     }
-  }, [supplierToEdit, isOpen]);
+  }, [warehouseToEdit, isOpen]);
+
+  const typeOptions = [
+    { value: "MAIN_WAREHOUSE", label: t("main_warehouse") },
+    { value: "SUB_WAREHOUSE", label: t("sub_warehouse") },
+    { value: "STORE", label: t("store") },
+    { value: "DISTRIBUTION_CENTER", label: t("distribution_center") },
+    { value: "COLD_STORAGE", label: t("cold_storage") },
+    { value: "RAW_MATERIALS", label: t("raw_materials") },
+    { value: "FINISHED_GOODS", label: t("finished_goods") },
+  ];
+
+  const statusOptions = [
+    { value: "ACTIVE", label: t("active") },
+    { value: "INACTIVE", label: t("inactive") },
+  ];
 
   const companyOptions = companies.map(c => ({ 
     value: c._id || c.id, 
@@ -80,11 +95,6 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
     value: b._id || b.id, 
     label: b.name 
   }));
-
-  const statusOptions = [
-    { value: "ACTIVE", label: t("active") },
-    { value: "INACTIVE", label: t("inactive") },
-  ];
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -110,37 +120,51 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
       onClose={onClose}
       title={
         <div className="flex items-center gap-2">
-          {supplierToEdit ? <Edit2 size={20} /> : <Plus size={20} />}
-          {supplierToEdit ? t("edit_supplier") : t("add_supplier")}
+          {warehouseToEdit ? <Edit2 size={20} /> : <Plus size={20} />}
+          {warehouseToEdit ? t("edit_warehouse") : t("add_warehouse")}
         </div>
       }
       size="4xl"
     >
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-          {/* Supplier Code */}
+          {/* Warehouse Code */}
           <div className="space-y-1">
             <label className="text-sm font-medium text-gray-700">
-              {t("supplier_code")} <span className="text-red-500">*</span>
+              {t("warehouse_code")} <span className="text-red-500">*</span>
             </label>
             <Input
-              value={formData.supplierCode}
-              onChange={(e) => handleChange("supplierCode", e.target.value)}
-              placeholder="SUP-001"
+              value={formData.code}
+              onChange={(e) => handleChange("code", e.target.value)}
+              placeholder="WH-001"
               required
               fullWidth
             />
           </div>
 
-          {/* Supplier Name */}
+          {/* Warehouse Name */}
           <div className="space-y-1">
             <label className="text-sm font-medium text-gray-700">
-              {t("supplier_name")} <span className="text-red-500">*</span>
+              {t("warehouse_name")} <span className="text-red-500">*</span>
             </label>
             <Input
-              value={formData.supplierName}
-              onChange={(e) => handleChange("supplierName", e.target.value)}
-              placeholder={t("enter_supplier_name")}
+              value={formData.warehouseName}
+              onChange={(e) => handleChange("warehouseName", e.target.value)}
+              placeholder={t("enter_warehouse_name")}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Type */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("type")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.type}
+              onChange={(e) => handleChange("type", e.target.value)}
+              options={typeOptions}
               required
               fullWidth
             />
@@ -176,85 +200,58 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
             />
           </div>
 
-          {/* Email */}
+          {/* Manager Name */}
           <div className="space-y-1">
             <label className="text-sm font-medium text-gray-700">
-              {t("email")} <span className="text-red-500">*</span>
+              {t("manager")}
             </label>
             <Input
-              type="email"
-              value={formData.email}
-              onChange={(e) => handleChange("email", e.target.value)}
-              placeholder="supplier@company.com"
-              required
+              value={formData.managerName}
+              onChange={(e) => handleChange("managerName", e.target.value)}
+              placeholder={t("enter_manager_name")}
               fullWidth
             />
           </div>
 
-          {/* Phone */}
+          {/* Phone Number */}
           <div className="space-y-1">
             <label className="text-sm font-medium text-gray-700">
-              {t("phone")} <span className="text-red-500">*</span>
+              {t("phone_number")}
             </label>
             <Input
               value={formData.phoneNumber}
               onChange={(e) => handleChange("phoneNumber", e.target.value)}
               placeholder="+20123456789"
-              required
               fullWidth
             />
           </div>
 
-          {/* Address */}
-          <div className="col-span-2 space-y-1">
-            <label className="text-sm font-medium text-gray-700">
-              {t("address")} <span className="text-red-500">*</span>
-            </label>
-            <TextArea
-              value={formData.address}
-              onChange={(e) => handleChange("address", e.target.value)}
-              placeholder={t("enter_address")}
-              rows={2}
-              required
-              fullWidth
-            />
-          </div>
-
-          {/* Payment Terms */}
+          {/* Location */}
           <div className="space-y-1">
             <label className="text-sm font-medium text-gray-700">
-              {t("payment_terms")}
+              {t("location")}
             </label>
-            <Select
-              value={formData.paymentTerms}
-              onChange={(e) => handleChange("paymentTerms", e.target.value)}
-              options={[
-                { value: "", label: t("select_payment_terms") },
-                { value: "Cash", label: "Cash" },
-                { value: "Net 15", label: "Net 15" },
-                { value: "Net 30", label: "Net 30" },
-                { value: "Net 45", label: "Net 45" },
-                { value: "Net 60", label: "Net 60" },
-              ]}
+            <Input
+              value={formData.location}
+              onChange={(e) => handleChange("location", e.target.value)}
+              placeholder={t("enter_location")}
               fullWidth
             />
           </div>
 
-          {/* Status (only for edit) */}
-          {supplierToEdit && (
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">
-                {t("status")} <span className="text-red-500">*</span>
-              </label>
-              <Select
-                value={formData.status}
-                onChange={(e) => handleChange("status", e.target.value)}
-                options={statusOptions}
-                required
-                fullWidth
-              />
-            </div>
-          )}
+          {/* Status */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("status")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.state}
+              onChange={(e) => handleChange("state", e.target.value)}
+              options={statusOptions}
+              required
+              fullWidth
+            />
+          </div>
         </div>
 
         <div className="flex justify-end gap-3 mt-8">
@@ -268,7 +265,7 @@ export const SupplierModal: React.FC<SupplierModalProps> = ({
             isLoading={isSubmitting || isLoading}
             disabled={isSubmitting || isLoading}
           >
-            {supplierToEdit ? t("save") : t("add_supplier")}
+            {warehouseToEdit ? t("save") : t("add_warehouse")}
           </Button>
         </div>
       </form>

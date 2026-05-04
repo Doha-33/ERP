@@ -1,26 +1,70 @@
-
-import React, { useState, useMemo, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Plus, ChevronDown, Edit2, Trash2, Search, Filter } from 'lucide-react';
-import { Card, Button, Input, ExportDropdown } from '../../components/ui/Common';
-import { Table, Column } from '../../components/ui/Table';
-import { useData } from '../../context/DataContext';
-import { Company } from '../../types';
-import { CompanyModal } from '../../components/organization/CompanyModal';
-import { ConfirmationModal } from '../../components/ui/ConfirmationModal';
+import React, { useState, useMemo, useCallback } from "react";
+import { useTranslation } from "react-i18next";
+import {
+  Plus,
+  Search,
+  Edit2,
+  Trash2,
+  Building2,
+  Mail,
+  CreditCard,
+  Hash,
+  Filter,
+  X,
+  ChevronDown,
+} from "lucide-react";
+import {
+  Card,
+  Button,
+  Input,
+  Badge,
+  ExportDropdown,
+} from "../../components/ui/Common";
+import { Table, Column } from "../../components/ui/Table";
+import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
+import { CompanyModal } from "../../components/organization/CompanyModal";
+import { useData } from "../../context/DataContext";
+import { Company } from "../../types";
+import { toast } from "sonner";
 
 export const CompanyPage: React.FC = () => {
   const { t } = useTranslation();
   const { companies, addCompany, updateCompany, deleteCompany } = useData();
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCompanyName, setSelectedCompanyName] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSave = (company: Company) => {
-    if (editingCompany) updateCompany(company);
-    else addCompany(company);
+  const handleSave = async (company: Partial<Company>) => {
+    try {
+      setIsLoading(true);
+      if (editingCompany) {
+        // تأكد من أن لدينا _id صالح
+        const companyId = editingCompany._id;
+        if (!companyId) {
+          toast.error(t("invalid_company_id"));
+          return;
+        }
+        console.log("Updating company with ID:", companyId);
+        await updateCompany({ ...company, _id: companyId } as Company);
+        toast.success(t("company_updated_successfully"));
+      } else {
+        await addCompany(company as Company);
+        toast.success(t("company_created_successfully"));
+      }
+      setIsModalOpen(false);
+      setEditingCompany(null);
+      // إعادة تحميل البيانات بعد التحديث
+    } catch (error) {
+      console.error("Error saving company:", error);
+      toast.error(t("failed_to_save_company"));
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleEdit = useCallback((company: Company) => {
@@ -32,125 +76,247 @@ export const CompanyPage: React.FC = () => {
     setDeleteId(id);
   }, []);
 
-  const confirmDelete = useCallback(() => {
+  const confirmDelete = useCallback(async () => {
     if (deleteId) {
-      deleteCompany(deleteId);
-      setDeleteId(null);
+      try {
+        await deleteCompany(deleteId);
+        toast.success(t("company_deleted_successfully"));
+        setDeleteId(null);
+        setSelectedIds((prev) => prev.filter((sid) => sid !== deleteId));
+      } catch (error) {
+        toast.error(t("failed_to_delete_company"));
+      }
     }
-  }, [deleteId, deleteCompany]);
+  }, [deleteId, deleteCompany, t]);
 
-  const uniqueCompanyNames = useMemo(() => {
-    const names = companies.map(c => c.name).filter(Boolean);
-    return Array.from(new Set(names)).sort();
-  }, [companies]);
+  const handleBulkDelete = async () => {
+    try {
+      setIsLoading(true);
+      await Promise.all(selectedIds.map((id) => deleteCompany(id)));
+      toast.success(
+        t("companies_deleted_successfully", { count: selectedIds.length }),
+      );
+      setSelectedIds([]);
+      setIsBulkConfirmOpen(false);
+    } catch (error) {
+      console.error("Bulk delete failed", error);
+      toast.error(t("failed_to_delete_companies"));
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  const filtered = useMemo(() => {
-    return companies.filter(c => {
-      const matchesSearch = 
-        c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.taxNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.email.toLowerCase().includes(searchTerm.toLowerCase());
-      
-      const matchesFilter = selectedCompanyName === '' || c.name === selectedCompanyName;
-      
-      return matchesSearch && matchesFilter;
+  // Apply filters
+  const filteredCompanies = useMemo(() => {
+    return companies.filter((c) => {
+      const matchesSearch =
+        c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.taxNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.email?.toLowerCase().includes(searchTerm.toLowerCase());
+
+      return matchesSearch;
     });
-  }, [companies, searchTerm, selectedCompanyName]);
+  }, [companies, searchTerm]);
 
-  const columns: Column<Company>[] = useMemo(() => [
-    { header: t('company_name'), accessorKey: 'name', className: 'text-gray-700 dark:text-gray-200 font-bold' },
-    { header: t('tax_number'), accessorKey: 'taxNumber', className: 'text-gray-500 font-mono' },
-    { header: t('email'), accessorKey: 'email', className: 'text-gray-500' },
-    { header: t('default_currency'), accessorKey: 'defaultCurrency', className: 'text-gray-500 uppercase font-medium' },
-    {
-      header: t('actions'),
-      className: 'text-center',
-      render: (c) => (
-        <div className="flex items-center justify-center gap-2">
-           <button onClick={() => handleEdit(c)} className="p-1.5 text-gray-500 hover:text-primary hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded border border-gray-200 dark:border-gray-700 transition-colors">
-              <Edit2 size={14} />
-           </button>
-           <button onClick={() => handleDelete(c.id)} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded border border-gray-200 dark:border-gray-700 transition-colors">
-              <Trash2 size={14} />
-           </button>
-        </div>
-      )
-    }
-  ], [t, handleEdit, handleDelete]);
+  // Statistics
+  const totalCompanies = filteredCompanies.length;
+
+  const columns: Column<Company>[] = useMemo(
+    () => [
+      {
+        header: t("company_info"),
+        render: (c) => (
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center">
+              <Building2 size={18} className="text-indigo-600" />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-medium text-gray-900">{c.name}</span>
+              <span className="text-xs text-gray-500">{c.taxNumber}</span>
+            </div>
+          </div>
+        ),
+      },
+      {
+        header: t("contact"),
+        render: (c) => (
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-1.5">
+              <Mail size={14} className="text-gray-400" />
+              <span className="text-sm text-gray-600">{c.email}</span>
+            </div>
+            {(c as any).phoneNumber && (
+              <div className="flex items-center gap-1.5">
+                <Phone size={14} className="text-gray-400" />
+                <span className="text-sm text-gray-600">
+                  {(c as any).phoneNumber}
+                </span>
+              </div>
+            )}
+          </div>
+        ),
+      },
+      {
+        header: t("currency"),
+        render: (c) => (
+          <div className="flex items-center gap-1.5">
+            <CreditCard size={14} className="text-gray-400" />
+            <span className="text-sm font-medium text-gray-700 uppercase">
+              {c.defaultCurrency}
+            </span>
+          </div>
+        ),
+      },
+      {
+        header: t("actions"),
+        className: "text-center",
+        render: (c) => (
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={() => handleEdit(c)}
+              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+              title={t("edit")}
+            >
+              <Edit2 size={16} />
+            </button>
+            <button
+              onClick={() => handleDelete(c._id || c.id)}
+              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+              title={t("delete")}
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
+        ),
+      },
+    ],
+    [t, handleEdit, handleDelete],
+  );
 
   return (
     <div className="space-y-6">
-       {/* Header */}
-       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-           <h1 className="text-2xl font-bold dark:text-white">{t('company_page_title')}</h1>
-           <p className="text-gray-500 dark:text-gray-400 text-sm">{t('manage_company')}</p>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {t("company_page_title")}
+          </h1>
+          <p className="text-gray-500 mt-1">{t("manage_company")}</p>
         </div>
         <div className="flex gap-3">
-           <ExportDropdown data={filtered} filename="companies_report" />
-           <Button onClick={() => { setEditingCompany(null); setIsModalOpen(true); }} className="bg-[#4361EE] hover:bg-blue-700">
-              <Plus size={18} /> {t('add_company')}
-           </Button>
+          {selectedIds.length > 0 && (
+            <Button
+              variant="danger"
+              onClick={() => setIsBulkConfirmOpen(true)}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              <Trash2 size={18} />
+              {t("delete_selected")} ({selectedIds.length})
+            </Button>
+          )}
+          <ExportDropdown data={filteredCompanies} filename="companies" />
+          <Button
+            variant="primary"
+            onClick={() => {
+              setEditingCompany(null);
+              setIsModalOpen(true);
+            }}
+            className="bg-indigo-600 hover:bg-indigo-700"
+          >
+            <Plus size={18} />
+            {t("add_company")}
+          </Button>
         </div>
       </div>
 
-        {/* Toolbar */}
-        <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
-           <div className="w-full md:w-80 relative">
-              <Input 
-                placeholder="Search name, tax ID or email..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                icon={<Search size={18} />}
-                className="bg-gray-50 dark:bg-gray-800/50"
-              />
-           </div>
-           
-           <div className="flex gap-3 w-full md:w-auto">
-              <div className="relative flex-1 md:w-56">
-                 <select 
-                    value={selectedCompanyName}
-                    onChange={(e) => setSelectedCompanyName(e.target.value)}
-                    className="w-full appearance-none bg-white dark:bg-dark-surface border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 py-2.5 px-10 pr-10 rounded-lg text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all cursor-pointer"
-                 >
-                    <option value="">{t('all')} {t('company_name')}</option>
-                    {uniqueCompanyNames.map(name => (
-                        <option key={name} value={name}>{name}</option>
-                    ))}
-                 </select>
-                 <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-gray-400">
-                    <Filter size={16} />
-                 </div>
-                 <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-400">
-                    <ChevronDown size={14} />
-                 </div>
-              </div>
-           </div>
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-1 gap-4">
+        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center">
+              <Building2 size={18} className="text-indigo-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">{t("total_companies")}</p>
+              <p className="text-xl font-bold text-gray-900">
+                {totalCompanies}
+              </p>
+            </div>
+          </div>
         </div>
-        
-        <Table 
-           data={filtered} 
-           columns={columns} 
-           keyExtractor={c => c.id} 
-           selectable 
-           minWidth="min-w-[1000px]" 
-           emptyMessage="No companies found matching your filters"
-        />
+      </div>
 
-      <CompanyModal 
-         isOpen={isModalOpen}
-         onClose={() => setIsModalOpen(false)}
-         onSave={handleSave}
-         companyToEdit={editingCompany}
+      {/* Filters */}
+      <div className="flex flex-wrap gap-4 items-center">
+        <div className="relative max-w-md">
+          <Search
+            size={18}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+          />
+          <input
+            type="text"
+            placeholder={t("search_companies")}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+
+        {searchTerm && (
+          <button
+            onClick={() => setSearchTerm("")}
+            className="text-sm text-red-600 hover:text-red-700"
+          >
+            {t("clear_filters")}
+          </button>
+        )}
+      </div>
+
+      {/* Table */}
+      <Table
+        data={filteredCompanies}
+        columns={columns}
+        keyExtractor={(item) => item._id || item.id}
+        isLoading={isLoading}
+        selectable
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
       />
 
+      {/* Modal */}
+      <CompanyModal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingCompany(null);
+        }}
+        onSave={handleSave}
+        companyToEdit={editingCompany}
+        isLoading={isLoading}
+      />
+
+      {/* Delete Confirmation */}
       <ConfirmationModal
-         isOpen={!!deleteId}
-         onClose={() => setDeleteId(null)}
-         onConfirm={confirmDelete}
-         title={t('confirm_delete')}
-         message={t('are_you_sure_delete')}
+        isOpen={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        onConfirm={confirmDelete}
+        title={t("delete_company")}
+        message={t("are_you_sure_delete_company")}
+      />
+
+      {/* Bulk Delete Confirmation */}
+      <ConfirmationModal
+        isOpen={isBulkConfirmOpen}
+        onClose={() => setIsBulkConfirmOpen(false)}
+        onConfirm={handleBulkDelete}
+        title={t("delete_companies")}
+        message={t("are_you_sure_delete_companies", {
+          count: selectedIds.length,
+        })}
       />
     </div>
   );
 };
+
+// Add missing import
+import { Phone } from "lucide-react";

@@ -1,29 +1,45 @@
-
-import React, { useState, useMemo, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Plus, ChevronDown, Edit2, Trash2, Search, Filter, X } from 'lucide-react';
-import { Card, Button, Input, ExportDropdown } from '../../components/ui/Common';
-import { Table, Column } from '../../components/ui/Table';
-import { useData } from '../../context/DataContext';
-import { Insurance } from '../../types';
-import { InsuranceModal } from '../../components/hr/InsuranceModal';
-import { ConfirmationModal } from '../../components/ui/ConfirmationModal';
+import React, { useState, useMemo, useCallback } from "react";
+import { useTranslation } from "react-i18next";
+import { Plus, Search, Edit2, Trash2, Shield, Building2, Calendar, DollarSign, Filter, X, ChevronDown, Users, Hash } from "lucide-react";
+import { Card, Button, Input, Badge, ExportDropdown } from "../../components/ui/Common";
+import { Table, Column } from "../../components/ui/Table";
+import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
+import { InsuranceModal } from "../../components/hr/InsuranceModal";
+import { useData } from "../../context/DataContext";
+import { Insurance } from "../../types";
+import { toast } from "sonner";
 
 export const InsurancePage: React.FC = () => {
   const { t } = useTranslation();
-  const { insurancePolicies, addInsurance, updateInsurance, deleteInsurance } = useData();
+  const { insurancePolicies, addInsurance, updateInsurance, deleteInsurance, employees } = useData();
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingInsurance, setEditingInsurance] = useState<Insurance | null>(null);
-  
-  // Search and Filter States
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedEmployee, setSelectedEmployee] = useState('');
-  
+  const [searchTerm, setSearchTerm] = useState("");
+  const [employeeFilter, setEmployeeFilter] = useState("");
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSave = (insurance: Insurance) => {
-    if (editingInsurance) updateInsurance(insurance);
-    else addInsurance(insurance);
+  const handleSave = async (insurance: Partial<Insurance>) => {
+    try {
+      setIsLoading(true);
+      if (editingInsurance) {
+        await updateInsurance({ ...insurance, _id: editingInsurance._id, id: editingInsurance.id } as Insurance);
+        toast.success(t("insurance_updated_successfully"));
+      } else {
+        await addInsurance(insurance as Insurance);
+        toast.success(t("insurance_created_successfully"));
+      }
+      setIsModalOpen(false);
+      setEditingInsurance(null);
+    } catch (error) {
+      console.error("Error saving insurance:", error);
+      toast.error(t("failed_to_save_insurance"));
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleEdit = useCallback((insurance: Insurance) => {
@@ -35,147 +51,358 @@ export const InsurancePage: React.FC = () => {
     setDeleteId(id);
   }, []);
 
-  const confirmDelete = useCallback(() => {
+  const confirmDelete = useCallback(async () => {
     if (deleteId) {
-      deleteInsurance(deleteId);
-      setDeleteId(null);
+      try {
+        await deleteInsurance(deleteId);
+        toast.success(t("insurance_deleted_successfully"));
+        setDeleteId(null);
+        setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+      } catch (error) {
+        toast.error(t("failed_to_delete_insurance"));
+      }
     }
-  }, [deleteId, deleteInsurance]);
+  }, [deleteId, deleteInsurance, t]);
 
-  // Extract unique employee names for the dropdown
-  const uniqueEmployeeNames = useMemo(() => {
-    const names = insurancePolicies.map(i => i.employeeName).filter(Boolean);
-    return Array.from(new Set(names)).sort();
-  }, [insurancePolicies]);
+  const handleBulkDelete = async () => {
+    try {
+      setIsLoading(true);
+      await Promise.all(selectedIds.map(id => deleteInsurance(id)));
+      toast.success(t("insurances_deleted_successfully", { count: selectedIds.length }));
+      setSelectedIds([]);
+      setIsBulkConfirmOpen(false);
+    } catch (error) {
+      console.error("Bulk delete failed", error);
+      toast.error(t("failed_to_delete_insurances"));
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-  // Combined filtration logic
-  const filtered = useMemo(() => {
+  // Helper functions
+  const getEmployeeName = (insurance: Insurance): string => {
+    if (typeof insurance.employeeInfo === "object" && insurance.employeeInfo !== null) {
+      return (insurance.employeeInfo as any)?.fullName || "-";
+    }
+    const employee = employees.find(e => (e._id || e.id) === insurance.employeeInfo);
+    return employee?.fullName || insurance.employeeName || "-";
+  };
+
+  const getEmployeeCode = (insurance: Insurance): string => {
+    if (typeof insurance.employeeInfo === "object" && insurance.employeeInfo !== null) {
+      return (insurance.employeeInfo as any)?.employeeCode || "-";
+    }
+    const employee = employees.find(e => (e._id || e.id) === insurance.employeeInfo);
+    return employee?.employeeCode || "-";
+  };
+
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return "-";
+    return new Date(dateStr).toLocaleDateString();
+  };
+
+  const isExpired = (dateStr: string) => {
+    if (!dateStr) return false;
+    return new Date(dateStr) < new Date();
+  };
+
+  // Apply filters
+  const filteredPolicies = useMemo(() => {
     return insurancePolicies.filter(i => {
-      const matchesSearch = (i.employeeName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           (i.policyNumber || '').toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesSelect = selectedEmployee === '' || i.employeeName === selectedEmployee;
-      return matchesSearch && matchesSelect;
+      const employeeName = getEmployeeName(i).toLowerCase();
+      const matchesSearch = 
+        employeeName.includes(searchTerm.toLowerCase()) ||
+        i.policyNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        i.insuranceCompany?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesEmployee = !employeeFilter || 
+        (typeof i.employeeInfo === "object" ? (i.employeeInfo as any)._id : i.employeeInfo) === employeeFilter;
+      
+      return matchesSearch && matchesEmployee;
     });
-  }, [insurancePolicies, searchTerm, selectedEmployee]);
+  }, [insurancePolicies, searchTerm, employeeFilter]);
 
-  const columns: Column<Insurance>[] = useMemo(() => [
-    { 
-      header: t('employee_name'), 
-      render: (i) => (
-         <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-primary font-bold text-xs uppercase">
-               {(i.employeeName || 'U')[0]}
+  // Statistics
+  const totalPolicies = filteredPolicies.length;
+  const totalCost = filteredPolicies.reduce((sum, i) => sum + (i.totalCost || 0), 0);
+  const expiredPolicies = filteredPolicies.filter(i => isExpired(i.coverageExpiryDate || i.coverageExpiry)).length;
+
+  const employeeOptions = [
+    { value: "", label: t("all_employees") },
+    ...employees.map(e => ({ 
+      value: e._id || e.id, 
+      label: e.fullName 
+    }))
+  ];
+
+  const columns: Column<Insurance>[] = useMemo(
+    () => [
+      {
+        header: t("employee"),
+        render: (i) => (
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+              <Shield size={18} className="text-blue-600" />
             </div>
-            <span className="font-bold text-gray-900 dark:text-white">{i.employeeName}</span>
-         </div>
-      )
-    },
-    { header: t('policy_number'), accessorKey: 'policyNumber', className: 'text-gray-500 font-mono text-xs' },
-    { header: t('insurance_company'), accessorKey: 'insuranceCompany', className: 'text-gray-500 font-medium' },
-    { header: t('plan_name'), accessorKey: 'planName', className: 'text-gray-500' },
-    { header: t('policy_start_date'), accessorKey: 'startDate', className: 'text-gray-500 text-xs' },
-    { header: t('policy_end_date'), accessorKey: 'endDate', className: 'text-gray-500 text-xs' },
-    { header: t('total_cost'), accessorKey: 'totalCost', className: 'text-primary font-bold' },
-    { header: t('policy_plan'), accessorKey: 'policyPlan', className: 'text-gray-500' },
-    { header: t('family_members'), accessorKey: 'familyMembers', className: 'text-gray-500 text-center' },
-    { header: t('coverage_expiry'), accessorKey: 'coverageExpiry', className: 'text-red-500 text-xs font-bold' },
-    { header: t('membership_id'), accessorKey: 'membershipId', className: 'text-gray-400 text-xs' },
-    {
-      header: t('actions'),
-      className: 'text-center',
-      render: (i) => (
-        <div className="flex items-center justify-center gap-2">
-           <button onClick={() => handleEdit(i)} className="p-1.5 text-gray-500 hover:text-primary hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded border border-gray-200 dark:border-gray-700 transition-colors"><Edit2 size={14} /></button>
-           <button onClick={() => handleDelete(i.id)} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded border border-gray-200 dark:border-gray-700 transition-colors"><Trash2 size={14} /></button>
-        </div>
-      )
-    }
-  ], [t, handleEdit, handleDelete]);
+            <div className="flex flex-col">
+              <span className="font-medium text-gray-900">{getEmployeeName(i)}</span>
+              <span className="text-xs text-gray-500">{getEmployeeCode(i)}</span>
+            </div>
+          </div>
+        )
+      },
+      {
+        header: t("policy_info"),
+        render: (i) => (
+          <div className="flex flex-col gap-0.5">
+            <span className="text-sm font-medium text-gray-900">{i.policyNumber}</span>
+            <span className="text-xs text-gray-500">{i.insuranceCompany}</span>
+          </div>
+        )
+      },
+      {
+        header: t("plan_details"),
+        render: (i) => (
+          <div className="flex flex-col gap-0.5">
+            <span className="text-sm text-gray-700">{i.planName}</span>
+            <span className="text-xs text-gray-500">{i.policyPlan}</span>
+          </div>
+        )
+      },
+      {
+        header: t("cost"),
+        render: (i) => (
+          <div className="flex items-center gap-1.5">
+            <DollarSign size={14} className="text-green-600" />
+            <span className="text-sm font-bold text-green-600">{i.totalCost?.toLocaleString()} EGP</span>
+          </div>
+        )
+      },
+      {
+        header: t("period"),
+        render: (i) => (
+          <div className="flex flex-col gap-0.5">
+            <div className="flex items-center gap-1.5">
+              <Calendar size={12} className="text-gray-400" />
+              <span className="text-xs text-gray-600">Start: {formatDate(i.policyStartDate || i.startDate)}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Calendar size={12} className="text-gray-400" />
+              <span className="text-xs text-gray-600">End: {formatDate(i.policyEndDate || i.endDate)}</span>
+            </div>
+          </div>
+        )
+      },
+      {
+        header: t("coverage"),
+        render: (i) => {
+          const expired = isExpired(i.coverageExpiryDate || i.coverageExpiry);
+          return (
+            <div className="flex flex-col gap-0.5">
+              <span className={`text-xs font-medium ${expired ? "text-red-600" : "text-green-600"}`}>
+                {expired ? t("expired") : t("active")}
+              </span>
+              <span className="text-xs text-gray-500">{formatDate(i.coverageExpiryDate || i.coverageExpiry)}</span>
+            </div>
+          );
+        }
+      },
+      {
+        header: t("family"),
+        render: (i) => (
+          <div className="flex items-center gap-1.5">
+            <Users size={14} className="text-gray-400" />
+            <span className="text-sm text-gray-600">{i.familyMembers || "-"}</span>
+          </div>
+        )
+      },
+      {
+        header: t("membership"),
+        render: (i) => (
+          <div className="flex items-center gap-1.5">
+            <Hash size={14} className="text-gray-400" />
+            <span className="text-xs font-mono text-gray-500">{i.membershipId || "-"}</span>
+          </div>
+        )
+      },
+      {
+        header: t("actions"),
+        className: "text-center",
+        render: (i) => (
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={() => handleEdit(i)}
+              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+              title={t("edit")}
+            >
+              <Edit2 size={16} />
+            </button>
+            <button
+              onClick={() => handleDelete(i._id || i.id)}
+              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+              title={t("delete")}
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
+        )
+      }
+    ],
+    [t, handleEdit, handleDelete]
+  );
 
   return (
     <div className="space-y-6">
-       {/* Header */}
-       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-           <h1 className="text-2xl font-bold dark:text-white">{t('insurance')}</h1>
-           <p className="text-gray-500 dark:text-gray-400 text-sm">{t('manage_insurance')}</p>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {t("insurance")}
+          </h1>
+          <p className="text-gray-500 mt-1">
+            {t("manage_insurance")}
+          </p>
         </div>
         <div className="flex gap-3">
-           <ExportDropdown data={filtered} filename="insurance_policies" />
-           <Button onClick={() => { setEditingInsurance(null); setIsModalOpen(true); }} className="bg-[#4361EE] hover:bg-blue-700 shadow-lg shadow-primary/20">
-              <Plus size={18} /> {t('add_insurance')}
-           </Button>
+          {selectedIds.length > 0 && (
+            <Button
+              variant="danger"
+              onClick={() => setIsBulkConfirmOpen(true)}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              <Trash2 size={18} />
+              {t("delete_selected")} ({selectedIds.length})
+            </Button>
+          )}
+          <ExportDropdown data={filteredPolicies} filename="insurance-policies" />
+          <Button
+            variant="primary"
+            onClick={() => {
+              setEditingInsurance(null);
+              setIsModalOpen(true);
+            }}
+            className="bg-indigo-600 hover:bg-indigo-700"
+          >
+            <Plus size={18} />
+            {t("add_insurance")}
+          </Button>
         </div>
       </div>
 
-      <Card className="min-h-[500px] border-none shadow-xl shadow-gray-200/50 dark:shadow-none">
-        {/* Toolbar */}
-        <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6 bg-gray-50 dark:bg-gray-800/30 p-4 rounded-2xl">
-           <div className="w-full md:w-80 relative">
-              <Input 
-                placeholder="Search employee or policy ID..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                icon={<Search size={18} />}
-                className="bg-white dark:bg-dark-surface border-gray-200 dark:border-gray-700"
-              />
-           </div>
-           
-           <div className="flex gap-3 w-full md:w-auto">
-              <div className="relative flex-1 md:w-64">
-                 <select 
-                    value={selectedEmployee}
-                    onChange={(e) => setSelectedEmployee(e.target.value)}
-                    className="w-full appearance-none bg-white dark:bg-dark-surface border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200 py-2.5 px-10 pr-10 rounded-xl text-sm font-bold focus:ring-2 focus:ring-primary/20 outline-none transition-all cursor-pointer"
-                 >
-                    <option value="">{t('all')} {t('employees')}</option>
-                    {uniqueEmployeeNames.map(name => (
-                        <option key={name} value={name}>{name}</option>
-                    ))}
-                 </select>
-                 <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-gray-400">
-                    <Filter size={16} />
-                 </div>
-                 <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-400">
-                    <ChevronDown size={14} />
-                 </div>
-              </div>
-              
-              {(searchTerm || selectedEmployee) && (
-                <button 
-                  onClick={() => { setSearchTerm(''); setSelectedEmployee(''); }}
-                  className="p-2.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl border border-red-100 dark:border-red-900/30 transition-colors"
-                  title="Reset filters"
-                >
-                  <X size={18} />
-                </button>
-              )}
-           </div>
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+              <Shield size={18} className="text-blue-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">{t("total_policies")}</p>
+              <p className="text-xl font-bold text-gray-900">{totalPolicies}</p>
+            </div>
+          </div>
         </div>
-        
-        <Table 
-           data={filtered} 
-           columns={columns} 
-           keyExtractor={i => i.id} 
-           selectable 
-           minWidth="min-w-[1500px]" 
-           emptyMessage="No insurance records found matching your selection"
-        />
-      </Card>
+        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center">
+              <DollarSign size={18} className="text-green-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">{t("total_cost")}</p>
+              <p className="text-xl font-bold text-green-600">{totalCost.toLocaleString()} EGP</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center">
+              <Calendar size={18} className="text-red-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">{t("expired_policies")}</p>
+              <p className="text-xl font-bold text-red-600">{expiredPolicies}</p>
+            </div>
+          </div>
+        </div>
+      </div>
 
-      <InsuranceModal 
-         isOpen={isModalOpen}
-         onClose={() => setIsModalOpen(false)}
-         onSave={handleSave}
-         insuranceToEdit={editingInsurance}
+      {/* Filters */}
+      <div className="flex flex-wrap gap-4 items-center">
+        <div className="relative max-w-md">
+          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder={t("search_insurance")}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+
+        <select
+          value={employeeFilter}
+          onChange={(e) => setEmployeeFilter(e.target.value)}
+          className="px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          {employeeOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+
+        {(employeeFilter || searchTerm) && (
+          <button
+            onClick={() => {
+              setEmployeeFilter("");
+              setSearchTerm("");
+            }}
+            className="text-sm text-red-600 hover:text-red-700"
+          >
+            {t("clear_filters")}
+          </button>
+        )}
+      </div>
+
+      {/* Table */}
+        <Table
+          data={filteredPolicies}
+          columns={columns}
+          keyExtractor={(item) => item._id || item.id}
+          isLoading={isLoading}
+          selectable
+          selectedIds={selectedIds}
+          onSelectionChange={setSelectedIds}
+        />
+
+      {/* Modal */}
+      <InsuranceModal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingInsurance(null);
+        }}
+        onSave={handleSave}
+        insuranceToEdit={editingInsurance}
+        isLoading={isLoading}
       />
 
+      {/* Delete Confirmation */}
       <ConfirmationModal
-         isOpen={!!deleteId}
-         onClose={() => setDeleteId(null)}
-         onConfirm={confirmDelete}
-         title={t('confirm_delete')}
-         message={t('are_you_sure_delete')}
+        isOpen={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        onConfirm={confirmDelete}
+        title={t("delete_insurance")}
+        message={t("are_you_sure_delete_insurance")}
+      />
+
+      {/* Bulk Delete Confirmation */}
+      <ConfirmationModal
+        isOpen={isBulkConfirmOpen}
+        onClose={() => setIsBulkConfirmOpen(false)}
+        onConfirm={handleBulkDelete}
+        title={t("delete_insurances")}
+        message={t("are_you_sure_delete_insurances", { count: selectedIds.length })}
       />
     </div>
   );

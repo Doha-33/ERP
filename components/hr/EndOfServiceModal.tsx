@@ -1,36 +1,18 @@
-
-import React, { useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { Button, Input, Select, FileUpload } from '../ui/Common';
-import { Modal } from '../ui/Modal';
-import { EndOfService } from '../../types';
-import { useData } from '../../context/DataContext';
-import { Plus } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { Plus, Edit2, User, Calendar, FileText, DollarSign, AlertCircle } from "lucide-react";
+import { Modal } from "../../components/ui/Modal";
+import { Button, Input, Select, TextArea, FileUpload } from "../../components/ui/Common";
+import { EndOfService } from "../../types";
+import { useData } from "../../context/DataContext";
 
 interface EndOfServiceModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (eos: EndOfService) => Promise<void>;
+  onSave: (data: Partial<EndOfService>) => Promise<void>;
   eosToEdit?: EndOfService | null;
+  isLoading?: boolean;
 }
-
-const eosSchema = z.object({
-  employee_id: z.string().min(1, 'Required'),
-  eos_type: z.string().min(1, 'Required'),
-  job_id: z.string().min(1, 'Required'),
-  department_id: z.string().min(1, 'Required'),
-  collect_laptop: z.boolean(),
-  collect_access_cards: z.boolean(),
-  final_settlement: z.string().min(1, 'Required'),
-  reason: z.string().min(1, 'Required'),
-  start_date: z.string().optional(),
-  last_working_day: z.string().min(1, 'Required'),
-});
-
-type EosFormInputs = z.infer<typeof eosSchema>;
 
 const compressImage = (base64Str: string, maxWidth = 1200, maxHeight = 1200): Promise<string> => {
   return new Promise((resolve) => {
@@ -41,10 +23,16 @@ const compressImage = (base64Str: string, maxWidth = 1200, maxHeight = 1200): Pr
       let width = img.width;
       let height = img.height;
       if (width > maxWidth || height > maxHeight) {
-        if (width > height) { height *= maxWidth / width; width = maxWidth; }
-        else { width *= maxHeight / height; height = maxHeight; }
+        if (width > height) {
+          height *= maxWidth / width;
+          width = maxWidth;
+        } else {
+          width *= maxHeight / height;
+          height = maxHeight;
+        }
       }
-      canvas.width = width; canvas.height = height;
+      canvas.width = width;
+      canvas.height = height;
       const ctx = canvas.getContext('2d');
       ctx?.drawImage(img, 0, 0, width, height);
       resolve(canvas.toDataURL('image/jpeg', 0.5));
@@ -53,55 +41,82 @@ const compressImage = (base64Str: string, maxWidth = 1200, maxHeight = 1200): Pr
   });
 };
 
-export const EndOfServiceModal: React.FC<EndOfServiceModalProps> = ({ isOpen, onClose, onSave, eosToEdit }) => {
+export const EndOfServiceModal: React.FC<EndOfServiceModalProps> = ({
+  isOpen,
+  onClose,
+  onSave,
+  eosToEdit,
+  isLoading = false,
+}) => {
   const { t } = useTranslation();
-  const { employees, jobs, departments } = useData();
-  const [attachment, setAttachment] = useState<string | undefined>(undefined);
+  const { employees } = useData();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<EosFormInputs>({
-    resolver: zodResolver(eosSchema),
-    defaultValues: { collect_laptop: false, collect_access_cards: false, eos_type: 'Resignation', last_working_day: new Date().toISOString().split('T')[0] }
+  const [attachment, setAttachment] = useState<string | undefined>(undefined);
+  const [attachmentName, setAttachmentName] = useState<string>("");
+  const [formData, setFormData] = useState({
+    employeeInfo: "",
+    lastWorkingDay: new Date().toISOString().split("T")[0],
+    reasonForLeaving: "Resignation",
+    endOfServiceBenefits: 0,
+    status: "Pending",
+    notes: "",
   });
 
-  const selectedEmployeeId = watch('employee_id');
-
   useEffect(() => {
-    if (selectedEmployeeId && !eosToEdit) {
-      const emp = employees.find(e => e.id === selectedEmployeeId);
-      if (emp) {
-        if (emp.department) setValue('department_id', emp.department);
-        if (emp.position) setValue('job_id', emp.position);
-        if (emp.joinDate) setValue('start_date', emp.joinDate.split('T')[0]);
-      }
-    }
-  }, [selectedEmployeeId, employees, setValue, eosToEdit]);
+    if (eosToEdit && isOpen) {
+      const employeeId = typeof eosToEdit.employeeId === "object"
+        ? (eosToEdit.employeeId as any)?._id
+        : eosToEdit.employeeId || eosToEdit.employeeInfo;
 
-  useEffect(() => {
-    if (isOpen) {
-      if (eosToEdit) {
-        setAttachment(eosToEdit.attachment);
-        reset({
-          employee_id: eosToEdit.employeeId,
-          eos_type: eosToEdit.eosType,
-          job_id: eosToEdit.jobId || '',
-          department_id: eosToEdit.departmentId || '',
-          collect_laptop: String(eosToEdit.collectLaptop).toLowerCase() === 'true',
-          collect_access_cards: String(eosToEdit.collectAccessCards).toLowerCase() === 'true',
-          final_settlement: eosToEdit.finalSettlement,
-          reason: eosToEdit.reason,
-          start_date: eosToEdit.startDate?.split('T')[0],
-          last_working_day: eosToEdit.lastWorkingDay?.split('T')[0] || new Date().toISOString().split('T')[0]
-        });
-      } else {
-        setAttachment(undefined);
-        reset({ employee_id: '', eos_type: 'Resignation', job_id: '', department_id: '', collect_laptop: false, collect_access_cards: false, final_settlement: '', reason: '', start_date: '', last_working_day: new Date().toISOString().split('T')[0] });
-      }
+      setFormData({
+        employeeInfo: employeeId || "",
+        lastWorkingDay: eosToEdit.lastWorkingDay
+          ? new Date(eosToEdit.lastWorkingDay).toISOString().split("T")[0]
+          : new Date().toISOString().split("T")[0],
+        reasonForLeaving: eosToEdit.reasonForLeaving || "Resignation",
+        endOfServiceBenefits: eosToEdit.endOfServiceBenefits || 0,
+        status: eosToEdit.status || "Pending",
+        notes: eosToEdit.notes || "",
+      });
+      setAttachment(eosToEdit.attachment);
+    } else if (!eosToEdit && isOpen) {
+      setFormData({
+        employeeInfo: "",
+        lastWorkingDay: new Date().toISOString().split("T")[0],
+        reasonForLeaving: "Resignation",
+        endOfServiceBenefits: 0,
+        status: "Pending",
+        notes: "",
+      });
+      setAttachment(undefined);
+      setAttachmentName("");
     }
-  }, [eosToEdit, isOpen, reset]);
+  }, [eosToEdit, isOpen]);
 
-  const handleFileChange = (file: File | null) => {
+  const employeeOptions = [
+    { value: "", label: t("select_employee") },
+    ...employees.map(emp => ({
+      value: emp._id || emp.id,
+      label: `${emp.fullName} (${emp.employeeCode})`,
+    })),
+  ];
+
+  const reasonOptions = [
+    { value: "Resignation", label: t("resignation") },
+    { value: "Termination", label: t("termination") },
+    { value: "Retirement", label: t("retirement") },
+    { value: "Contract Expiry", label: t("contract_expiry") },
+  ];
+
+  const statusOptions = [
+    { value: "Pending", label: t("pending") },
+    { value: "Approved", label: t("approved") },
+    { value: "Rejected", label: t("rejected") },
+  ];
+
+  const handleFileChange = async (file: File | null) => {
     if (file) {
+      setAttachmentName(file.name);
       const reader = new FileReader();
       reader.onloadend = async () => {
         const result = reader.result as string;
@@ -115,72 +130,170 @@ export const EndOfServiceModal: React.FC<EndOfServiceModalProps> = ({ isOpen, on
       reader.readAsDataURL(file);
     } else {
       setAttachment(undefined);
+      setAttachmentName("");
     }
   };
 
-  const onSubmit = async (data: EosFormInputs) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
     setIsSubmitting(true);
+    
     try {
-      const selectedEmp = employees.find(e => e.id === data.employee_id);
-      const start = data.start_date ? new Date(data.start_date) : (selectedEmp?.joinDate ? new Date(selectedEmp.joinDate) : new Date());
-      const end = new Date(data.last_working_day);
-      const diffTime = Math.abs(end.getTime() - start.getTime());
-      const years = Number((diffTime / (1000 * 60 * 60 * 24 * 365.25)).toFixed(1));
-
-      const eosPayload: EndOfService = {
-        id: eosToEdit?.id || '',
-        employeeId: data.employee_id,
-        employeeName: selectedEmp?.fullName || '',
-        eosType: data.eos_type,
-        jobId: data.job_id,
-        jobTitle: jobs.find(j => j.id === data.job_id)?.name || '',
-        departmentId: data.department_id,
-        department: departments.find(d => d.id === data.department_id)?.name || '',
-        startDate: data.start_date || '',
-        endDate: data.last_working_day,
-        yearsOfService: String(years),
-        requestDate: new Date().toISOString().split('T')[0],
-        lastWorkingDay: data.last_working_day,
-        collectLaptop: data.collect_laptop ? 'true' : 'false',
-        collectAccessCards: data.collect_access_cards ? 'true' : 'false',
-        finalSettlement: data.final_settlement,
-        reason: data.reason,
+      await onSave({
+        ...formData,
         attachment: attachment,
-        status: eosToEdit ? eosToEdit.status : 'Pending'
-      };
-      await onSave(eosPayload);
+      });
       onClose();
+    } catch (error) {
+      console.error("Error in form submission:", error);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const footer = (
-    <div className="flex gap-2">
-      <Button type="button" variant="ghost" className="bg-[#4B5563] text-white hover:bg-gray-700" onClick={onClose} disabled={isSubmitting}>{t('cancel')}</Button>
-      <Button type="submit" form="eos-form" disabled={isSubmitting} className="bg-[#4361EE] hover:bg-blue-700 min-w-[150px]">
-        {isSubmitting ? 'Processing...' : (eosToEdit ? t('save') : t('add_resignation'))}
-      </Button>
-    </div>
-  );
+  const handleChange = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={eosToEdit ? t('edit_end_of_service') : t('add_end_of_service')} footer={footer} className="max-w-3xl">
-      <form id="eos-form" onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-            <Select label={t('employee_info') + ' *'} options={[{ value: '', label: 'Select Employee' }, ...employees.map(e => ({ value: e.id, label: e.fullName }))]} {...register('employee_id')} error={errors.employee_id?.message} />
-            <Select label={t('eos_type') + ' *'} options={[{value: 'Resignation', label: t('resignation')}, {value: 'Termination', label: t('termination')}, {value: 'Retirement', label: t('retirement')}, {value: 'Contract Expiry', label: t('contract_expiry')}]} {...register('eos_type')} error={errors.eos_type?.message} />
-            <Select label={t('department') + ' *'} options={[{ value: '', label: 'Select Department' }, ...departments.map(d => ({ value: d.id, label: d.name }))]} {...register('department_id')} error={errors.department_id?.message} />
-            <Select label={t('job_title') + ' *'} options={[{ value: '', label: 'Select Job' }, ...jobs.map(j => ({ value: j.id, label: j.name }))]} {...register('job_id')} error={errors.job_id?.message} />
-            <Input label={t('final_settlement_calculation') + ' *'} placeholder="Settlement amount" {...register('final_settlement')} error={errors.final_settlement?.message} />
-            <Input type="date" label={t('last_working_day') + ' *'} {...register('last_working_day')} error={errors.last_working_day?.message} />
-         </div>
-         <div className="space-y-1.5">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('reason')} *</label>
-            <textarea {...register('reason')} className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-dark-surface outline-none h-32"></textarea>
-            {errors.reason && <p className="text-red-500 text-xs">{errors.reason.message}</p>}
-         </div>
-         <FileUpload label={t('upload_attachment')} onChange={handleFileChange} />
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={
+        <div className="flex items-center gap-2">
+          {eosToEdit ? <Edit2 size={20} /> : <Plus size={20} />}
+          {eosToEdit ? t("edit_end_of_service") : t("add_end_of_service")}
+        </div>
+      }
+      size="4xl"
+    >
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+          {/* Employee */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("employee")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.employeeInfo}
+              onChange={(e) => handleChange("employeeInfo", e.target.value)}
+              options={employeeOptions}
+              placeholder={t("select_employee")}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Last Working Day */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("last_working_day")} <span className="text-red-500">*</span>
+            </label>
+            <Input
+              type="date"
+              value={formData.lastWorkingDay}
+              onChange={(e) => handleChange("lastWorkingDay", e.target.value)}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Reason for Leaving */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("reason_for_leaving")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.reasonForLeaving}
+              onChange={(e) => handleChange("reasonForLeaving", e.target.value)}
+              options={reasonOptions}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* End of Service Benefits */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("end_of_service_benefits")} (EGP) <span className="text-red-500">*</span>
+            </label>
+            <Input
+              type="number"
+              value={formData.endOfServiceBenefits}
+              onChange={(e) => handleChange("endOfServiceBenefits", Number(e.target.value))}
+              placeholder="0.00"
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Status */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("status")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.status}
+              onChange={(e) => handleChange("status", e.target.value)}
+              options={statusOptions}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Notes */}
+          <div className="col-span-2 space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("notes")}
+            </label>
+            <TextArea
+              value={formData.notes}
+              onChange={(e) => handleChange("notes", e.target.value)}
+              placeholder={t("enter_notes")}
+              rows={3}
+              fullWidth
+            />
+          </div>
+
+          {/* Attachment */}
+          <div className="col-span-2 space-y-2">
+            <label className="text-sm font-medium text-gray-700">
+              {t("attachment")}
+            </label>
+            <FileUpload label={t("upload_attachment")} onChange={handleFileChange} accept="image/*,application/pdf" />
+            {attachmentName && (
+              <div className="flex items-center gap-2 text-sm text-gray-600 mt-2">
+                <FileText size={14} />
+                <span>{attachmentName}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAttachment(undefined);
+                    setAttachmentName("");
+                  }}
+                  className="text-red-500 hover:text-red-700"
+                >
+                  Remove
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-3 mt-8">
+          <Button variant="secondary" onClick={onClose} disabled={isSubmitting || isLoading}>
+            {t("cancel")}
+          </Button>
+          <Button
+            variant="primary"
+            type="submit"
+            className="bg-indigo-600 hover:bg-indigo-700 px-8"
+            isLoading={isSubmitting || isLoading}
+            disabled={isSubmitting || isLoading}
+          >
+            {eosToEdit ? t("save") : t("add_end_of_service")}
+          </Button>
+        </div>
       </form>
     </Modal>
   );

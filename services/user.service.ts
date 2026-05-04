@@ -15,7 +15,7 @@ export interface User {
 const userService = {
   async getAllUsers(): Promise<User[]> {
     try {
-      const response = await apiClient.get<{ success: boolean; data: User[] }>('/users');
+      const response = await apiClient.get<{ success: boolean; data: User[] }>('/users/list');
       if (response.data.success) {
         return response.data.data;
       }
@@ -51,7 +51,7 @@ const userService = {
 
   async deleteUser(userId: string): Promise<void> {
     try {
-      const response = await apiClient.delete<{ success: boolean }>(`/users/${userId}`);
+      const response = await apiClient.delete<{ success: boolean }>(`/users/delete/${userId}`);
       if (!response.data.success) {
         throw new Error('Failed to delete user');
       }
@@ -62,7 +62,7 @@ const userService = {
 
   async updateUser(userId: string, userData: any): Promise<User> {
     try {
-      const response = await apiClient.put<{ success: boolean; data: User }>(`/users/${userId}`, userData);
+      const response = await apiClient.put<{ success: boolean; data: User }>(`/users/update/${userId}`, userData);
       if (response.data.success) {
         return response.data.data;
       }
@@ -74,7 +74,7 @@ const userService = {
 
   async toggleUserStatus(userId: string): Promise<void> {
     try {
-      await apiClient.post(`/users/${userId}/toggle-status`);
+      await apiClient.post(`/users/update/${userId}/toggle-status`);
     } catch (error: any) {
       throw new Error(error.message || 'Error toggling user status');
     }

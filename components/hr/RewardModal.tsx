@@ -1,153 +1,260 @@
-
-import React, { useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { Button, Input, Select } from '../ui/Common';
-import { Modal } from '../ui/Modal';
-import { Reward } from '../../types';
-import { useData } from '../../context/DataContext';
+import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { Plus, Edit2, User, Calendar, DollarSign, Award, Gift, Star } from "lucide-react";
+import { Modal } from "../../components/ui/Modal";
+import { Button, Input, Select, TextArea } from "../../components/ui/Common";
+import { Reward } from "../../types";
+import { useData } from "../../context/DataContext";
 
 interface RewardModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (reward: Reward) => void;
+  onSave: (data: Partial<Reward>) => Promise<void>;
   rewardToEdit?: Reward | null;
+  isLoading?: boolean;
 }
 
-const rewardSchema = z.object({
-  employeeId: z.string().min(1, 'Required'),
-  rewardType: z.string().min(1, 'Required'),
-  date: z.string().min(1, 'Required'),
-  amount: z.string().min(1, 'Required'),
-  bonus: z.string().optional(),
-  commission: z.string().optional(),
-});
-
-type RewardFormInputs = z.infer<typeof rewardSchema>;
-
-export const RewardModal: React.FC<RewardModalProps> = ({ isOpen, onClose, onSave, rewardToEdit }) => {
+export const RewardModal: React.FC<RewardModalProps> = ({
+  isOpen,
+  onClose,
+  onSave,
+  rewardToEdit,
+  isLoading = false,
+}) => {
   const { t } = useTranslation();
   const { employees } = useData();
-  
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors },
-  } = useForm<RewardFormInputs>({
-    resolver: zodResolver(rewardSchema),
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formData, setFormData] = useState({
+    employeeInfo: "",
+    rewardsType: "Performance Bonus",
+    rewardDate: new Date().toISOString().split("T")[0],
+    rewardAmount: 0,
+    bonus: 0,
+    commissions: 0,
+    notes: "",
   });
 
   useEffect(() => {
-    if (rewardToEdit) {
-      reset({
-        employeeId: rewardToEdit.employeeId || '', // Use ID
-        rewardType: rewardToEdit.rewardType,
-        date: rewardToEdit.date,
-        amount: rewardToEdit.amount,
-        bonus: rewardToEdit.bonus,
-        commission: rewardToEdit.commission,
+    if (rewardToEdit && isOpen) {
+      const employeeId = typeof rewardToEdit.employeeInfo === "object"
+        ? (rewardToEdit.employeeInfo as any)?._id
+        : rewardToEdit.employeeInfo || rewardToEdit.employeeId;
+
+      setFormData({
+        employeeInfo: employeeId || "",
+        rewardsType: rewardToEdit.rewardsType || rewardToEdit.rewardType || "Performance Bonus",
+        rewardDate: rewardToEdit.rewardDate || rewardToEdit.date
+          ? new Date(rewardToEdit.rewardDate || rewardToEdit.date).toISOString().split("T")[0]
+          : new Date().toISOString().split("T")[0],
+        rewardAmount: rewardToEdit.rewardAmount || rewardToEdit.amount || 0,
+        bonus: rewardToEdit.bonus || rewardToEdit.bonusAmount || 0,
+        commissions: rewardToEdit.commissions || rewardToEdit.commissionAmount || 0,
+        notes: rewardToEdit.notes || "",
       });
-    } else {
-      reset({
-        employeeId: '',
-        rewardType: '',
-        date: new Date().toISOString().split('T')[0],
-        amount: '',
-        bonus: '',
-        commission: '',
+    } else if (!rewardToEdit && isOpen) {
+      setFormData({
+        employeeInfo: "",
+        rewardsType: "Performance Bonus",
+        rewardDate: new Date().toISOString().split("T")[0],
+        rewardAmount: 0,
+        bonus: 0,
+        commissions: 0,
+        notes: "",
       });
     }
-  }, [rewardToEdit, isOpen, reset]);
+  }, [rewardToEdit, isOpen]);
 
-  const onSubmit = (data: RewardFormInputs) => {
-    const selectedEmp = employees.find(e => e.id === data.employeeId);
+  const rewardTypeOptions = [
+    { value: "Performance Bonus", label: t("performance_bonus"), icon: Star },
+    { value: "Spot Reward", label: t("spot_reward"), icon: Award },
+    { value: "Incentive", label: t("incentive"), icon: Gift },
+    { value: "Annual Bonus", label: t("annual_bonus"), icon: Award },
+    { value: "Team Award", label: t("team_award"), icon: Star },
+  ];
 
-    const newReward: Reward = {
-      id: rewardToEdit ? rewardToEdit.id : '', // Handled by API
-      rewardId: rewardToEdit ? rewardToEdit.rewardId : '',
-      employeeId: data.employeeId,
-      employeeName: selectedEmp ? selectedEmp.fullName : '',
-      avatar: selectedEmp ? selectedEmp.avatar : '',
-      ...data,
-    };
-    onSave(newReward);
-    onClose();
+  const employeeOptions = employees.map(emp => ({
+    value: emp._id || emp.id,
+    label: `${emp.fullName} (${emp.employeeCode})`,
+  }));
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    
+    try {
+      await onSave(formData);
+      onClose();
+    } catch (error) {
+      console.error("Error in form submission:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const title = (
-    <>
-      <span className="text-lg">{rewardToEdit ? '✎' : '⊕'}</span> {rewardToEdit ? t('edit_rewards') : t('add_rewards')}
-    </>
-  );
+  const handleChange = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
 
-  const footer = (
-    <>
-       <Button type="button" variant="ghost" className="bg-gray-700 text-white hover:bg-gray-800" onClick={onClose}>{t('cancel')}</Button>
-       <Button type="submit" form="reward-form" className="bg-[#4361EE] hover:bg-blue-700">{rewardToEdit ? t('save') : t('add_rewards')}</Button>
-    </>
-  );
+  const totalAmount = (formData.rewardAmount || 0) + (formData.bonus || 0) + (formData.commissions || 0);
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={title}
-      footer={footer}
-      className="max-w-4xl"
+      title={
+        <div className="flex items-center gap-2">
+          {rewardToEdit ? <Edit2 size={20} /> : <Plus size={20} />}
+          {rewardToEdit ? t("edit_reward") : t("add_reward")}
+        </div>
+      }
+      size="4xl"
     >
-      <form id="reward-form" onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-             <div className="space-y-6">
-                <Select 
-                  label={t('employee_info') + ' *'} 
-                  options={employees.map(e => ({ value: e.id, label: e.fullName }))}
-                  {...register('employeeId')}
-                  error={errors.employeeId?.message}
-                />
-                
-                <Select 
-                   label={t('rewards_types') + ' *'} 
-                   options={[
-                     {value: 'Performance Bonus', label: 'Performance Bonus'},
-                     {value: 'Spot Reward', label: 'Spot Reward'},
-                     {value: 'Incentive', label: 'Incentive'}
-                   ]}
-                   {...register('rewardType')}
-                   error={errors.rewardType?.message}
-                />
-                
-                <Input 
-                   type="date"
-                   label={t('reward_date') + ' *'} 
-                   {...register('date')} 
-                   error={errors.date?.message} 
-                />
-             </div>
-             
-             <div className="space-y-6">
-                <Input 
-                   label={t('reward_amount') + ' *'} 
-                   placeholder="Amount" 
-                   {...register('amount')} 
-                   error={errors.amount?.message} 
-                />
-                
-                <Input 
-                   label={t('bouns')} 
-                   placeholder="Bonus Amount" 
-                   {...register('bonus')} 
-                />
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+          {/* Employee */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("employee")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.employeeInfo}
+              onChange={(e) => handleChange("employeeInfo", e.target.value)}
+              options={employeeOptions}
+              placeholder={t("select_employee")}
+              required
+              fullWidth
+            />
+          </div>
 
-                <Input 
-                   label={t('commissions')} 
-                   placeholder="Commission Amount" 
-                   {...register('commission')} 
-                />
-             </div>
-         </div>
+          {/* Reward Type */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("reward_type")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.rewardsType}
+              onChange={(e) => handleChange("rewardsType", e.target.value)}
+              options={rewardTypeOptions}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Reward Date */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("reward_date")} <span className="text-red-500">*</span>
+            </label>
+            <Input
+              type="date"
+              value={formData.rewardDate}
+              onChange={(e) => handleChange("rewardDate", e.target.value)}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Reward Amount */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("reward_amount")} (EGP) <span className="text-red-500">*</span>
+            </label>
+            <Input
+              type="number"
+              step="0.01"
+              value={formData.rewardAmount}
+              onChange={(e) => handleChange("rewardAmount", Number(e.target.value))}
+              placeholder="0.00"
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Bonus */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("bonus")} (EGP)
+            </label>
+            <Input
+              type="number"
+              step="0.01"
+              value={formData.bonus}
+              onChange={(e) => handleChange("bonus", Number(e.target.value))}
+              placeholder="0.00"
+              fullWidth
+            />
+          </div>
+
+          {/* Commissions */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("commissions")} (EGP)
+            </label>
+            <Input
+              type="number"
+              step="0.01"
+              value={formData.commissions}
+              onChange={(e) => handleChange("commissions", Number(e.target.value))}
+              placeholder="0.00"
+              fullWidth
+            />
+          </div>
+
+          {/* Notes */}
+          <div className="col-span-2 space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("notes")}
+            </label>
+            <TextArea
+              value={formData.notes}
+              onChange={(e) => handleChange("notes", e.target.value)}
+              placeholder={t("enter_notes")}
+              rows={2}
+              fullWidth
+            />
+          </div>
+        </div>
+
+        {/* Summary Preview */}
+        <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 border border-green-100">
+          <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+            <Award size={16} className="text-green-600" />
+            {t("reward_summary")}
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <p className="text-xs text-gray-500">{t("reward_amount")}</p>
+              <p className="text-sm font-bold text-green-600">{formData.rewardAmount.toLocaleString()} EGP</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">{t("bonus")}</p>
+              <p className="text-sm font-bold text-blue-600">{formData.bonus.toLocaleString()} EGP</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">{t("commissions")}</p>
+              <p className="text-sm font-bold text-purple-600">{formData.commissions.toLocaleString()} EGP</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">{t("total_reward")}</p>
+              <p className="text-lg font-bold text-emerald-600">{totalAmount.toLocaleString()} EGP</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-3 mt-8">
+          <Button variant="secondary" onClick={onClose} disabled={isSubmitting || isLoading}>
+            {t("cancel")}
+          </Button>
+          <Button
+            variant="primary"
+            type="submit"
+            className="bg-indigo-600 hover:bg-indigo-700 px-8"
+            isLoading={isSubmitting || isLoading}
+            disabled={isSubmitting || isLoading}
+          >
+            {rewardToEdit ? t("save") : t("add_reward")}
+          </Button>
+        </div>
       </form>
     </Modal>
   );

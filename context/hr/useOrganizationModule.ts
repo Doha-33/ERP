@@ -9,23 +9,6 @@ export const useOrganizationModule = (fetchAllData?: () => Promise<void>) => {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
 
-  const fetchOrganizationData = useCallback(async () => {
-    try {
-      const [companiesRes, branchesRes, departmentsRes, jobsRes] = await Promise.all([
-        hrService.getCompanies(),
-        hrService.getBranches(),
-        hrService.getDepartments(),
-        hrService.getJobs(),
-      ]);
-      setCompanies(companiesRes);
-      setBranches(branchesRes);
-      setDepartments(departmentsRes);
-      setJobs(jobsRes);
-    } catch (error) {
-      console.error('Error fetching organization data:', error);
-    }
-  }, []);
-
   // Companies
   const addCompany = useCallback(async (company: Company) => {
     await hrService.addCompany(company);
@@ -90,23 +73,39 @@ export const useOrganizationModule = (fetchAllData?: () => Promise<void>) => {
     if (fetchAllData) await fetchAllData();
   }, [fetchAllData]);
 
+  const fetchOrganizationData = useCallback(async () => {
+    try {
+      const [compRes, branchRes, deptRes, jobRes] = await Promise.all([
+        hrService.getCompanies(),
+        hrService.getBranches(),
+        hrService.getDepartments(),
+        hrService.getJobs(),
+      ]);
+      setCompanies(Array.isArray(compRes) ? compRes : (compRes?.data || []));
+      setBranches(Array.isArray(branchRes) ? branchRes : (branchRes?.data || []));
+      setDepartments(Array.isArray(deptRes) ? deptRes : (deptRes?.data || []));
+      setJobs(Array.isArray(jobRes) ? jobRes : (jobRes?.data || []));
+    } catch (error) {
+      console.error('Error fetching organization data:', error);
+    }
+  }, []);
+
   return useMemo(() => ({
     companies, setCompanies,
     branches, setBranches,
     departments, setDepartments,
     jobs, setJobs,
+    fetchOrganizationData,
     addCompany, updateCompany, deleteCompany,
     addBranch, updateBranch, deleteBranch,
     addDepartment, updateDepartment, deleteDepartment,
     addJob, updateJob, deleteJob,
-    fetchOrganizationData
   }), [
-    companies, branches, departments, jobs,
+    companies, branches, departments, jobs, fetchOrganizationData,
     addCompany, updateCompany, deleteCompany,
     addBranch, updateBranch, deleteBranch,
     addDepartment, updateDepartment, deleteDepartment,
     addJob, updateJob, deleteJob,
-    fetchOrganizationData
   ]);
 };
     

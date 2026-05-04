@@ -172,6 +172,27 @@ export const useOnboardingModule = (fetchAllData?: () => Promise<void>) => {
     }
   }, [fetchAllData]);
 
+  const fetchOnboardingData = useCallback(async () => {
+    try {
+      const [ins, laps, cards, trans, pens, rews] = await Promise.all([
+        hrService.getInsurances(),
+        hrService.getAssignLaptops(),
+        hrService.getAccessCards(),
+        hrService.getInitialTrainings(),
+        hrService.getPenalties(),
+        hrService.getRewards()
+      ]);
+      setInsurancePolicies(Array.isArray(ins) ? ins : (ins?.data || []));
+      setAssignLaptops(Array.isArray(laps) ? laps : (laps?.data || []));
+      setAccessCards(Array.isArray(cards) ? cards : (cards?.data || []));
+      setInitialTrainings(Array.isArray(trans) ? trans : (trans?.data || []));
+      setPenalties(Array.isArray(pens) ? pens : (pens?.data || []));
+      setRewards(Array.isArray(rews) ? rews : (rews?.data || []));
+    } catch (error) {
+      console.error('Error fetching onboarding data:', error);
+    }
+  }, []);
+
   return useMemo(() => ({
     insurancePolicies, setInsurancePolicies,
     assignLaptops, setAssignLaptops,
@@ -179,6 +200,7 @@ export const useOnboardingModule = (fetchAllData?: () => Promise<void>) => {
     initialTrainings, setInitialTrainings,
     penalties, setPenalties,
     rewards, setRewards,
+    fetchOnboardingData,
     addInsurance, updateInsurance, deleteInsurance,
     addAssignLaptop, updateAssignLaptop, deleteAssignLaptop,
     addAccessCard, updateAccessCard, deleteAccessCard,
@@ -187,6 +209,7 @@ export const useOnboardingModule = (fetchAllData?: () => Promise<void>) => {
     addReward, updateReward, deleteReward
   }), [
     insurancePolicies, assignLaptops, accessCards, initialTrainings, penalties, rewards,
+    fetchOnboardingData,
     addInsurance, updateInsurance, deleteInsurance,
     addAssignLaptop, updateAssignLaptop, deleteAssignLaptop,
     addAccessCard, updateAccessCard, deleteAccessCard,

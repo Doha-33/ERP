@@ -1,173 +1,270 @@
-
-import React, { useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { Button, Input, Select } from '../ui/Common';
-import { Modal } from '../ui/Modal';
-import { InitialTraining } from '../../types';
-import { useData } from '../../context/DataContext';
+import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { Plus, Edit2, User, Calendar, BookOpen, Users, Award, Clock } from "lucide-react";
+import { Modal } from "../../components/ui/Modal";
+import { Button, Input, Select, TextArea } from "../../components/ui/Common";
+import { InitialTraining } from "../../types";
+import { useData } from "../../context/DataContext";
+import { useAuth } from "../../context/AuthContext";
 
 interface InitialTrainingModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (training: InitialTraining) => void;
+  onSave: (data: Partial<InitialTraining>) => Promise<void>;
   trainingToEdit?: InitialTraining | null;
+  isLoading?: boolean;
 }
 
-const trainingSchema = z.object({
-  employeeId: z.string().min(1, 'Required'),
-  trainingType: z.string().min(1, 'Required'),
-  doneAt: z.string().min(1, 'Required'),
-  doneBy: z.string().min(1, 'Required'),
-  status: z.enum(['Paid', 'Unpaid', 'Pending']),
-  trainer: z.string().min(1, 'Required'),
-  departmentId: z.string().min(1, 'Required'),
-});
-
-type TrainingFormInputs = z.infer<typeof trainingSchema>;
-
-export const InitialTrainingModal: React.FC<InitialTrainingModalProps> = ({ isOpen, onClose, onSave, trainingToEdit }) => {
+export const InitialTrainingModal: React.FC<InitialTrainingModalProps> = ({
+  isOpen,
+  onClose,
+  onSave,
+  trainingToEdit,
+  isLoading = false,
+}) => {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const { employees, departments } = useData();
-  
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors },
-  } = useForm<TrainingFormInputs>({
-    resolver: zodResolver(trainingSchema),
-    defaultValues: {
-      status: 'Pending'
-    }
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formData, setFormData] = useState({
+    employeeInfo: "",
+    trainingType: "",
+    trainer: "",
+    department: "",
+    doneBy: "",
+    doneAt: new Date().toISOString().split("T")[0],
+    status: "Pending",
+    notes: "",
   });
 
+  const isAdmin = user?.role === "admin";
+
   useEffect(() => {
-    if (trainingToEdit) {
-      reset({
-        employeeId: trainingToEdit.employeeId || '', // Using ID logic
-        trainingType: trainingToEdit.trainingType,
-        doneAt: trainingToEdit.doneAt,
-        doneBy: trainingToEdit.doneBy,
-        status: trainingToEdit.status,
-        trainer: trainingToEdit.trainer,
-        departmentId: trainingToEdit.departmentId || '', // Using ID logic
+    if (trainingToEdit && isOpen) {
+      const employeeId = typeof trainingToEdit.employeeInfo === "object"
+        ? (trainingToEdit.employeeInfo as any)?._id
+        : trainingToEdit.employeeInfo || trainingToEdit.employeeId;
+      const departmentId = typeof trainingToEdit.department === "object"
+        ? (trainingToEdit.department as any)?._id
+        : trainingToEdit.department;
+
+      setFormData({
+        employeeInfo: employeeId || "",
+        trainingType: trainingToEdit.trainingType || trainingToEdit.trainingName || "",
+        trainer: trainingToEdit.trainer || "",
+        department: departmentId || "",
+        doneBy: trainingToEdit.doneBy || "",
+        doneAt: trainingToEdit.doneAt || trainingToEdit.trainingDate
+          ? new Date(trainingToEdit.doneAt || trainingToEdit.trainingDate).toISOString().split("T")[0]
+          : new Date().toISOString().split("T")[0],
+        status: trainingToEdit.status || "Pending",
+        notes: trainingToEdit.notes || "",
       });
-    } else {
-      reset({
-        employeeId: '',
-        trainingType: '',
-        doneAt: new Date().toISOString().split('T')[0],
-        doneBy: '',
-        status: 'Pending',
-        trainer: '',
-        departmentId: '',
+    } else if (!trainingToEdit && isOpen) {
+      setFormData({
+        employeeInfo: "",
+        trainingType: "",
+        trainer: "",
+        department: "",
+        doneBy: isAdmin ? "" : user?.username || "",
+        doneAt: new Date().toISOString().split("T")[0],
+        status: "Pending",
+        notes: "",
       });
     }
-  }, [trainingToEdit, isOpen, reset]);
+  }, [trainingToEdit, isOpen, isAdmin, user]);
 
-  const onSubmit = (data: TrainingFormInputs) => {
-    const selectedEmp = employees.find(e => e.id === data.employeeId);
-    const selectedDept = departments.find(d => d.id === data.departmentId);
+  const trainingTypeOptions = [
+    { value: "Safety Training", label: t("safety_training"), icon: Award },
+    { value: "Technical Training", label: t("technical_training"), icon: BookOpen },
+    { value: "Soft Skills", label: t("soft_skills"), icon: Users },
+    { value: "Compliance Training", label: t("compliance_training"), icon: Award },
+    { value: "Onboarding", label: t("onboarding"), icon: BookOpen },
+  ];
+
+  const statusOptions = [
+    { value: "Pending", label: t("pending") },
+    { value: "Completed", label: t("completed") },
+    { value: "Failed", label: t("failed") },
+  ];
+
+  const employeeOptions = employees.map(emp => ({
+    value: emp._id || emp.id,
+    label: `${emp.fullName} (${emp.employeeCode})`,
+  }));
+
+  const departmentOptions = departments.map(dept => ({
+    value: dept._id || dept.id,
+    label: dept.departmentName,
+  }));
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSubmitting(true);
     
-    const newTraining: InitialTraining = {
-      id: trainingToEdit ? trainingToEdit.id : '', // Handled by API
-      employeeId: data.employeeId,
-      empCode: selectedEmp?.code || '',
-      empName: selectedEmp?.fullName || '',
-      department: selectedDept?.name || '',
-      ...data,
-    };
-    onSave(newTraining);
-    onClose();
+    try {
+      // Get selected employee for empCode
+      const selectedEmployee = employees.find(e => (e._id || e.id) === formData.employeeInfo);
+      
+      await onSave({
+        ...formData,
+        empCode: selectedEmployee?.employeeCode || "",
+      });
+      onClose();
+    } catch (error) {
+      console.error("Error in form submission:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const title = (
-    <>
-      <span className="text-lg">{trainingToEdit ? '✎' : '⊕'}</span> {trainingToEdit ? t('edit_initial_training') : t('add_initial_training')}
-    </>
-  );
-
-  const footer = (
-    <>
-       <Button type="button" variant="ghost" className="bg-gray-700 text-white hover:bg-gray-800" onClick={onClose}>{t('cancel')}</Button>
-       <Button type="submit" form="training-form" className="bg-[#4361EE] hover:bg-blue-700">{trainingToEdit ? t('save') : t('add_initial_training')}</Button>
-    </>
-  );
+  const handleChange = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={title}
-      footer={footer}
-      className="max-w-4xl"
+      title={
+        <div className="flex items-center gap-2">
+          {trainingToEdit ? <Edit2 size={20} /> : <Plus size={20} />}
+          {trainingToEdit ? t("edit_initial_training") : t("add_initial_training")}
+        </div>
+      }
+      size="4xl"
     >
-      <form id="training-form" onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-             <div className="space-y-6">
-                <Select 
-                  label={t('employee_info') + ' *'} 
-                  options={employees.map(e => ({ value: e.id, label: e.fullName }))}
-                  {...register('employeeId')}
-                  error={errors.employeeId?.message}
-                />
-                
-                <Input 
-                   type="date"
-                   label={t('done_at') + ' *'} 
-                   {...register('doneAt')} 
-                   error={errors.doneAt?.message} 
-                />
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+          {/* Employee */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("employee")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.employeeInfo}
+              onChange={(e) => handleChange("employeeInfo", e.target.value)}
+              options={employeeOptions}
+              placeholder={t("select_employee")}
+              required
+              fullWidth
+            />
+          </div>
 
-                <Select 
-                   label={t('status') + ' *'} 
-                   options={[
-                     {value: 'Pending', label: t('pending')},
-                     {value: 'Paid', label: t('paid')},
-                     {value: 'Unpaid', label: t('unpaid')}
-                   ]}
-                   {...register('status')}
-                   error={errors.status?.message}
-                />
+          {/* Training Type */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("training_type")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.trainingType}
+              onChange={(e) => handleChange("trainingType", e.target.value)}
+              options={trainingTypeOptions}
+              required
+              fullWidth
+            />
+          </div>
 
-                <Select 
-                   label={t('department') + ' *'} 
-                   options={departments.map(d => ({ value: d.id, label: d.name }))}
-                   {...register('departmentId')}
-                   error={errors.departmentId?.message}
-                />
-             </div>
-             
-             <div className="space-y-6">
-                <Select 
-                   label={t('training_type') + ' *'} 
-                   options={[
-                     {value: 'Orientation', label: 'Orientation'},
-                     {value: 'Technical', label: 'Technical'},
-                     {value: 'Soft Skills', label: 'Soft Skills'}
-                   ]}
-                   {...register('trainingType')}
-                   error={errors.trainingType?.message}
-                />
-                
-                <Input 
-                   label={t('done_by') + ' *'} 
-                   placeholder="HR / Manager" 
-                   {...register('doneBy')} 
-                   error={errors.doneBy?.message} 
-                />
+          {/* Trainer */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("trainer")} <span className="text-red-500">*</span>
+            </label>
+            <Input
+              value={formData.trainer}
+              onChange={(e) => handleChange("trainer", e.target.value)}
+              placeholder={t("enter_trainer_name")}
+              required
+              fullWidth
+            />
+          </div>
 
-                <Input 
-                   label={t('trainer') + ' *'} 
-                   placeholder="Trainer Name" 
-                   {...register('trainer')} 
-                   error={errors.trainer?.message}
-                />
-             </div>
-         </div>
+          {/* Department */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("department")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.department}
+              onChange={(e) => handleChange("department", e.target.value)}
+              options={departmentOptions}
+              placeholder={t("select_department")}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Done By */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("done_by")} <span className="text-red-500">*</span>
+            </label>
+            <Input
+              value={formData.doneBy}
+              onChange={(e) => handleChange("doneBy", e.target.value)}
+              placeholder={t("enter_done_by")}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Done At */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("done_at")} <span className="text-red-500">*</span>
+            </label>
+            <Input
+              type="date"
+              value={formData.doneAt}
+              onChange={(e) => handleChange("doneAt", e.target.value)}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Status */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("status")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.status}
+              onChange={(e) => handleChange("status", e.target.value)}
+              options={statusOptions}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Notes */}
+          <div className="col-span-2 space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("notes")}
+            </label>
+            <TextArea
+              value={formData.notes}
+              onChange={(e) => handleChange("notes", e.target.value)}
+              placeholder={t("enter_notes")}
+              rows={3}
+              fullWidth
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-3 mt-8">
+          <Button variant="secondary" onClick={onClose} disabled={isSubmitting || isLoading}>
+            {t("cancel")}
+          </Button>
+          <Button
+            variant="primary"
+            type="submit"
+            className="bg-indigo-600 hover:bg-indigo-700 px-8"
+            isLoading={isSubmitting || isLoading}
+            disabled={isSubmitting || isLoading}
+          >
+            {trainingToEdit ? t("save") : t("add_initial_training")}
+          </Button>
+        </div>
       </form>
     </Modal>
   );

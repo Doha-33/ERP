@@ -58,16 +58,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
   const [items, setItems] = useState<OrderItem[]>([
     { productId: "", sku: "", quantity: 1, unitPrice: 0, discount: 0, tax: 0, total: 0 }
   ]);
-
-  // Calculate totals when items change
-  useEffect(() => {
-    const newItems = items.map(item => ({
-      ...item,
-      total: (item.quantity * item.unitPrice) - item.discount + item.tax
-    }));
-    setItems(newItems);
-  }, [items.map(i => [i.quantity, i.unitPrice, i.discount, i.tax])]);
-
+  
   const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
   const discountAmount = items.reduce((sum, item) => sum + (item.discount || 0), 0);
   const taxAmount = items.reduce((sum, item) => sum + (item.tax || 0), 0);

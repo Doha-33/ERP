@@ -1,191 +1,373 @@
-
-import React, { useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { Button, Input, Select } from '../ui/Common';
-import { Modal } from '../ui/Modal';
-import { Contract } from '../../types';
-import { useData } from '../../context/DataContext';
+import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { Plus, Edit2, User, Building2, Calendar, DollarSign, FileText, Clock, Briefcase } from "lucide-react";
+import { Modal } from "../../components/ui/Modal";
+import { Button, Input, Select, TextArea } from "../../components/ui/Common";
+import { Contract } from "../../types";
+import { useData } from "../../context/DataContext";
 
 interface ContractModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (contract: Contract) => Promise<void>;
+  onSave: (data: Partial<Contract>) => Promise<void>;
   contractToEdit?: Contract | null;
+  isLoading?: boolean;
 }
 
-const contractSchema = z.object({
-  employeeId: z.string().min(1, 'Required'),
-  contractType: z.string().min(1, 'Required'),
-  duration: z.string().min(1, 'Required'),
-  jobTitle: z.string().min(1, 'Required'),
-  branch: z.string().min(1, 'Required'),
-  startDate: z.string().min(1, 'Required'),
-  endDate: z.string().min(1, 'Required'),
-  workingHours: z.string().min(1, 'Required'),
-  allowances: z.string().optional(),
-  basicSalary: z.string().min(1, 'Required'),
-  state: z.string().min(1, 'Required'),
-  contractId: z.string().min(1, 'Required'), // mapped to contract_number
-});
-
-type ContractFormInputs = z.infer<typeof contractSchema>;
-
-export const ContractModal: React.FC<ContractModalProps> = ({ isOpen, onClose, onSave, contractToEdit }) => {
+export const ContractModal: React.FC<ContractModalProps> = ({
+  isOpen,
+  onClose,
+  onSave,
+  contractToEdit,
+  isLoading = false,
+}) => {
   const { t } = useTranslation();
   const { employees, branches } = useData();
-  
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors, isSubmitting },
-  } = useForm<ContractFormInputs>({
-    resolver: zodResolver(contractSchema),
-    defaultValues: {
-      state: 'Active'
-    }
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formData, setFormData] = useState({
+    employeeId: "",
+    contractId: "",
+    contractType: "Saudi",
+    duration: "1 Year",
+    jobTitle: "",
+    branch: "",
+    startDate: new Date().toISOString().split("T")[0],
+    endDate: new Date().toISOString().split("T")[0],
+    workingHours: "Full Time",
+    allowances: 0,
+    basicSalary: 0,
+    state: "Active",
   });
 
   useEffect(() => {
-    if (isOpen) {
-        if (contractToEdit) {
-            reset({
-                employeeId: contractToEdit.employeeId,
-                contractType: contractToEdit.contractType,
-                duration: contractToEdit.duration,
-                jobTitle: contractToEdit.jobTitle,
-                branch: contractToEdit.branch,
-                startDate: contractToEdit.startDate?.split('T')[0] || '',
-                endDate: contractToEdit.endDate?.split('T')[0] || '',
-                workingHours: contractToEdit.workingHours,
-                allowances: contractToEdit.allowances,
-                basicSalary: contractToEdit.basicSalary,
-                state: contractToEdit.state,
-                contractId: contractToEdit.contractId,
-            });
-        } else {
-            reset({
-                employeeId: '',
-                contractType: 'Saudi',
-                duration: '1 Year',
-                jobTitle: '',
-                branch: branches.length > 0 ? branches[0].id : '',
-                startDate: new Date().toISOString().split('T')[0],
-                endDate: new Date().toISOString().split('T')[0],
-                workingHours: 'Full Time',
-                allowances: '0',
-                basicSalary: '0',
-                state: 'Active',
-                contractId: `CON-${Date.now().toString().slice(-5)}`,
-            });
-        }
-    }
-  }, [contractToEdit, isOpen, reset, branches]);
+    if (contractToEdit && isOpen) {
+      const employeeId = typeof contractToEdit.employeeInfo === "object"
+        ? (contractToEdit.employeeInfo as any)?._id
+        : contractToEdit.employeeId;
+      const branchId = typeof contractToEdit.branch === "object"
+        ? (contractToEdit.branch as any)?._id
+        : contractToEdit.branch;
 
-  const onSubmit = async (data: ContractFormInputs) => {
-    const selectedEmp = employees.find(e => e.id === data.employeeId);
+      setFormData({
+        employeeId: employeeId || "",
+        contractId: contractToEdit.contractId || `CON-${Date.now().toString().slice(-5)}`,
+        contractType: contractToEdit.contractType || "Saudi",
+        duration: contractToEdit.duration || "1 Year",
+        jobTitle: contractToEdit.jobTitle || "",
+        branch: branchId || "",
+        startDate: contractToEdit.startDate
+          ? new Date(contractToEdit.startDate).toISOString().split("T")[0]
+          : new Date().toISOString().split("T")[0],
+        endDate: contractToEdit.endDate
+          ? new Date(contractToEdit.endDate).toISOString().split("T")[0]
+          : new Date().toISOString().split("T")[0],
+        workingHours: contractToEdit.workingHours || "Full Time",
+        allowances: contractToEdit.allowances || 0,
+        basicSalary: contractToEdit.basicSalary || 0,
+        state: contractToEdit.state || "Active",
+      });
+    } else if (!contractToEdit && isOpen) {
+      const randomNum = Math.floor(Math.random() * 10000).toString().padStart(5, '0');
+      setFormData({
+        employeeId: "",
+        contractId: `CON-${randomNum}`,
+        contractType: "Saudi",
+        duration: "1 Year",
+        jobTitle: "",
+        branch: branches.length > 0 ? (branches[0]._id || branches[0].id) : "",
+        startDate: new Date().toISOString().split("T")[0],
+        endDate: new Date().toISOString().split("T")[0],
+        workingHours: "Full Time",
+        allowances: 0,
+        basicSalary: 0,
+        state: "Active",
+      });
+    }
+  }, [contractToEdit, isOpen, branches]);
+
+  const contractTypeOptions = [
+    { value: "Saudi", label: t("saudi_contract") },
+    { value: "Expat", label: t("expat_contract") },
+    { value: "Freelance", label: t("freelance_contract") },
+    { value: "Part-time", label: t("part_time_contract") },
+  ];
+
+  const workingHoursOptions = [
+    { value: "Full Time", label: t("full_time") },
+    { value: "Part Time", label: t("part_time") },
+    { value: "Flexible", label: t("flexible") },
+  ];
+
+  const stateOptions = [
+    { value: "Active", label: t("active") },
+    { value: "Expired", label: t("expired") },
+    { value: "Under Renewal", label: t("under_renewal") },
+    { value: "Renewal Pending", label: t("renewal_pending") },
+  ];
+
+  const durationOptions = [
+    { value: "1 Year", label: "1 Year" },
+    { value: "2 Years", label: "2 Years" },
+    { value: "3 Years", label: "3 Years" },
+    { value: "5 Years", label: "5 Years" },
+    { value: "Indefinite", label: t("indefinite") },
+  ];
+
+  const employeeOptions = employees.map(emp => ({
+    value: emp._id || emp.id,
+    label: `${emp.fullName} (${emp.employeeCode})`,
+  }));
+
+  const branchOptions = branches.map(b => ({
+    value: b._id || b.id,
+    label: b.name,
+  }));
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSubmitting(true);
     
-    // Default allowances to '0' to satisfy Contract interface requirements
-    const newContract: Contract = {
-      id: contractToEdit ? contractToEdit.id : '',
-      avatar: selectedEmp?.avatar,
-      employeeName: selectedEmp?.fullName || '',
-      ...data,
-      allowances: data.allowances || '0',
-      // Casting state to any because the interface expects a specific union type and the form value is a string
-      state: data.state as any,
-    };
-    await onSave(newContract);
-    onClose();
+    try {
+      await onSave(formData);
+      onClose();
+    } catch (error) {
+      console.error("Error in form submission:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const title = (
-    <>
-      <span className="text-lg">{contractToEdit ? '✎' : '⊕'}</span> {contractToEdit ? t('edit_contracts') : t('add_contracts')}
-    </>
-  );
+  const handleChange = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
 
-  const footer = (
-    <>
-       <Button type="button" variant="ghost" disabled={isSubmitting} className="bg-gray-700 text-white hover:bg-gray-800" onClick={onClose}>{t('cancel')}</Button>
-       <Button type="submit" form="contract-form" disabled={isSubmitting} className="bg-[#4361EE] hover:bg-blue-700">
-           {isSubmitting ? 'Saving...' : (contractToEdit ? t('save') : t('add_contracts'))}
-       </Button>
-    </>
-  );
+  const totalSalary = (formData.basicSalary || 0) + (formData.allowances || 0);
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={title}
-      footer={footer}
-      className="max-w-4xl"
+      title={
+        <div className="flex items-center gap-2">
+          {contractToEdit ? <Edit2 size={20} /> : <Plus size={20} />}
+          {contractToEdit ? t("edit_contract") : t("add_contract")}
+        </div>
+      }
+      size="4xl"
     >
-      <form id="contract-form" onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-6">
-                <Select 
-                  label={t('employee_info') + ' *'} 
-                  options={employees.map(e => ({ value: e.id, label: e.fullName }))}
-                  {...register('employeeId')}
-                  error={errors.employeeId?.message}
-                />
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+          {/* Employee */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("employee")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.employeeId}
+              onChange={(e) => handleChange("employeeId", e.target.value)}
+              options={employeeOptions}
+              placeholder={t("select_employee")}
+              required
+              fullWidth
+            />
+          </div>
 
-                <Input label={t('contract_id') + ' *'} placeholder="CON-0001" {...register('contractId')} error={errors.contractId?.message} />
-                
-                <Input label={t('job_title') + ' *'} placeholder="Job Title" {...register('jobTitle')} error={errors.jobTitle?.message} />
-                
-                <Input type="date" label={t('start_date') + ' *'} {...register('startDate')} error={errors.startDate?.message} />
-                <Select 
-                   label={t('working_hours') + ' *'} 
-                   options={[
-                      {value: 'Full Time', label: 'Full Time'},
-                      {value: 'Part Time', label: 'Part Time'}
-                   ]}
-                   {...register('workingHours')} 
-                   error={errors.workingHours?.message} 
-                />
-                
-                <Select 
-                   label={t('branch') + ' *'} 
-                   options={branches.map(b => ({ value: b.id, label: b.name }))}
-                   {...register('branch')} 
-                   error={errors.branch?.message} 
-                />
+          {/* Contract ID */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("contract_id")} <span className="text-red-500">*</span>
+            </label>
+            <Input
+              value={formData.contractId}
+              onChange={(e) => handleChange("contractId", e.target.value)}
+              placeholder="CON-001"
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Contract Type */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("contract_type")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.contractType}
+              onChange={(e) => handleChange("contractType", e.target.value)}
+              options={contractTypeOptions}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Duration */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("duration")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.duration}
+              onChange={(e) => handleChange("duration", e.target.value)}
+              options={durationOptions}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Job Title */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("job_title")} <span className="text-red-500">*</span>
+            </label>
+            <Input
+              value={formData.jobTitle}
+              onChange={(e) => handleChange("jobTitle", e.target.value)}
+              placeholder={t("enter_job_title")}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Branch */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("branch")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.branch}
+              onChange={(e) => handleChange("branch", e.target.value)}
+              options={branchOptions}
+              placeholder={t("select_branch")}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Start Date */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("start_date")} <span className="text-red-500">*</span>
+            </label>
+            <Input
+              type="date"
+              value={formData.startDate}
+              onChange={(e) => handleChange("startDate", e.target.value)}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* End Date */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("end_date")} <span className="text-red-500">*</span>
+            </label>
+            <Input
+              type="date"
+              value={formData.endDate}
+              onChange={(e) => handleChange("endDate", e.target.value)}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Working Hours */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("working_hours")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.workingHours}
+              onChange={(e) => handleChange("workingHours", e.target.value)}
+              options={workingHoursOptions}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Basic Salary */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("basic_salary")} (EGP) <span className="text-red-500">*</span>
+            </label>
+            <Input
+              type="number"
+              step="0.01"
+              value={formData.basicSalary}
+              onChange={(e) => handleChange("basicSalary", Number(e.target.value))}
+              placeholder="0.00"
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Allowances */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("allowances")} (EGP) <span className="text-red-500">*</span>
+            </label>
+            <Input
+              type="number"
+              step="0.01"
+              value={formData.allowances}
+              onChange={(e) => handleChange("allowances", Number(e.target.value))}
+              placeholder="0.00"
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Status */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("status")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.state}
+              onChange={(e) => handleChange("state", e.target.value)}
+              options={stateOptions}
+              required
+              fullWidth
+            />
+          </div>
+        </div>
+
+        {/* Summary Preview */}
+        <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl p-4 border border-indigo-100">
+          <h3 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+            <DollarSign size={16} className="text-indigo-600" />
+            {t("salary_summary")}
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div>
+              <p className="text-xs text-gray-500">{t("basic_salary")}</p>
+              <p className="text-sm font-bold text-indigo-600">{formData.basicSalary.toLocaleString()} EGP</p>
             </div>
-            
-            <div className="space-y-6">
-                <Select 
-                   label={t('contract_type') + ' *'} 
-                   options={[
-                      {value: 'Saudi', label: 'Saudi'},
-                      {value: 'Expat', label: 'Expat'}
-                   ]}
-                   {...register('contractType')} 
-                   error={errors.contractType?.message} 
-                />
-                <Input label={t('duration') + ' *'} placeholder="e.g., 2 Years" {...register('duration')} error={errors.duration?.message} />
-                <Input type="date" label={t('end_date') + ' *'} {...register('endDate')} error={errors.endDate?.message} />
-                <Input label={t('basic_salary') + ' *'} type="number" placeholder="Amount" {...register('basicSalary')} error={errors.basicSalary?.message} />
-                <Input label={t('allowances') + ' *'} type="number" placeholder="Allowances" {...register('allowances')} error={errors.allowances?.message} />
-                
-                <Select 
-                  label={t('state') + ' *'} 
-                  options={[
-                    {value: 'Active', label: 'Active'},
-                    {value: 'Expired', label: 'Expired'},
-                    {value: 'Under Renewal', label: 'Under Renewal'},
-                    {value: 'Renewal Pending', label: 'Renewal Pending'}
-                  ]}
-                  {...register('state')} 
-                  error={errors.state?.message}
-                />
+            <div>
+              <p className="text-xs text-gray-500">{t("allowances")}</p>
+              <p className="text-sm font-bold text-green-600">{formData.allowances.toLocaleString()} EGP</p>
             </div>
-         </div>
+            <div>
+              <p className="text-xs text-gray-500">{t("total_salary")}</p>
+              <p className="text-lg font-bold text-purple-600">{totalSalary.toLocaleString()} EGP</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-3 mt-8">
+          <Button variant="secondary" onClick={onClose} disabled={isSubmitting || isLoading}>
+            {t("cancel")}
+          </Button>
+          <Button
+            variant="primary"
+            type="submit"
+            className="bg-indigo-600 hover:bg-indigo-700 px-8"
+            isLoading={isSubmitting || isLoading}
+            disabled={isSubmitting || isLoading}
+          >
+            {contractToEdit ? t("save") : t("add_contract")}
+          </Button>
+        </div>
       </form>
     </Modal>
   );

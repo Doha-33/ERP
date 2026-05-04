@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { UserPlus, Edit2, User, Mail, Phone, Calendar, MapPin, Briefcase, Building2, CreditCard } from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
 import { Button, Input, Select } from "../../components/ui/Common";
-import { Employee } from "../../types";
+import { Employee, Department, Job } from "../../types";
+import { useData } from "../../context/DataContext";
 
 interface EmployeeModalProps {
   isOpen: boolean;
@@ -21,6 +22,7 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
   isLoading = false,
 }) => {
   const { t } = useTranslation();
+  const { companies, branches, departments, jobs } = useData();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     fullName: "",
@@ -31,16 +33,91 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
     employeeStatus: "ACTIVE",
     jobGrade: "",
     nationality: "",
-    gender: "",
-    maritalStatus: "",
+    gender: "MALE",
+    maritalStatus: "SINGLE",
     address: "",
     companyId: "",
     branchId: "",
+    departmentId: "",
     jobId: "",
   });
 
+  // Debug: Log departments and jobs
+  useEffect(() => {
+    if (isOpen) {
+      console.log("Departments available:", departments);
+      console.log("Jobs available:", jobs);
+      console.log("Companies available:", companies);
+      console.log("Branches available:", branches);
+    }
+  }, [isOpen, departments, jobs, companies, branches]);
+
+  // Filtered branches based on selected company
+  const filteredBranches = useMemo(() => {
+    if (!formData.companyId) return [];
+    console.log("Filtering branches for company:", formData.companyId);
+    const filtered = branches.filter(branch => {
+      const branchCompanyId = typeof branch.companyId === "object" 
+        ? (branch.companyId as any)?._id || (branch.companyId as any)?.id
+        : branch.companyId;
+      console.log(`Branch ${branch.name} companyId: ${branchCompanyId}, comparing with: ${formData.companyId}`);
+      return branchCompanyId === formData.companyId;
+    });
+    console.log("Filtered branches:", filtered);
+    return filtered;
+  }, [branches, formData.companyId]);
+
+  // Filtered departments based on selected company
+  const filteredDepartments = useMemo(() => {
+    if (!formData.companyId) return [];
+    console.log("Filtering departments for company:", formData.companyId);
+    const filtered = departments.filter(dept => {
+      const deptCompanyId = typeof dept.companyId === "object" 
+        ? (dept.companyId as any)?._id || (dept.companyId as any)?.id
+        : dept.companyId;
+      console.log(`Department ${dept.departmentName} companyId: ${deptCompanyId}, comparing with: ${formData.companyId}`);
+      return deptCompanyId === formData.companyId;
+    });
+    console.log("Filtered departments:", filtered);
+    return filtered;
+  }, [departments, formData.companyId]);
+
+  // Filtered jobs based on selected department
+  const filteredJobs = useMemo(() => {
+    if (!formData.departmentId) {
+      console.log("No department selected, showing all jobs?");
+      return jobs;
+    }
+    console.log("Filtering jobs for department:", formData.departmentId);
+    const filtered = jobs.filter(job => {
+      const jobDepartmentId = typeof job.departmentId === "object" 
+        ? (job.departmentId as any)?._id || (job.departmentId as any)?.id
+        : job.departmentId;
+      console.log(`Job ${job.jobName} departmentId: ${jobDepartmentId}, comparing with: ${formData.departmentId}`);
+      return jobDepartmentId === formData.departmentId;
+    });
+    console.log("Filtered jobs:", filtered);
+    return filtered;
+  }, [jobs, formData.departmentId]);
+
   useEffect(() => {
     if (employeeToEdit && isOpen) {
+      // Get IDs from objects safely
+      const companyId = typeof employeeToEdit.companyId === "object" 
+        ? (employeeToEdit.companyId as any)?._id || (employeeToEdit.companyId as any)?.id || "" 
+        : employeeToEdit.companyId || "";
+      const branchId = typeof employeeToEdit.branchId === "object" 
+        ? (employeeToEdit.branchId as any)?._id || (employeeToEdit.branchId as any)?.id || "" 
+        : employeeToEdit.branchId || "";
+      const departmentId = typeof employeeToEdit.departmentId === "object" 
+        ? (employeeToEdit.departmentId as any)?._id || (employeeToEdit.departmentId as any)?.id || "" 
+        : employeeToEdit.departmentId || "";
+      const jobId = typeof employeeToEdit.jobId === "object" 
+        ? (employeeToEdit.jobId as any)?._id || (employeeToEdit.jobId as any)?.id || "" 
+        : employeeToEdit.jobId || "";
+
+      console.log("Editing employee with IDs:", { companyId, branchId, departmentId, jobId });
+
       setFormData({
         fullName: employeeToEdit.fullName || "",
         employeeCode: employeeToEdit.employeeCode || "",
@@ -50,12 +127,13 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
         employeeStatus: employeeToEdit.employeeStatus || "ACTIVE",
         jobGrade: employeeToEdit.jobGrade || "",
         nationality: employeeToEdit.nationality || "",
-        gender: employeeToEdit.gender || "",
-        maritalStatus: employeeToEdit.maritalStatus || "",
+        gender: employeeToEdit.gender || "MALE",
+        maritalStatus: employeeToEdit.maritalStatus || "SINGLE",
         address: employeeToEdit.address || "",
-        companyId: typeof employeeToEdit.companyId === "object" ? (employeeToEdit.companyId as any)._id || "" : employeeToEdit.companyId || "",
-        branchId: typeof employeeToEdit.branchId === "object" ? (employeeToEdit.branchId as any)._id || "" : employeeToEdit.branchId || "",
-        jobId: typeof employeeToEdit.jobId === "object" ? (employeeToEdit.jobId as any)._id || "" : employeeToEdit.jobId || "",
+        companyId: companyId,
+        branchId: branchId,
+        departmentId: departmentId,
+        jobId: jobId,
       });
     } else if (!employeeToEdit && isOpen) {
       setFormData({
@@ -64,35 +142,83 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
         email: "",
         phoneNumber: "",
         hireDate: "",
-        employeeStatus: "Active",
+        employeeStatus: "ACTIVE",
         jobGrade: "",
         nationality: "",
-        gender: "",
-        maritalStatus: "",
+        gender: "MALE",
+        maritalStatus: "SINGLE",
         address: "",
         companyId: "",
         branchId: "",
+        departmentId: "",
         jobId: "",
       });
     }
   }, [employeeToEdit, isOpen]);
 
+  // Reset branch, department, job when company changes
+  const handleCompanyChange = (value: string) => {
+    console.log("Company changed to:", value);
+    setFormData(prev => ({
+      ...prev,
+      companyId: value,
+      branchId: "",
+      departmentId: "",
+      jobId: "",
+    }));
+  };
+
+  // Reset job when department changes
+  const handleDepartmentChange = (value: string) => {
+    console.log("Department changed to:", value);
+    setFormData(prev => ({
+      ...prev,
+      departmentId: value,
+      jobId: "",
+    }));
+  };
+
+  // Status options according to API expectations
   const statusOptions = [
-    { value: "Active", label: t("active") },
-    { value: "Inactive", label: t("inactive") },
-    { value: "OnLeave", label: t("on_leave") },
+    { value: "ACTIVE", label: t("active") },
+    { value: "INACTIVE", label: t("inactive") },
+    { value: "ON_LEAVE", label: t("on_leave") },
+    { value: "TERMINATED", label: t("terminated") },
   ];
 
+  // Gender options according to API expectations
   const genderOptions = [
-    { value: "Male", label: t("male") },
-    { value: "Female", label: t("female") },
+    { value: "MALE", label: t("male") },
+    { value: "FEMALE", label: t("female") },
   ];
 
+  // Marital status options according to API expectations
   const maritalStatusOptions = [
-    { value: "Single", label: t("single") },
-    { value: "Married", label: t("married") },
-    { value: "Divorced", label: t("divorced") },
+    { value: "SINGLE", label: t("single") },
+    { value: "MARRIED", label: t("married") },
+    { value: "DIVORCED", label: t("divorced") },
+    { value: "WIDOWED", label: t("widowed") },
   ];
+
+  const companyOptions = companies.map(c => ({ 
+    value: c._id || c.id, 
+    label: c.name 
+  }));
+
+  const branchOptions = filteredBranches.map(b => ({ 
+    value: b._id || b.id, 
+    label: b.name 
+  }));
+
+  const departmentOptions = filteredDepartments.map(d => ({ 
+    value: d._id || d.id, 
+    label: d.departmentName 
+  }));
+
+  const jobOptions = filteredJobs.map(j => ({ 
+    value: j._id || j.id, 
+    label: j.jobName 
+  }));
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -260,6 +386,83 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
               options={maritalStatusOptions}
               fullWidth
             />
+          </div>
+
+          {/* Company */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("company")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.companyId}
+              onChange={(e) => handleCompanyChange(e.target.value)}
+              options={companyOptions}
+              placeholder={t("select_company")}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Branch */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("branch")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.branchId}
+              onChange={(e) => handleChange("branchId", e.target.value)}
+              options={branchOptions}
+              placeholder={t("select_branch")}
+              required
+              disabled={!formData.companyId || branchOptions.length === 0}
+              fullWidth
+            />
+            {formData.companyId && branchOptions.length === 0 && (
+              <p className="text-xs text-amber-600 mt-1">
+                {t("no_branches_available_for_this_company")}
+              </p>
+            )}
+          </div>
+
+          {/* Department */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("department")}
+            </label>
+            <Select
+              value={formData.departmentId}
+              onChange={(e) => handleDepartmentChange(e.target.value)}
+              options={departmentOptions}
+              placeholder={t("select_department")}
+              disabled={!formData.companyId || departmentOptions.length === 0}
+              fullWidth
+            />
+            {formData.companyId && departmentOptions.length === 0 && (
+              <p className="text-xs text-amber-600 mt-1">
+                {t("no_departments_available_for_this_company")}
+              </p>
+            )}
+          </div>
+
+          {/* Job */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("job")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.jobId}
+              onChange={(e) => handleChange("jobId", e.target.value)}
+              options={jobOptions}
+              placeholder={t("select_job")}
+              required
+              disabled={!formData.departmentId || jobOptions.length === 0}
+              fullWidth
+            />
+            {formData.departmentId && jobOptions.length === 0 && (
+              <p className="text-xs text-amber-600 mt-1">
+                {t("no_jobs_available_for_this_department")}
+              </p>
+            )}
           </div>
 
           {/* Address */}
