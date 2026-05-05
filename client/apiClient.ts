@@ -13,7 +13,7 @@ const apiClient: AxiosInstance = axios.create({
     'Content-Type': 'application/json',
     "ngrok-skip-browser-warning": "true"
   },
-  timeout: 10000, // 10 seconds timeout
+  timeout: 30000, // 30 seconds timeout
 });
 
 // Request Interceptor: Add Authorization token to every request

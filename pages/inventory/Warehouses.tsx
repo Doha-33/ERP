@@ -362,7 +362,6 @@ export const Warehouses: React.FC = () => {
       </div>
 
       {/* Table */}
-      <Card className="bg-white">
         <Table
           data={filteredWarehouses}
           columns={columns}
@@ -372,7 +371,6 @@ export const Warehouses: React.FC = () => {
           selectedIds={selectedIds}
           onSelectionChange={setSelectedIds}
         />
-      </Card>
 
       {/* Modal */}
       <WarehouseModal

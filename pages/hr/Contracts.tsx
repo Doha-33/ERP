@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Search, Edit2, Trash2, FileText, Calendar, DollarSign, Building2, Filter, X, ChevronDown, Briefcase, Clock } from "lucide-react";
+import { Plus, Search, Edit2, Trash2, FileText, Calendar, DollarSign, Building2, Filter, X, ChevronDown, Briefcase, Clock, CheckCircle, XCircle } from "lucide-react";
 import { Card, Button, Input, Badge, ExportDropdown } from "../../components/ui/Common";
 import { Table, Column } from "../../components/ui/Table";
 import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
@@ -461,6 +461,3 @@ export const Contracts: React.FC = () => {
     </div>
   );
 };
-
-// Add missing imports
-import { CheckCircle, XCircle } from "lucide-react";

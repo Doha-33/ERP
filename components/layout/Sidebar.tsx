@@ -128,6 +128,12 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
                 path: "/roles",
                 icon: Shield,
               },
+              {
+                id: "system-permissions",
+                label: "sales_permission",
+                path: "/sales-permissions",
+                icon: ShieldCheck,
+              },
             ],
           },
         ]

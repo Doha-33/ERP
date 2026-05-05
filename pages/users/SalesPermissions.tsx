@@ -1,9 +1,8 @@
-
-import React, { useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Search, ChevronDown, Download } from 'lucide-react';
-import { Card, Button, Switch } from '../../components/ui/Common';
-import { Table, Column } from '../../components/ui/Table';
+import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { Search, ChevronDown, Download } from "lucide-react";
+import { Card, Button, Switch, Input, Badge, ExportDropdown } from "../../components/ui/Common";
+import { Table, Column } from "../../components/ui/Table";
 
 interface PermissionRow {
   id: string;
@@ -19,26 +18,37 @@ interface PermissionRow {
 
 export const SalesPermissions: React.FC = () => {
   const { t } = useTranslation();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedRole, setSelectedRole] = useState('Role Name');
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedRole] = useState("sales");
 
   const [data, setData] = useState<PermissionRow[]>([
     {
-      id: '1',
-      roleName: 'sales',
-      description: 'Description',
-      page: 'Sales Orders',
+      id: "1",
+      roleName: "Sales Manager",
+      description: "Full access to sales modules",
+      page: "Sales Orders",
       allowAll: true,
       read: true,
-      edit: false,
+      edit: true,
       add: true,
       delete: true,
     },
     {
-      id: '2',
-      roleName: 'Sales',
-      description: 'Description',
-      page: 'Sales Invoice',
+      id: "2",
+      roleName: "Sales Representative",
+      description: "Limited access to sales",
+      page: "Sales Orders",
+      allowAll: false,
+      read: true,
+      edit: true,
+      add: true,
+      delete: false,
+    },
+    {
+      id: "3",
+      roleName: "Sales Representative",
+      description: "Limited access to sales",
+      page: "Sales Invoice",
       allowAll: false,
       read: true,
       edit: false,
@@ -46,141 +56,174 @@ export const SalesPermissions: React.FC = () => {
       delete: false,
     },
     {
-      id: '3',
-      roleName: 'Sales',
-      description: 'Description',
-      page: 'Customers',
+      id: "4",
+      roleName: "Sales Representative",
+      description: "Limited access to sales",
+      page: "Customers",
       allowAll: false,
       read: true,
       edit: true,
+      add: true,
+      delete: false,
+    },
+    {
+      id: "5",
+      roleName: "Viewer",
+      description: "Read-only access",
+      page: "Sales Orders",
+      allowAll: false,
+      read: true,
+      edit: false,
       add: false,
-      delete: true,
+      delete: false,
     },
   ]);
 
   const handleToggle = (id: string, field: keyof PermissionRow) => {
-    setData(prev => prev.map(row => {
-      if (row.id === id) {
-        const newValue = !row[field];
-        if (field === 'allowAll' && newValue) {
-          return { ...row, allowAll: true, read: true, edit: true, add: true, delete: true };
+    setData((prev) =>
+      prev.map((row) => {
+        if (row.id === id) {
+          const newValue = !row[field];
+          if (field === "allowAll") {
+            return {
+              ...row,
+              allowAll: newValue,
+              read: newValue,
+              edit: newValue,
+              add: newValue,
+              delete: newValue,
+            };
+          }
+          const updatedRow = { ...row, [field]: newValue };
+          const allSet =
+            updatedRow.read && updatedRow.edit && updatedRow.add && updatedRow.delete;
+          return { ...updatedRow, allowAll: allSet };
         }
-        if (field === 'allowAll' && !newValue) {
-          return { ...row, allowAll: false };
-        }
-        // If any specific permission is turned off, Allow All should be off
-        if (!newValue && field !== 'allowAll') {
-          return { ...row, [field]: false, allowAll: false };
-        }
-        // If all specific permissions are turned on, Allow All should be on
-        const updatedRow = { ...row, [field]: newValue };
-        if (updatedRow.read && updatedRow.edit && updatedRow.add && updatedRow.delete) {
-          return { ...row, [field]: newValue, allowAll: true };
-        }
-        return { ...row, [field]: newValue };
-      }
-      return row;
-    }));
+        return row;
+      })
+    );
   };
 
+  const filteredData = data.filter(
+    (row) =>
+      row.page.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      row.roleName.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   const columns: Column<PermissionRow>[] = [
-    { 
-      header: t('role_name'), 
-      accessorKey: 'roleName',
-      render: (r) => <span className="text-gray-600 dark:text-gray-300">{r.roleName}</span>
+    {
+      header: t("role_name"),
+      accessorKey: "roleName",
+      render: (r) => <span className="font-medium text-gray-900">{r.roleName}</span>,
     },
-    { 
-      header: t('description'), 
-      accessorKey: 'description',
-      render: (r) => <span className="text-gray-600 dark:text-gray-300">{r.description}</span>
+    {
+      header: t("page"),
+      accessorKey: "page",
+      render: (r) => <span className="text-gray-600">{r.page}</span>,
     },
-    { 
-      header: t('page'), 
-      accessorKey: 'page',
-      render: (r) => <span className="text-gray-600 dark:text-gray-300">{r.page}</span>
-    },
-    { 
-      header: t('allow_all'), 
+    {
+      header: t("allow_all"),
+      className: "text-center",
       render: (r) => (
-        <Switch 
-          checked={r.allowAll} 
-          onChange={() => handleToggle(r.id, 'allowAll')} 
-        />
-      )
+        <div className="flex justify-center">
+          <Switch
+            checked={r.allowAll}
+            onChange={() => handleToggle(r.id, "allowAll")}
+          />
+        </div>
+      ),
     },
-    { 
-      header: t('read'), 
+    {
+      header: t("read"),
+      className: "text-center",
       render: (r) => (
-        <Switch 
-          checked={r.read} 
-          onChange={() => handleToggle(r.id, 'read')} 
-        />
-      )
+        <div className="flex justify-center">
+          <Switch
+            checked={r.read}
+            onChange={() => handleToggle(r.id, "read")}
+          />
+        </div>
+      ),
     },
-    { 
-      header: t('edit'), 
+    {
+      header: t("edit"),
+      className: "text-center",
       render: (r) => (
-        <Switch 
-          checked={r.edit} 
-          onChange={() => handleToggle(r.id, 'edit')} 
-        />
-      )
+        <div className="flex justify-center">
+          <Switch
+            checked={r.edit}
+            onChange={() => handleToggle(r.id, "edit")}
+          />
+        </div>
+      ),
     },
-    { 
-      header: t('permission_add'), 
+    {
+      header: t("add"),
+      className: "text-center",
       render: (r) => (
-        <Switch 
-          checked={r.add} 
-          onChange={() => handleToggle(r.id, 'add')} 
-        />
-      )
+        <div className="flex justify-center">
+          <Switch
+            checked={r.add}
+            onChange={() => handleToggle(r.id, "add")}
+          />
+        </div>
+      ),
     },
-    { 
-      header: t('delete'), 
+    {
+      header: t("delete"),
+      className: "text-center",
       render: (r) => (
-        <Switch 
-          checked={r.delete} 
-          onChange={() => handleToggle(r.id, 'delete')} 
-        />
-      )
+        <div className="flex justify-center">
+          <Switch
+            checked={r.delete}
+            onChange={() => handleToggle(r.id, "delete")}
+          />
+        </div>
+      ),
     },
   ];
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-blue-900 dark:text-white">{t('sales_permission')}</h1>
-          <p className="text-gray-500 dark:text-gray-400 text-sm">{t('manage_your_permission')}</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t("sales_permission")}</h1>
+          <p className="text-gray-500 mt-1">{t("manage_your_permission")}</p>
         </div>
-        <Button variant="outline" className="text-primary border-primary flex items-center gap-2">
-          <ChevronDown size={16} />
-          {t('export')}
-        </Button>
+        <div className="flex gap-3">
+          <ExportDropdown data={filteredData} filename="sales-permissions" />
+        </div>
       </div>
 
-      <Card className="p-0 overflow-hidden border-none shadow-sm">
-        <div className="p-6 space-y-6">
-          <div className="flex justify-end">
-            <div className="relative">
-              <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-sm text-gray-600 dark:text-gray-300">
-                {t('role_name')}
-                <ChevronDown size={16} />
-              </button>
-            </div>
-          </div>
-
-          <div className="border border-gray-100 dark:border-gray-800 rounded-xl overflow-hidden">
-            <Table 
-              data={data}
-              columns={columns}
-              keyExtractor={(r) => r.id}
-              className="w-full"
-              headerClassName="bg-blue-50/50 dark:bg-blue-900/10 text-blue-900 dark:text-blue-200"
-            />
-          </div>
+      {/* Filters */}
+      <div className="flex flex-wrap gap-4 items-center">
+        <div className="relative max-w-md">
+          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder={t("search_permissions")}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
         </div>
-      </Card>
+
+        <div className="relative">
+          <button className="flex items-center gap-3 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+            <span className="text-gray-500">{t("role_name")}:</span>
+            <span className="capitalize">{selectedRole}</span>
+            <ChevronDown size={16} className="text-gray-400" />
+          </button>
+        </div>
+      </div>
+
+      {/* Table */}
+        <Table
+          data={filteredData}
+          columns={columns}
+          keyExtractor={(r) => r.id}
+        />
     </div>
   );
 };

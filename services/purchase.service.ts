@@ -10,7 +10,7 @@ const purchaseService = {
     return res.data.data;
   },
   async updateSupplier(id: string, data: any) {
-    const res = await apiClient.put(`/suppliers/update/${id}`, data);
+    const res = await apiClient.patch(`/suppliers/update/${id}`, data);
     return res.data.data;
   },
   async deleteSupplier(id: string) {
@@ -27,13 +27,16 @@ const purchaseService = {
     return res.data.data;
   },
   async updatePurchaseRequest(id: string, data: any) {
-    const res = await apiClient.put(`/purchase-requests/update/${id}`, data);
+    const res = await apiClient.patch(`/purchase-requests/update/${id}`, data);
     return res.data.data;
   },
   async updatePurchaseRequestStatus(id: string, status: string) {
-    const res = await apiClient.put(`/purchase-requests/update/${id}/status`, {
-      status,
-    });
+    const res = await apiClient.patch(
+      `/purchase-requests/update/${id}/status`,
+      {
+        status,
+      },
+    );
     return res.data.data;
   },
   async deletePurchaseRequest(id: string) {
@@ -50,7 +53,7 @@ const purchaseService = {
     return res.data.data;
   },
   async updatePurchaseOrder(id: string, data: any) {
-    const res = await apiClient.put(`/purchase-orders/update/${id}`, data);
+    const res = await apiClient.patch(`/purchase-orders/update/${id}`, data);
     return res.data.data;
   },
   async deletePurchaseOrder(id: string) {
@@ -59,17 +62,17 @@ const purchaseService = {
   },
 
   async getGoodsReceipts() {
-    const res = await apiClient.get("/purchase/goods-receipts/list");
+    const res = await apiClient.get("/goods-receipts/list");
     return res.data.data;
   },
   async addGoodsReceipt(data: any) {
-    return apiClient.post("/purchase/goods-receipts/create", data);
+    return apiClient.post("/goods-receipts/create", data);
   },
   async updateGoodsReceipt(id: string, data: any) {
-    return apiClient.put(`/purchase/goods-receipts/update/${id}`, data);
+    return apiClient.patch(`/goods-receipts/update/${id}`, data);
   },
   async deleteGoodsReceipt(id: string) {
-    return apiClient.delete(`/purchase/goods-receipts/delete/${id}`);
+    return apiClient.delete(`/goods-receipts/delete/${id}`);
   },
 
   async getPurchaseInvoices() {
@@ -80,35 +83,61 @@ const purchaseService = {
     return apiClient.post("/purchase-invoice/create", data);
   },
   async updatePurchaseInvoice(id: string, data: any) {
-    return apiClient.put(`/purchase-invoice/update/${id}`, data);
+    return apiClient.patch(`/purchase-invoice/update/${id}`, data);
   },
   async deletePurchaseInvoice(id: string) {
     return apiClient.delete(`/purchase-invoice/delete/${id}`);
   },
 
   async getReturnsToSupplier() {
-    const res = await apiClient.get("/purchase/returns/list");
-    return res.data.data;
-  },
-  async addReturnToSupplier(data: any) {
-    return apiClient.post("/purchase/returns/create", data);
-  },
-  async updateReturnToSupplier(id: string, data: any) {
-    return apiClient.put(`/purchase/returns/update/${id}`, data);
-  },
-  async deleteReturnToSupplier(id: string) {
-    return apiClient.delete(`/purchase/returns/delete/${id}`);
+    const res = await apiClient.get("/purchase-returns/list");
+    const data = res.data?.data || [];
+    return data.map((item: any) => ({
+      ...item,
+      id: item._id,
+      _id: item._id,
+    }));
   },
 
-  async getSupplierRatings() {
-    const res = await apiClient.get("/purchase/ratings/list");
+  async addReturnToSupplier(data: any) {
+    const res = await apiClient.post("/purchase-returns/create", data);
     return res.data.data;
   },
-  async addSupplierRating(data: any) {
-    return apiClient.post("/purchase/ratings/create", data);
+
+  async updateReturnToSupplier(id: string, data: any) {
+    const res = await apiClient.patch(`/purchase-returns/update/${id}`, data);
+    return res.data.data;
   },
+
+  async deleteReturnToSupplier(id: string) {
+    const res = await apiClient.delete(`/purchase-returns/delete/${id}`);
+    return res.data;
+  },
+
+  // Supplier Ratings
+  async getSupplierRatings() {
+    const res = await apiClient.get('/supplier-ratings/list');
+    const data = res.data?.data || [];
+    return data.map((item: any) => ({
+      ...item,
+      id: item._id,
+      _id: item._id,
+    }));
+  },
+
+  async addSupplierRating(data: any) {
+    const res = await apiClient.post('/supplier-ratings/create', data);
+    return res.data.data;
+  },
+
+  async updateSupplierRating(id: string, data: any) {
+    const res = await apiClient.patch(`/supplier-ratings/update/${id}`, data);
+    return res.data.data;
+  },
+
   async deleteSupplierRating(id: string) {
-    return apiClient.delete(`/purchase/ratings/delete/${id}`);
+    const res = await apiClient.delete(`/supplier-ratings/delete/${id}`);
+    return res.data;
   },
 };
 

@@ -3,8 +3,8 @@ import apiClient from '../client/apiClient';
 const inventoryService = {
   // Stock Items (Products)
   async getStockItems() {
-    const res = await apiClient.get('/products/list');
-    const items = res.data?.data || [];
+    const res = await apiClient.get('/inventory/product-list/list');
+    const items = Array.isArray(res.data) ? res.data : (res.data?.data || []);
     return items.map((item: any) => ({
       ...item,
       id: item._id || item.id,
@@ -13,79 +13,44 @@ const inventoryService = {
       sku: item.sku,
       category: item.category,
       productType: item.productType,
-      salesPrice: item.salesPrice,
-      cost: item.cost,
+      salesPrice: item.sellingPrice || item.salesPrice,
+      cost: item.purchasePrice || item.cost,
       description: item.description,
-      unitOfMeasure: item.unitOfMeasure,
+      unitOfMeasure: item.defaultUnit || item.unitOfMeasure,
       barcode: item.barcode,
-      hasExpiry: item.hasExpiry,
-      status: item.status,
-      currentStock: item.currentStock || item.quantityOnHand || 0,
+      hasExpiry: item.expired === 'YES',
+      status: item.status || (item.isDeleted ? 'INACTIVE' : 'ACTIVE'),
+      currentStock: item.currentStockQty || item.currentStock || 0,
       reorderLevel: item.reorderLevel || 0,
+      image: item.image,
+      warehouseName: item.warehouseId?.warehouseName || item.warehouseName
     }));
   },
 
   async addStockItem(data: any) {
-    const res = await apiClient.post('/products/create', {
-      sku: data.sku,
-      productName: data.productName,
-      category: data.category,
-      productType: data.productType,
-      salesPrice: data.salesPrice,
-      cost: data.cost,
-      description: data.description,
-      unitOfMeasure: data.unitOfMeasure,
-      barcode: data.barcode,
-      hasExpiry: data.hasExpiry,
-      status: data.status || 'ACTIVE',
-    });
+    const res = await apiClient.post('/inventory/product-list/create', data);
     return res.data.data;
   },
 
   async updateStockItem(id: string, data: any) {
-    const res = await apiClient.patch(`/products/update/${id}`, {
-      sku: data.sku,
-      productName: data.productName,
-      category: data.category,
-      productType: data.productType,
-      salesPrice: data.salesPrice,
-      cost: data.cost,
-      description: data.description,
-      unitOfMeasure: data.unitOfMeasure,
-      barcode: data.barcode,
-      hasExpiry: data.hasExpiry,
-      status: data.status,
-    });
+    const res = await apiClient.put(`/inventory/product-list/update/${id}`, data);
     return res.data.data;
   },
 
   async deleteStockItem(id: string) {
-    const res = await apiClient.delete(`/products/delete/${id}`);
+    const res = await apiClient.delete(`/inventory/product-list/delete/${id}`);
     return res.data;
   },
 
-  // Stocks
-  async getStock() {
-    const res = await apiClient.get('/stocks/list');
+  async getProductMovements(productId: string) {
+    const res = await apiClient.get(`/stock/movements/${productId}`);
     return res.data.data || [];
-  },
-  async addStock(data: any) {
-    const res = await apiClient.post('/stocks/create', data);
-    return res.data.data;
-  },
-  async updateStock(id: string, data: any) {
-    const res = await apiClient.patch(`/stocks/update/${id}`, data);
-    return res.data.data;
-  },
-  async deleteStock(id: string) {
-    const res = await apiClient.delete(`/stocks/delete/${id}`);
-    return res.data;
   },
 
   // Warehouses
   async getWarehouses() {
     const res = await apiClient.get('/warehouses/list');
-    const warehouses = res.data?.data || [];
+    const warehouses = Array.isArray(res.data) ? res.data : (res.data?.data || []);
     return warehouses.map((w: any) => ({
       ...w,
       id: w._id || w.id,
@@ -113,32 +78,12 @@ const inventoryService = {
   },
 
   async addWarehouse(data: any) {
-    const res = await apiClient.post('/warehouses/create', {
-      code: data.code,
-      warehouseName: data.warehouseName,
-      type: data.type,
-      companyId: data.companyId,
-      branchId: data.branchId,
-      managerName: data.managerName,
-      phoneNumber: data.phoneNumber,
-      location: data.location,
-      state: data.state || 'ACTIVE',
-    });
+    const res = await apiClient.post('/warehouses/create', data);
     return res.data.data;
   },
 
   async updateWarehouse(id: string, data: any) {
-    const res = await apiClient.patch(`/warehouses/update/${id}`, {
-      code: data.code,
-      warehouseName: data.warehouseName,
-      type: data.type,
-      companyId: data.companyId,
-      branchId: data.branchId,
-      managerName: data.managerName,
-      phoneNumber: data.phoneNumber,
-      location: data.location,
-      state: data.state,
-    });
+    const res = await apiClient.put(`/warehouses/update/${id}`, data);
     return res.data.data;
   },
 
@@ -149,22 +94,111 @@ const inventoryService = {
 
   // Categories
   async getCategories() {
-    const res = await apiClient.get('/categories/list');
-    return res.data?.data || [];
+    const res = await apiClient.get('/inventory/category/list');
+    const data = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+    return data.map((item: any) => ({
+      ...item,
+      id: item._id,
+      _id: item._id,
+    }));
   },
 
-  // Stock Movements
-  async addStockMovement(data: any) {
-    const res = await apiClient.post('/stock-movements/create', data);
+  async addCategory(data: any) {
+    const res = await apiClient.post('/inventory/category/create', data);
+    return res.data.data;
+  },
+
+  async updateCategory(id: string, data: any) {
+    const res = await apiClient.put(`/inventory/category/update/${id}`, data);
+    return res.data.data;
+  },
+
+  async deleteCategory(id: string) {
+    const res = await apiClient.delete(`/inventory/category/delete/${id}`);
+    return res.data;
+  },
+
+  // Units
+  async getUnits() {
+    const res = await apiClient.get('/inventory/unit/list');
+    const data = res.data?.data || [];
+    return data.map((item: any) => ({
+      ...item,
+      id: item._id,
+      _id: item._id,
+    }));
+  },
+
+  async addUnit(data: any) {
+    const res = await apiClient.post('/inventory/unit/create', data);
+    return res.data.data;
+  },
+
+  async updateUnit(id: string, data: any) {
+    const res = await apiClient.patch(`/inventory/unit/update/${id}`, data);
+    return res.data.data;
+  },
+
+  async deleteUnit(id: string) {
+    const res = await apiClient.delete(`/inventory/unit/delete/${id}`);
+    return res.data;
+  },
+
+ // Stock Management
+  async getStock() {
+    const res = await apiClient.get('/stock/list');
+    const data = res.data?.data || [];
+    return data.map((item: any) => ({
+      ...item,
+      id: item._id,
+      _id: item._id,
+      productName: item.productId?.productName || item.productName,
+      sku: item.productId?.sku || item.sku,
+      unit: item.productId?.unitOfMeasure || item.unit,
+      warehouseName: item.warehouseId?.warehouseName || item.warehouseName,
+      warehouseId: typeof item.warehouseId === 'object' ? (item.warehouseId._id || item.warehouseId.id) : item.warehouseId,
+      productId: typeof item.productId === 'object' ? (item.productId._id || item.productId.id) : item.productId,
+    }));
+  },
+
+  async stockIn(data: any) {
+    const res = await apiClient.post('/stock/in', data);
+    return res.data.data;
+  },
+
+  async stockOut(data: any) {
+    const res = await apiClient.post('/stock/out', data);
     return res.data.data;
   },
 
   async getStockMovements(productId?: string) {
-    const url = productId 
-      ? `/stock-movements/list?productId=${productId}`
-      : '/stock-movements/list';
+    const url = productId ? `/stock/movements/${productId}` : '/stock/movements';
     const res = await apiClient.get(url);
-    return res.data?.data || [];
+    const data = res.data.data || [];
+    return data.map((m: any) => ({
+      ...m,
+      id: m._id || m.id,
+      productName: m.productId?.productName || m.productName,
+      sku: m.productId?.sku || m.sku,
+      warehouse: typeof m.warehouseId === 'object' ? (m.warehouseId.warehouseName || m.warehouseId.name) : (m.warehouse || m.warehouseId),
+      qty: m.qty || m.quantity,
+      type: m.type || (m.qty > 0 ? 'In' : 'Out'),
+    }));
+  },
+
+  async reserveStock(data: any) {
+    const res = await apiClient.post('/stock/reserve', data);
+    return res.data.data;
+  },
+
+  async releaseStock(data: any) {
+    const res = await apiClient.post('/stock/release', data);
+    return res.data.data;
+  },
+
+  // Alias for getStock as requested by user
+  async getStockList() {
+    return this.getStock();
   },
 };
 

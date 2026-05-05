@@ -27,7 +27,7 @@ const userService = {
 
   async createUser(userData: any): Promise<User> {
     try {
-      const response = await apiClient.post<{ success: boolean; data: User }>('/auth/register', userData);
+      const response = await apiClient.post<{ success: boolean; data: User }>('/users/create', userData);
       if (response.data.success) {
         return response.data.data;
       }
@@ -62,7 +62,7 @@ const userService = {
 
   async updateUser(userId: string, userData: any): Promise<User> {
     try {
-      const response = await apiClient.put<{ success: boolean; data: User }>(`/users/update/${userId}`, userData);
+      const response = await apiClient.patch<{ success: boolean; data: User }>(`/users/update/${userId}`, userData);
       if (response.data.success) {
         return response.data.data;
       }

@@ -82,8 +82,12 @@ const salesService = {
     return res.data;
   },
   
+  async getSettings(){
+    const res = await apiClient.get('/sales-settings/list');
+    return res.data.data;
+  },
   async updateSalesSettings(data: any) {
-    const res = await apiClient.put('/settings/update', data);
+    const res = await apiClient.patch('/sales-settings/update', data);
     return res.data.data;
   },
   

@@ -1,13 +1,13 @@
-
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Plus, Edit2, Trash2, Shield, Search, Lock } from 'lucide-react';
-import { Card, Button } from '../../components/ui/Common';
-import { Table, Column } from '../../components/ui/Table';
-import roleService, { Role } from '../../services/role.service';
-import { RoleModal } from '../../components/users/RoleModal';
-import { PermissionsModal } from '../../components/users/PermissionsModal';
-import { ConfirmationModal } from '../../components/ui/ConfirmationModal';
+import React, { useState, useMemo, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
+import { Plus, Edit2, Trash2, Shield, Search, Lock, Users } from "lucide-react";
+import { Card, Button, Input, Badge, ExportDropdown } from "../../components/ui/Common";
+import { Table, Column } from "../../components/ui/Table";
+import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
+import { RoleModal } from "../../components/users/RoleModal";
+import { PermissionsModal } from "../../components/users/PermissionsModal";
+import roleService, { Role } from "../../services/role.service";
+import { toast } from "sonner";
 
 export const RolesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -17,7 +17,10 @@ export const RolesPage: React.FC = () => {
   const [isPermModalOpen, setIsPermModalOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
 
   const fetchRoles = useCallback(async () => {
     try {
@@ -25,11 +28,12 @@ export const RolesPage: React.FC = () => {
       const data = await roleService.getAllRoles();
       setRoles(data);
     } catch (error) {
-      console.error('Error fetching roles:', error);
+      console.error("Error fetching roles:", error);
+      toast.error(t("failed_to_fetch_roles"));
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     fetchRoles();
@@ -39,13 +43,17 @@ export const RolesPage: React.FC = () => {
     try {
       if (editingRole) {
         await roleService.updateRole(editingRole._id, data);
+        toast.success(t("role_updated_successfully"));
       } else {
         await roleService.createRole(data);
+        toast.success(t("role_created_successfully"));
       }
       await fetchRoles();
       setIsModalOpen(false);
+      setEditingRole(null);
     } catch (error) {
-      console.error('Error saving role:', error);
+      console.error("Error saving role:", error);
+      toast.error(t("failed_to_save_role"));
     }
   };
 
@@ -53,11 +61,27 @@ export const RolesPage: React.FC = () => {
     if (deleteId) {
       try {
         await roleService.deleteRole(deleteId);
+        toast.success(t("role_deleted_successfully"));
         await fetchRoles();
         setDeleteId(null);
+        setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
       } catch (error) {
-        console.error('Error deleting role:', error);
+        console.error("Error deleting role:", error);
+        toast.error(t("failed_to_delete_role"));
       }
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    try {
+      await Promise.all(selectedIds.map(id => roleService.deleteRole(id)));
+      toast.success(t("roles_deleted_successfully", { count: selectedIds.length }));
+      setSelectedIds([]);
+      setIsBulkConfirmOpen(false);
+      await fetchRoles();
+    } catch (error) {
+      console.error("Bulk delete failed", error);
+      toast.error(t("failed_to_delete_roles"));
     }
   };
 
@@ -66,134 +90,242 @@ export const RolesPage: React.FC = () => {
     setIsPermModalOpen(true);
   };
 
-  const filtered = useMemo(() => {
-    return roles.filter(r => 
-      (r.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (r.description || '').toLowerCase().includes(searchTerm.toLowerCase())
+  const getStatusBadge = (state: string) => {
+    return (
+      <Badge variant={state === "ACTIVE" ? "success" : "danger"}>
+        {state === "ACTIVE" ? t("active") : t("inactive")}
+      </Badge>
     );
-  }, [roles, searchTerm]);
+  };
 
-  const columns: Column<Role>[] = useMemo(() => [
-    { 
-      header: t('role_name'), 
-      render: (r) => (
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-blue-50 dark:bg-blue-900/20 text-primary rounded-lg">
-            <Shield size={16} />
+  const filteredRoles = useMemo(() => {
+    return roles.filter(r => {
+      const matchesSearch = 
+        (r.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (r.description || "").toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesStatus = !statusFilter || r.state === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [roles, searchTerm, statusFilter]);
+
+  const statusOptions = [
+    { value: "", label: t("all_statuses") },
+    { value: "ACTIVE", label: t("active") },
+    { value: "INACTIVE", label: t("inactive") },
+  ];
+
+  const columns: Column<Role>[] = useMemo(
+    () => [
+      {
+        header: t("role_info"),
+        render: (r) => (
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center">
+              <Shield size={18} className="text-indigo-600" />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-medium text-gray-900">{r.name}</span>
+              <span className="text-xs text-gray-500">{r.description || "-"}</span>
+            </div>
           </div>
-          <span className="font-bold text-[#4A5568] dark:text-white">{r.name}</span>
-        </div>
-      )
-    },
-    { header: t('description'), accessorKey: 'description', className: 'text-[#718096]' },
-    { 
-      header: t('state'), 
-      render: (r) => (
-        <span className={`px-4 py-1 rounded-md text-xs font-bold ${
-          r.state === 'ACTIVE' ? 'bg-[#2F855A] text-white' : 'bg-[#CBD5E0] text-[#718096]'
-        }`}>
-          {r.state}
-        </span>
-      )
-    },
-    { 
-      header: t('user_id'), 
-      render: (r) => <span className="text-[#718096] text-[10px] font-mono">{r._id}</span> 
-    },
-    {
-      header: t('actions'),
-      className: 'text-center',
-      render: (r) => (
-        <div className="flex items-center justify-center gap-2">
-           <button 
-             onClick={() => handleOpenPermissions(r)}
-             title="Manage Permissions"
-             className="p-1.5 text-orange-500 hover:bg-orange-50 rounded-lg border border-orange-100 transition-colors"
-           >
-             <Lock size={16} />
-           </button>
-           <button 
-             onClick={() => { setEditingRole(r); setIsModalOpen(true); }} 
-             className="p-1.5 text-[#718096] hover:text-primary rounded-lg border border-[#E2E8F0] dark:border-gray-700 transition-colors"
-           >
-             <Edit2 size={16} />
-           </button>
-           <button 
-             onClick={() => setDeleteId(r._id)} 
-             className="p-1.5 text-[#718096] hover:text-red-600 rounded-lg border border-[#E2E8F0] dark:border-gray-700 transition-colors"
-           >
-             <Trash2 size={16} />
-           </button>
-        </div>
-      )
-    }
-  ], [t]);
+        ),
+      },
+      {
+        header: t("users"),
+        render: (r) => (
+          <div className="flex items-center gap-1.5">
+            <Users size={14} className="text-gray-400" />
+            <span className="text-sm font-medium text-gray-700">{(r as any).userCount || 0}</span>
+          </div>
+        ),
+      },
+      {
+        header: t("status"),
+        render: (r) => getStatusBadge(r.state),
+      },
+      {
+        header: t("actions"),
+        className: "text-center",
+        render: (r) => (
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={() => handleOpenPermissions(r)}
+              className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-lg border border-amber-200 transition-colors"
+              title={t("manage_permissions")}
+            >
+              <Lock size={16} />
+            </button>
+            <button
+              onClick={() => {
+                setEditingRole(r);
+                setIsModalOpen(true);
+              }}
+              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+              title={t("edit")}
+            >
+              <Edit2 size={16} />
+            </button>
+            <button
+              onClick={() => setDeleteId(r._id)}
+              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+              title={t("delete")}
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
+        ),
+      },
+    ],
+    [t]
+  );
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-           <h1 className="text-2xl font-bold text-[#2D3748] dark:text-white">{t('roles')}</h1>
-           <p className="text-[#718096] dark:text-gray-400 text-sm">{t('manage_your_roles_desc')}</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t("roles")}</h1>
+          <p className="text-gray-500 mt-1">{t("manage_your_roles_desc")}</p>
         </div>
-        <div className="flex gap-4">
-           <Button 
-             onClick={() => { setEditingRole(null); setIsModalOpen(true); }} 
-             className="bg-[#4361EE] hover:bg-blue-700 text-white min-w-[160px] flex items-center gap-2"
-           >
-              <Plus size={18} /> {t('add_role')}
-           </Button>
+        <div className="flex gap-3">
+          {selectedIds.length > 0 && (
+            <Button
+              variant="danger"
+              onClick={() => setIsBulkConfirmOpen(true)}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              <Trash2 size={18} />
+              {t("delete_selected")} ({selectedIds.length})
+            </Button>
+          )}
+          <ExportDropdown data={filteredRoles} filename="roles" />
+          <Button
+            variant="primary"
+            onClick={() => {
+              setEditingRole(null);
+              setIsModalOpen(true);
+            }}
+            className="bg-indigo-600 hover:bg-indigo-700"
+          >
+            <Plus size={18} />
+            {t("add_role")}
+          </Button>
         </div>
       </div>
 
-      <Card className="overflow-visible border-none shadow-xl shadow-gray-200/50 dark:shadow-none">
-        <div className="flex justify-between items-center mb-6 bg-gray-50 dark:bg-gray-800/20 p-4 rounded-xl">
-           <div className="relative w-full max-w-md">
-              <input 
-                type="text" 
-                placeholder={t('search_placeholder')}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-4 py-2 border border-[#E2E8F0] dark:border-gray-700 rounded-lg text-sm outline-none pr-10 focus:ring-1 focus:ring-primary dark:bg-gray-800 dark:text-white"
-              />
-              <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
-           </div>
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center">
+              <Shield size={18} className="text-indigo-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">{t("total_roles")}</p>
+              <p className="text-xl font-bold text-gray-900">{roles.length}</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center">
+              <Users size={18} className="text-green-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">{t("total_users_assigned")}</p>
+              <p className="text-xl font-bold text-green-600">
+                {roles.reduce((sum, r) => sum + ((r as any).userCount || 0), 0)}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-4 items-center">
+        <div className="relative max-w-md">
+          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder={t("search_roles")}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
         </div>
 
-        {isLoading ? (
-          <div className="flex justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
-          </div>
-        ) : (
-          <Table 
-            data={filtered}
-            columns={columns}
-            keyExtractor={(r) => r._id}
-            selectable
-            minWidth="min-w-[1000px]"
-          />
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          {statusOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+
+        {(statusFilter || searchTerm) && (
+          <button
+            onClick={() => {
+              setStatusFilter("");
+              setSearchTerm("");
+            }}
+            className="text-sm text-red-600 hover:text-red-700"
+          >
+            {t("clear_filters")}
+          </button>
         )}
-      </Card>
+      </div>
 
-      <RoleModal 
+      {/* Table */}
+        <Table
+          data={filteredRoles}
+          columns={columns}
+          keyExtractor={(r) => r._id}
+          isLoading={isLoading}
+          selectable
+          selectedIds={selectedIds}
+          onSelectionChange={setSelectedIds}
+        />
+
+      {/* Modals */}
+      <RoleModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingRole(null);
+        }}
         onSave={handleSave}
-        roleToEdit={editingRole as any}
+        roleToEdit={editingRole}
+        isLoading={isLoading}
       />
 
-      <PermissionsModal 
+      <PermissionsModal
         isOpen={isPermModalOpen}
-        onClose={() => setIsPermModalOpen(false)}
-        role={editingRole as any}
+        onClose={() => {
+          setIsPermModalOpen(false);
+          setEditingRole(null);
+        }}
+        role={editingRole}
       />
 
+      {/* Delete Confirmations */}
       <ConfirmationModal
         isOpen={!!deleteId}
         onClose={() => setDeleteId(null)}
         onConfirm={handleDelete}
-        title={t('confirm_delete')}
-        message={t('are_you_sure_delete')}
+        title={t("delete_role")}
+        message={t("are_you_sure_delete_role")}
+      />
+
+      <ConfirmationModal
+        isOpen={isBulkConfirmOpen}
+        onClose={() => setIsBulkConfirmOpen(false)}
+        onConfirm={handleBulkDelete}
+        title={t("delete_roles")}
+        message={t("are_you_sure_delete_roles", { count: selectedIds.length })}
       />
     </div>
   );

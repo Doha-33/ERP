@@ -36,7 +36,7 @@ const roleService = {
 
   async updateRole(roleId: string, roleData: Partial<Role>): Promise<Role> {
     try {
-      const response = await apiClient.put<{ success: boolean; data: Role }>(`/roles/update/${roleId}`, roleData);
+      const response = await apiClient.patch<{ success: boolean; data: Role }>(`/roles/update/${roleId}`, roleData);
       if (response.data.success) {
         return response.data.data;
       }
@@ -59,7 +59,7 @@ const roleService = {
 
   async getPermissionsByRole(roleId: string): Promise<any[]> {
     try {
-      const response = await apiClient.get<{ success: boolean; data: any[] }>(`/roles/${roleId}/permissions`);
+      const response = await apiClient.get<{ success: boolean; data: any[] }>(`/permissions/list/${roleId}`);
       if (response.data.success) {
         return response.data.data;
       }
@@ -70,11 +70,11 @@ const roleService = {
     }
   },
 
-  async addPermissionToRole(roleId: string, permissionIds: string[]): Promise<void> {
+  async updatePermissionForRole(roleId: string, permissionData: any): Promise<void> {
     try {
-      await apiClient.post(`/roles/${roleId}/permissions`, { permissionIds });
+      await apiClient.post(`/permissions/create/${roleId}`, permissionData);
     } catch (error: any) {
-      throw new Error(error.message || 'Error assigning permissions');
+      throw new Error(error.message || 'Error updating permissions');
     }
   }
 };

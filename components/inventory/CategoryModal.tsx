@@ -1,23 +1,23 @@
 import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Shield, Edit2, Plus } from "lucide-react";
+import { Plus, Edit2, Tag, FileText } from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
 import { Button, Input, Select, TextArea } from "../../components/ui/Common";
-import { Role } from "../../services/role.service";
+import { Category } from "../../types";
 
-interface RoleModalProps {
+interface CategoryModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (data: any) => Promise<void>;
-  roleToEdit?: Role | null;
+  onSave: (data: Partial<Category>) => Promise<void>;
+  categoryToEdit?: Category | null;
   isLoading?: boolean;
 }
 
-export const RoleModal: React.FC<RoleModalProps> = ({
+export const CategoryModal: React.FC<CategoryModalProps> = ({
   isOpen,
   onClose,
   onSave,
-  roleToEdit,
+  categoryToEdit,
   isLoading = false,
 }) => {
   const { t } = useTranslation();
@@ -25,24 +25,24 @@ export const RoleModal: React.FC<RoleModalProps> = ({
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-    state: "ACTIVE",
+    status: "ACTIVE",
   });
 
   useEffect(() => {
-    if (roleToEdit && isOpen) {
+    if (categoryToEdit && isOpen) {
       setFormData({
-        name: roleToEdit.name || "",
-        description: roleToEdit.description || "",
-        state: roleToEdit.state || "ACTIVE",
+        name: categoryToEdit.name || "",
+        description: categoryToEdit.description || "",
+        status: categoryToEdit.status || categoryToEdit.state || "ACTIVE",
       });
-    } else if (!roleToEdit && isOpen) {
+    } else if (!categoryToEdit && isOpen) {
       setFormData({
         name: "",
         description: "",
-        state: "ACTIVE",
+        status: "ACTIVE",
       });
     }
-  }, [roleToEdit, isOpen]);
+  }, [categoryToEdit, isOpen]);
 
   const statusOptions = [
     { value: "ACTIVE", label: t("active") },
@@ -52,7 +52,7 @@ export const RoleModal: React.FC<RoleModalProps> = ({
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
-
+    
     try {
       await onSave(formData);
       onClose();
@@ -64,7 +64,7 @@ export const RoleModal: React.FC<RoleModalProps> = ({
   };
 
   const handleChange = (field: string, value: any) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   return (
@@ -73,37 +73,23 @@ export const RoleModal: React.FC<RoleModalProps> = ({
       onClose={onClose}
       title={
         <div className="flex items-center gap-2">
-          {roleToEdit ? <Edit2 size={20} /> : <Plus size={20} />}
-          {roleToEdit ? t("edit_role") : t("add_role")}
+          {categoryToEdit ? <Edit2 size={20} /> : <Plus size={20} />}
+          {categoryToEdit ? t("edit_category") : t("add_category")}
         </div>
       }
       size="4xl"
     >
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-          {/* Role Name */}
-          <div className="space-y-1">
+          {/* Category Name */}
+          <div className="col-span-2 space-y-1">
             <label className="text-sm font-medium text-gray-700">
-              {t("role_name")} <span className="text-red-500">*</span>
+              {t("category_name")} <span className="text-red-500">*</span>
             </label>
             <Input
               value={formData.name}
               onChange={(e) => handleChange("name", e.target.value)}
-              placeholder={t("enter_role_name")}
-              required
-              fullWidth
-            />
-          </div>
-
-          {/* Status */}
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-gray-700">
-              {t("status")} <span className="text-red-500">*</span>
-            </label>
-            <Select
-              value={formData.state}
-              onChange={(e) => handleChange("state", e.target.value)}
-              options={statusOptions}
+              placeholder={t("enter_category_name")}
               required
               fullWidth
             />
@@ -112,13 +98,26 @@ export const RoleModal: React.FC<RoleModalProps> = ({
           {/* Description */}
           <div className="col-span-2 space-y-1">
             <label className="text-sm font-medium text-gray-700">
-              {t("description")} <span className="text-red-500">*</span>
+              {t("description")}
             </label>
             <TextArea
               value={formData.description}
               onChange={(e) => handleChange("description", e.target.value)}
-              placeholder={t("enter_role_description")}
-              rows={4}
+              placeholder={t("enter_description")}
+              rows={3}
+              fullWidth
+            />
+          </div>
+
+          {/* Status */}
+          <div className="col-span-2 space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("status")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.status}
+              onChange={(e) => handleChange("status", e.target.value)}
+              options={statusOptions}
               required
               fullWidth
             />
@@ -136,7 +135,7 @@ export const RoleModal: React.FC<RoleModalProps> = ({
             isLoading={isSubmitting || isLoading}
             disabled={isSubmitting || isLoading}
           >
-            {roleToEdit ? t("save") : t("add_role")}
+            {categoryToEdit ? t("save") : t("add_category")}
           </Button>
         </div>
       </form>

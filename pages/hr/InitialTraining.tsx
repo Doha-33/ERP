@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Search, Edit2, Trash2, Calendar, BookOpen, User, Filter, X, ChevronDown, Award } from "lucide-react";
+import { Plus, Search, Edit2, Trash2, Calendar, BookOpen, User, Filter, X, ChevronDown, Award, Clock, XCircle } from "lucide-react";
 import { Card, Button, Input, Badge, ExportDropdown } from "../../components/ui/Common";
 import { Table, Column } from "../../components/ui/Table";
 import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
@@ -165,72 +165,72 @@ export const InitialTrainingPage: React.FC = () => {
     () => [
       {
         header: t("employee"),
-        render: (t) => (
+        render: (item) => (
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
               <User size={18} className="text-indigo-600" />
             </div>
             <div className="flex flex-col">
-              <span className="font-medium text-gray-900">{getEmployeeName(t)}</span>
-              <span className="text-xs text-gray-500">{getEmployeeCode(t)}</span>
+              <span className="font-medium text-gray-900">{getEmployeeName(item)}</span>
+              <span className="text-xs text-gray-500">{getEmployeeCode(item)}</span>
             </div>
           </div>
         )
       },
       {
         header: t("training_info"),
-        render: (t) => (
+        render: (item) => (
           <div className="flex flex-col gap-0.5">
             <div className="flex items-center gap-1.5">
               <BookOpen size={14} className="text-blue-500" />
-              <span className="text-sm font-medium text-gray-700">{t.trainingType}</span>
+              <span className="text-sm font-medium text-gray-700">{item.trainingType}</span>
             </div>
             <div className="flex items-center gap-1.5">
               <Award size={12} className="text-gray-400" />
-              <span className="text-xs text-gray-500">{t.trainer}</span>
+              <span className="text-xs text-gray-500">{item.trainer}</span>
             </div>
           </div>
         )
       },
       {
         header: t("department"),
-        render: (t) => (
-          <span className="text-sm text-gray-600">{getDepartmentName(t)}</span>
+        render: (item) => (
+          <span className="text-sm text-gray-600">{getDepartmentName(item)}</span>
         )
       },
       {
         header: t("date"),
-        render: (t) => (
+        render: (item) => (
           <div className="flex items-center gap-1.5">
             <Calendar size={14} className="text-gray-400" />
-            <span className="text-sm text-gray-600">{formatDate(t.doneAt || t.trainingDate)}</span>
+            <span className="text-sm text-gray-600">{formatDate(item.doneAt || item.trainingDate)}</span>
           </div>
         )
       },
       {
         header: t("done_by"),
-        render: (t) => (
-          <span className="text-sm text-gray-600">{t.doneBy || "-"}</span>
+        render: (item) => (
+          <span className="text-sm text-gray-600">{item.doneBy || "-"}</span>
         )
       },
       {
         header: t("status"),
-        render: (t) => getStatusBadge(t.status)
+        render: (item) => getStatusBadge(item.status)
       },
       {
         header: t("actions"),
         className: "text-center",
-        render: (t) => (
+        render: (item) => (
           <div className="flex items-center justify-center gap-2">
             <button
-              onClick={() => handleEdit(t)}
+              onClick={() => handleEdit(item)}
               className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
               title={t("edit")}
             >
               <Edit2 size={16} />
             </button>
             <button
-              onClick={() => handleDelete(t._id || t.id)}
+              onClick={() => handleDelete(item._id || item.id)}
               className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
               title={t("delete")}
             >
@@ -407,6 +407,3 @@ export const InitialTrainingPage: React.FC = () => {
     </div>
   );
 };
-
-// Add missing imports
-import { Clock, XCircle } from "lucide-react";

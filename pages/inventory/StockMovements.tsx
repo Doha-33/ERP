@@ -19,11 +19,18 @@ export const StockMovements: React.FC = () => {
     {
       header: t('product_name'),
       accessorKey: 'productName' as keyof StockMovement,
-      render: (m: StockMovement) => <span className="font-medium">{m.productName || (m as any).name}</span>
+      render: (m: StockMovement) => {
+        const pName = m.productName || (m as any).name || (typeof (m as any).productId === 'object' ? (m as any).productId?.productName : 'N/A');
+        return <span className="font-medium">{pName}</span>;
+      }
     },
     {
       header: t('warehouse'),
       accessorKey: 'warehouse' as keyof StockMovement,
+      render: (m: StockMovement) => {
+        const wName = m.warehouse || (typeof (m as any).warehouseId === 'object' ? ((m as any).warehouseId?.warehouseName || (m as any).warehouseId?.name) : (m as any).warehouseId || '-');
+        return <span>{String(wName)}</span>;
+      }
     },
     {
       header: t('quantity'),
@@ -43,23 +50,24 @@ export const StockMovements: React.FC = () => {
     },
     {
       header: t('reference'),
-      accessorKey: 'reference' as keyof StockMovement,
+      accessorKey: 'referenceId' as any,
+      render: (m: any) => m.referenceId || m.reference || '-'
     },
     {
       header: t('user'),
       accessorKey: 'userName' as keyof StockMovement,
       render: (m: StockMovement) => (
         <div className="flex flex-col">
-          <span className="text-sm font-medium">{m.userName}</span>
-          <span className="text-xs text-gray-500">{m.userRole}</span>
+          <span className="text-sm font-medium">{m.userName || t('system')}</span>
+          <span className="text-xs text-gray-500">{(m as any).userRole || (m as any).referenceType || ''}</span>
         </div>
       )
     }
   ];
 
   const filteredMovements = stockMovements.filter(m => 
-    m.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    m.reference.toLowerCase().includes(searchTerm.toLowerCase())
+    (m.productName || (m as any).name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (m.reference || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (

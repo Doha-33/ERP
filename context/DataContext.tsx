@@ -63,20 +63,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchAllDataCentral = useCallback(async () => {
     setIsDataLoading(true);
     try {
-      await Promise.all([
-        salesFetchRef.current?.(),
-        orgFetchRef.current?.(),
-        employeeFetchRef.current?.(),
-        hrFinanceFetchRef.current?.(),
-        accountingFetchRef.current?.(),
-        requestFetchRef.current?.(),
-        onboardingFetchRef.current?.(),
-        inventoryFetchRef.current?.(),
-        purchaseFetchRef.current?.(),
-        assetsFetchRef.current?.(),
-      ]);
+      // Execute fetches sequentially to avoid overwhelming the proxy/backend
+      // which can lead to timeouts (especially over ngrok/slow networks)
+      await salesFetchRef.current?.();
+      await orgFetchRef.current?.();
+      await employeeFetchRef.current?.();
+      await hrFinanceFetchRef.current?.();
+      await accountingFetchRef.current?.();
+      await requestFetchRef.current?.();
+      await onboardingFetchRef.current?.();
+      await inventoryFetchRef.current?.();
+      await purchaseFetchRef.current?.();
+      await assetsFetchRef.current?.();
     } catch (error) {
-      console.error('Error fetching all data:', error);
+      console.error('Error fetching data during central update:', error);
     } finally {
       setIsDataLoading(false);
     }
@@ -105,6 +105,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     inventoryFetchRef.current = inventoryModule.fetchInventoryData;
     purchaseFetchRef.current = purchaseModule.fetchPurchaseData;
     assetsFetchRef.current = assetsModule.fetchAssetsData;
+
+    fetchAllDataCentral();
   }, [
     salesModule.fetchSalesData, 
     orgModule.fetchOrganizationData, 
@@ -115,12 +117,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     onboardingModule.fetchOnboardingData,
     inventoryModule.fetchInventoryData,
     purchaseModule.fetchPurchaseData,
-    assetsModule.fetchAssetsData
+    assetsModule.fetchAssetsData,
+    fetchAllDataCentral
   ]);
-
-  useEffect(() => {
-    fetchAllDataCentral();
-  }, [fetchAllDataCentral]);
 
   const currentUserEmployee = useMemo(() => {
     if (!user || !employeeModule.employees.length) return undefined;

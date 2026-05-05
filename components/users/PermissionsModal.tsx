@@ -1,212 +1,297 @@
+import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { Shield, Lock, Save, ChevronDown } from "lucide-react";
+import { Modal } from "../../components/ui/Modal";
+import { Button, Switch } from "../../components/ui/Common";
+import { Table, Column } from "../../components/ui/Table";
+import roleService, { Role } from "../../services/role.service";
+import { toast } from "sonner";
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Shield, Check, Save, ChevronRight, ChevronDown } from 'lucide-react';
-import { Button } from '../ui/Common';
-import { Modal } from '../ui/Modal';
-import { UserRole, Permission } from '../../types';
-import { useData } from '../../context/DataContext';
+interface PagePermission {
+  module: string;
+  page: string;
+  read: boolean;
+  create: boolean;
+  edit: boolean;
+  delete: boolean;
+  allowAll: boolean;
+}
 
 interface PermissionsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  role: UserRole | null;
+  role: Role | null;
 }
 
-export const PermissionsModal: React.FC<PermissionsModalProps> = ({ isOpen, onClose, role }) => {
-  const { t } = useTranslation();
-  const { structuredPermissions, roles, assignPermissionsToRole } = useData();
-  
-  // Local state for selected permission IDs
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [isSaving, setIsSaving] = useState(false);
-  const [expandedModules, setExpandedModules] = useState<string[]>([]);
+const PAGES_LIST = [
+  { module: "Dashboard", page: "Main Dashboard" },
+  { module: "Sales", page: "Sales Orders" },
+  { module: "Sales", page: "Sales Invoice" },
+  { module: "Sales", page: "Customers" },
+  { module: "Sales", page: "Quotations" },
+  { module: "Sales", page: "Products" },
+  { module: "Sales", page: "Discounts" },
+  { module: "Sales", page: "Promotions" },
+  { module: "Inventory", page: "Products" },
+  { module: "Inventory", page: "Warehouses" },
+  { module: "Inventory", page: "Stock" },
+  { module: "HR", page: "Employees" },
+  { module: "HR", page: "Attendance" },
+  { module: "HR", page: "Payroll" },
+  { module: "HR", page: "Leaves" },
+  { module: "HR", page: "Requests" },
+  { module: "Fleet", page: "Vehicles" },
+  { module: "Fleet", page: "Drivers" },
+  { module: "Fleet", page: "Trips" },
+  { module: "Manufacturing", page: "BOM" },
+  { module: "Manufacturing", page: "Orders" },
+  { module: "Purchasing", page: "Suppliers" },
+  { module: "Purchasing", page: "Purchase Orders" },
+  { module: "CRM", page: "Leads" },
+  { module: "CRM", page: "Contacts" },
+  { module: "CRM", page: "Deals" },
+  { module: "Settings", page: "Users" },
+  { module: "Settings", page: "Roles" },
+  { module: "Settings", page: "Companies" },
+  { module: "Settings", page: "Branches" },
+];
 
-  // Find all permission IDs currently in use across roles to create a flat mapping of Code -> ID
-  const codeToIdMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    if (!Array.isArray(roles)) return map;
-    
-    roles.forEach(r => {
-      if (Array.isArray(r.Permissions)) {
-        r.Permissions.forEach(p => {
-          if (p.code && p.permission_id) {
-            map[p.code] = p.permission_id;
-          }
-        });
-      }
-    });
-    return map;
-  }, [roles]);
+export const PermissionsModal: React.FC<PermissionsModalProps> = ({
+  isOpen,
+  onClose,
+  role,
+}) => {
+  const { t } = useTranslation();
+  const [permissions, setPermissions] = useState<PagePermission[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (isOpen && role) {
-      const currentIds = (role.Permissions || []).map(p => p.permission_id).filter(Boolean);
-      setSelectedIds(currentIds);
-      // Auto-expand HR by default as it's common
-      setExpandedModules(['hr']);
+      const fetchPermissions = async () => {
+        setIsLoading(true);
+        try {
+          const data = await roleService.getPermissionsByRole(role._id);
+          const mapped = PAGES_LIST.map((p) => {
+            const existing = data.find(
+              (ex) => ex.module === p.module && ex.page === p.page
+            );
+            const actions = existing?.actions || {
+              read: false,
+              create: false,
+              edit: false,
+              delete: false,
+            };
+            const allowAll =
+              actions.read && actions.create && actions.edit && actions.delete;
+
+            return {
+              module: p.module,
+              page: p.page,
+              read: actions.read || false,
+              create: actions.create || false,
+              edit: actions.edit || false,
+              delete: actions.delete || false,
+              allowAll,
+            };
+          });
+          setPermissions(mapped);
+        } catch (error) {
+          console.error("Error fetching permissions:", error);
+          setPermissions(
+            PAGES_LIST.map((p) => ({
+              ...p,
+              read: false,
+              create: false,
+              edit: false,
+              delete: false,
+              allowAll: false,
+            }))
+          );
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      fetchPermissions();
     }
   }, [isOpen, role]);
 
-  const handleToggleModule = (module: string) => {
-    setExpandedModules(prev => 
-      prev.includes(module) ? prev.filter(m => m !== module) : [...prev, module]
-    );
-  };
+  const handleToggle = (index: number, action: keyof PagePermission) => {
+    const updated = [...permissions];
+    const item = { ...updated[index] };
 
-  const handleTogglePermission = (id: string) => {
-    if (!id) return;
-    setSelectedIds(prev => 
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-    );
-  };
-
-  const handleSelectAllModule = (moduleData: any) => {
-    const moduleIds: string[] = [];
-    
-    const extractIds = (obj: any) => {
-      if (typeof obj === 'string') {
-        const id = codeToIdMap[obj];
-        if (id) moduleIds.push(id);
-      } else if (typeof obj === 'object' && obj !== null) {
-        Object.values(obj).forEach(val => extractIds(val));
-      }
-    };
-
-    extractIds(moduleData);
-
-    const allIn = moduleIds.length > 0 && moduleIds.every(id => selectedIds.includes(id));
-    if (allIn) {
-        setSelectedIds(prev => prev.filter(id => !moduleIds.includes(id)));
+    if (action === "allowAll") {
+      const newVal = !item.allowAll;
+      item.allowAll = newVal;
+      item.read = newVal;
+      item.create = newVal;
+      item.edit = newVal;
+      item.delete = newVal;
     } else {
-        setSelectedIds(prev => Array.from(new Set([...prev, ...moduleIds])));
+      (item as any)[action] = !(item as any)[action];
+      item.allowAll = item.read && item.create && item.edit && item.delete;
     }
+
+    updated[index] = item;
+    setPermissions(updated);
   };
 
   const handleSave = async () => {
     if (!role) return;
     setIsSaving(true);
     try {
-        const success = await assignPermissionsToRole(role.role_id, selectedIds);
-        if (success) onClose();
-    } catch (err) {
-        console.error('Permission assignment error:', err);
+      for (const p of permissions) {
+        await roleService.updatePermissionForRole(role._id, {
+          module: p.module,
+          page: p.page,
+          actions: {
+            read: p.read,
+            create: p.create,
+            edit: p.edit,
+            delete: p.delete,
+          },
+        });
+      }
+      toast.success(t("permissions_saved_successfully"));
+      onClose();
+    } catch (error) {
+      console.error("Error saving permissions:", error);
+      toast.error(t("failed_to_save_permissions"));
     } finally {
-        setIsSaving(false);
+      setIsSaving(false);
     }
   };
 
-  const title = (
-    <div className="flex items-center gap-3">
-      <div className="p-2 bg-primary/10 rounded-lg">
-        <Shield size={20} className="text-primary" />
-      </div>
-      <div>
-        <h3 className="font-bold text-gray-900 dark:text-white">Role Permissions</h3>
-        <p className="text-xs text-gray-400 font-medium">Assigning access to: <span className="text-primary">{role?.name}</span></p>
-      </div>
-    </div>
-  );
+  // Group permissions by module
+  const groupedPermissions = permissions.reduce((acc, perm) => {
+    if (!acc[perm.module]) {
+      acc[perm.module] = [];
+    }
+    acc[perm.module].push(perm);
+    return acc;
+  }, {} as Record<string, PagePermission[]>);
 
-  const footer = (
-    <div className="flex justify-end gap-3 w-full">
-      <Button variant="ghost" onClick={onClose} disabled={isSaving}>
-        {t('cancel')}
-      </Button>
-      <Button 
-        onClick={handleSave} 
-        disabled={isSaving} 
-        className="bg-primary hover:bg-blue-700 min-w-[140px]"
-      >
-        {isSaving ? 'Updating...' : <><Save size={18} /> {t('save')}</>}
-      </Button>
-    </div>
-  );
+  const columns: Column<PagePermission>[] = [
+    {
+      header: t("page"),
+      accessorKey: "page",
+      render: (p) => <span className="text-sm text-gray-700">{p.page}</span>,
+    },
+    {
+      header: t("allow_all"),
+      className: "text-center",
+      render: (p, idx) => (
+        <div className="flex justify-center">
+          <Switch
+            checked={p.allowAll}
+            onChange={() => handleToggle(idx!, "allowAll")}
+          />
+        </div>
+      ),
+    },
+    {
+      header: t("read"),
+      className: "text-center",
+      render: (p, idx) => (
+        <div className="flex justify-center">
+          <Switch
+            checked={p.read}
+            onChange={() => handleToggle(idx!, "read")}
+          />
+        </div>
+      ),
+    },
+    {
+      header: t("create"),
+      className: "text-center",
+      render: (p, idx) => (
+        <div className="flex justify-center">
+          <Switch
+            checked={p.create}
+            onChange={() => handleToggle(idx!, "create")}
+          />
+        </div>
+      ),
+    },
+    {
+      header: t("edit"),
+      className: "text-center",
+      render: (p, idx) => (
+        <div className="flex justify-center">
+          <Switch
+            checked={p.edit}
+            onChange={() => handleToggle(idx!, "edit")}
+          />
+        </div>
+      ),
+    },
+    {
+      header: t("delete"),
+      className: "text-center",
+      render: (p, idx) => (
+        <div className="flex justify-center">
+          <Switch
+            checked={p.delete}
+            onChange={() => handleToggle(idx!, "delete")}
+          />
+        </div>
+      ),
+    },
+  ];
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={title}
-      footer={footer}
-      className="max-w-4xl"
+      title={
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <Lock size={20} className="text-indigo-600" />
+            <h3 className="text-xl font-bold text-gray-900">
+              {t("permissions_for")}: {role?.name}
+            </h3>
+          </div>
+          <p className="text-xs text-gray-500">{t("manage_page_permissions")}</p>
+        </div>
+      }
+      size="xl"
     >
-      <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
-        {Object.entries(structuredPermissions || {}).map(([moduleKey, categories]: [string, any]) => {
-          const isExpanded = expandedModules.includes(moduleKey);
-          
-          return (
-            <div key={moduleKey} className="border border-gray-100 dark:border-gray-800 rounded-xl overflow-hidden bg-gray-50/30 dark:bg-gray-900/10">
-              <div className="flex items-center justify-between p-4 bg-white dark:bg-dark-surface cursor-pointer" onClick={() => handleToggleModule(moduleKey)}>
-                <div className="flex items-center gap-3">
-                  <div className="text-primary">
-                    {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-                  </div>
-                  <span className="font-bold text-gray-700 dark:text-gray-200 uppercase tracking-wider text-sm">{moduleKey}</span>
-                </div>
-                <button 
-                  onClick={(e) => { e.stopPropagation(); handleSelectAllModule(categories); }}
-                  className="text-[10px] font-black uppercase text-primary hover:underline"
-                >
-                  Toggle Module
-                </button>
-              </div>
-
-              {isExpanded && (
-                <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-6 animate-in slide-in-from-top-1 duration-200">
-                  {Object.entries(categories || {}).map(([categoryName, perms]: [string, any]) => {
-                    // Category can be a string (direct permission) or an object (sub-categories)
-                    if (typeof perms === 'string') {
-                      const id = codeToIdMap[perms];
-                      if (!id) return null;
-                      return (
-                        <label key={perms} className="flex items-center gap-3 p-3 bg-white dark:bg-dark-surface rounded-lg border border-gray-100 dark:border-gray-800 cursor-pointer hover:border-primary/30 transition-colors">
-                           <div className="relative">
-                              <input 
-                                type="checkbox" 
-                                checked={selectedIds.includes(id)}
-                                onChange={() => handleTogglePermission(id)}
-                                className="peer appearance-none w-5 h-5 border-2 border-gray-200 rounded-md checked:bg-primary checked:border-primary transition-all"
-                              />
-                              <Check size={14} className="absolute top-0.5 left-0.5 text-white scale-0 peer-checked:scale-100 transition-transform" />
-                           </div>
-                           <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{categoryName}</span>
-                        </label>
-                      );
-                    }
-
-                    return (
-                      <div key={categoryName} className="space-y-3">
-                        <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 dark:border-gray-800 pb-1">{categoryName}</h4>
-                        <div className="space-y-2">
-                           {Object.entries(perms || {}).map(([action, code]: [string, any]) => {
-                             const id = codeToIdMap[code];
-                             if (!id) return null;
-
-                             return (
-                               <label key={code} className="flex items-center gap-3 group cursor-pointer">
-                                  <div className="relative">
-                                     <input 
-                                       type="checkbox" 
-                                       checked={selectedIds.includes(id)}
-                                       onChange={() => handleTogglePermission(id)}
-                                       className="peer appearance-none w-4 h-4 border-2 border-gray-200 dark:border-gray-700 rounded checked:bg-primary checked:border-primary transition-all"
-                                     />
-                                     <Check size={10} className="absolute top-0.5 left-0.5 text-white scale-0 peer-checked:scale-100 transition-transform" />
-                                  </div>
-                                  <span className="text-xs font-medium text-gray-600 dark:text-gray-400 group-hover:text-primary transition-colors">{action}</span>
-                               </label>
-                             );
-                           })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+      <div className="space-y-6 max-h-[70vh] overflow-y-auto px-2">
+        {isLoading ? (
+          <div className="flex justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+          </div>
+        ) : (
+          Object.entries(groupedPermissions).map(([moduleName, modulePermissions]) => (
+            <div key={moduleName} className="border-b border-gray-100 pb-4">
+              <h4 className="text-md font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                <Shield size={16} className="text-indigo-500" />
+                {moduleName}
+              </h4>
+              <Table
+                data={modulePermissions}
+                columns={columns}
+                keyExtractor={(p) => p.page}
+              />
             </div>
-          );
-        })}
+          ))
+        )}
+      </div>
+
+      <div className="flex justify-end gap-3 mt-8 pt-4 border-t border-gray-100">
+        <Button variant="secondary" onClick={onClose} disabled={isSaving}>
+          {t("cancel")}
+        </Button>
+        <Button
+          variant="primary"
+          onClick={handleSave}
+          className="bg-indigo-600 hover:bg-indigo-700 px-8"
+          isLoading={isSaving}
+          disabled={isSaving}
+        >
+          <Save size={16} />
+          {t("save_permissions")}
+        </Button>
       </div>
     </Modal>
   );

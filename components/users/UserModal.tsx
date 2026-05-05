@@ -1,51 +1,39 @@
-
-import React, { useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { UserPlus, Edit2, Key, User as UserIcon } from 'lucide-react';
-import { Button, Input, Select } from '../ui/Common';
-import { Modal } from '../ui/Modal';
-import { User } from '../../services/user.service';
-import roleService, { Role } from '../../services/role.service';
+import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { UserPlus, Edit2, Mail, Lock, Shield, Building2, FileText } from "lucide-react";
+import { Modal } from "../../components/ui/Modal";
+import { Button, Input, Select, TextArea } from "../../components/ui/Common";
+import { User } from "../../services/user.service";
+import roleService, { Role } from "../../services/role.service";
+import { useData } from "../../context/DataContext";
 
 interface UserModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (user: any) => Promise<void>;
+  onSave: (data: any) => Promise<void>;
   userToEdit?: User | null;
+  isLoading?: boolean;
 }
 
-const userSchema = z.object({
-  username: z.string().min(3, 'Username must be at least 3 characters'),
-  email: z.string().email('Invalid email'),
-  password: z.string().optional().or(z.literal('')),
-  roleId: z.string().min(1, 'Role is required'),
-  state: z.enum(['ACTIVE', 'INACTIVE']),
-}).refine((data) => {
-  return true; 
-}, {
-  message: "Password is required",
-  path: ["password"],
-});
-
-type UserFormInputs = z.infer<typeof userSchema>;
-
-export const UserModal: React.FC<UserModalProps> = ({ isOpen, onClose, onSave, userToEdit }) => {
+export const UserModal: React.FC<UserModalProps> = ({
+  isOpen,
+  onClose,
+  onSave,
+  userToEdit,
+  isLoading = false,
+}) => {
   const { t } = useTranslation();
+  const { branches } = useData();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [roles, setRoles] = useState<Role[]>([]);
-  
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors, isSubmitting },
-  } = useForm<UserFormInputs>({
-    resolver: zodResolver(userSchema),
-    defaultValues: {
-      state: 'ACTIVE'
-    }
+  const [formData, setFormData] = useState({
+    username: "",
+    email: "",
+    password: "",
+    roleId: "",
+    branchId: "",
+    state: "ACTIVE",
+    notes: "",
   });
 
   useEffect(() => {
@@ -54,7 +42,7 @@ export const UserModal: React.FC<UserModalProps> = ({ isOpen, onClose, onSave, u
         const data = await roleService.getAllRoles();
         setRoles(data);
       } catch (error) {
-        console.error('Error fetching roles:', error);
+        console.error("Error fetching roles:", error);
       }
     };
     if (isOpen) {
@@ -63,127 +51,202 @@ export const UserModal: React.FC<UserModalProps> = ({ isOpen, onClose, onSave, u
   }, [isOpen]);
 
   useEffect(() => {
-    if (isOpen) {
-      if (userToEdit) {
-        reset({
-          username: userToEdit.username,
-          email: userToEdit.email,
-          roleId: (userToEdit.roleId && typeof userToEdit.roleId === 'object') ? userToEdit.roleId._id : (userToEdit.roleId || ''),
-          state: userToEdit.state as any,
-          password: '',
-        });
-      } else {
-        reset({
-          username: '',
-          email: '',
-          password: '',
-          roleId: roles[0]?._id || '',
-          state: 'ACTIVE',
-        });
-      }
+    if (userToEdit && isOpen) {
+      setFormData({
+        username: userToEdit.username || "",
+        email: userToEdit.email || "",
+        password: "",
+        roleId: typeof userToEdit.roleId === "object" 
+          ? (userToEdit.roleId as any)?._id 
+          : userToEdit.roleId || "",
+        branchId: typeof userToEdit.branchId === "object" 
+          ? (userToEdit.branchId as any)?._id || (userToEdit.branchId as any)?.id 
+          : userToEdit.branchId || "",
+        state: userToEdit.state || "ACTIVE",
+        notes: (userToEdit as any).notes || "",
+      });
+    } else if (!userToEdit && isOpen) {
+      setFormData({
+        username: "",
+        email: "",
+        password: "",
+        roleId: roles[0]?._id || "",
+        branchId: branches[0]?._id || branches[0]?.id || "",
+        state: "ACTIVE",
+        notes: "",
+      });
     }
-  }, [userToEdit, isOpen, reset, roles]);
+  }, [userToEdit, isOpen, roles, branches]);
 
-  const onSubmit = async (data: UserFormInputs) => {
-    if (!userToEdit && (!data.password || data.password.length < 6)) {
-        alert("Password is required and must be at least 6 characters for new users.");
-        return;
-    }
+  const statusOptions = [
+    { value: "ACTIVE", label: t("active") },
+    { value: "INACTIVE", label: t("inactive") },
+  ];
 
+  const roleOptions = roles.map(r => ({
+    value: r._id,
+    label: r.name,
+  }));
+
+  const branchOptions = branches.map(b => ({
+    value: b._id || b.id,
+    label: b.name,
+  }));
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    
     try {
-        const payload = { ...data };
-        if (userToEdit && !payload.password) {
-            delete payload.password;
-        }
-        await onSave(payload);
-        onClose();
-    } catch (e) {
-        console.error("Form submission error:", e);
+      const submitData = { ...formData };
+      // Remove password if empty when editing
+      if (userToEdit && !submitData.password) {
+        delete submitData.password;
+      }
+      await onSave(submitData);
+      onClose();
+    } catch (error) {
+      console.error("Error in form submission:", error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const title = (
-    <div className="flex items-center gap-2">
-      {userToEdit ? <Edit2 size={20} className="text-primary" /> : <UserPlus size={20} className="text-primary" />}
-      <span className="text-[#2D3748] font-bold">{userToEdit ? t('edit_user') : t('add_user')}</span>
-    </div>
-  );
-
-  const footer = (
-    <div className="flex justify-end gap-3 w-full">
-       <Button 
-         type="button" 
-         className="bg-[#4A5568] hover:bg-[#2D3748] text-white px-8 min-w-[120px]" 
-         onClick={onClose}
-       >
-         {t('cancel')}
-       </Button>
-       <Button 
-         type="submit" 
-         form="user-form" 
-         disabled={isSubmitting} 
-         className="bg-[#4361EE] hover:bg-blue-700 text-white px-8 min-w-[140px] flex items-center gap-2"
-       >
-         {!userToEdit && <UserPlus size={18} />}
-         {isSubmitting ? 'Saving...' : (userToEdit ? t('save') : t('add_user'))}
-       </Button>
-    </div>
-  );
+  const handleChange = (field: string, value: any) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={title}
-      footer={footer}
-      className="max-w-2xl"
+      title={
+        <div className="flex items-center gap-2">
+          {userToEdit ? <Edit2 size={20} /> : <UserPlus size={20} />}
+          {userToEdit ? t("edit_user") : t("add_user")}
+        </div>
+      }
+      size="4xl"
     >
-      <form id="user-form" onSubmit={handleSubmit(onSubmit)} className="space-y-6 py-2">
-         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
-            <Input 
-               label={<span className="flex items-center gap-1">{t('username')} <span className="text-red-500">*</span></span>}
-               placeholder="login_username"
-               required 
-               icon={<UserIcon size={16} />}
-               {...register('username')} 
-               error={errors.username?.message} 
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+          {/* Username */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("username")} <span className="text-red-500">*</span>
+            </label>
+            <Input
+              value={formData.username}
+              onChange={(e) => handleChange("username", e.target.value)}
+              placeholder={t("enter_username")}
+              required
+              fullWidth
             />
+          </div>
 
-            <Select 
-               label={<span className="flex items-center gap-1">{t('state')} <span className="text-red-500">*</span></span>}
-               options={[
-                  {value: 'ACTIVE', label: t('active')},
-                  {value: 'INACTIVE', label: t('inactive')}
-               ]}
-               {...register('state')} 
-               error={errors.state?.message}
+          {/* Status */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("status")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.state}
+              onChange={(e) => handleChange("state", e.target.value)}
+              options={statusOptions}
+              required
+              fullWidth
             />
+          </div>
 
-            <Input 
-               label={<span className="flex items-center gap-1">{t('email')} <span className="text-red-500">*</span></span>}
-               placeholder="email@example.com"
-               type="email" 
-               required 
-               {...register('email')} 
-               error={errors.email?.message} 
+          {/* Email */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("email")} <span className="text-red-500">*</span>
+            </label>
+            <Input
+              type="email"
+              value={formData.email}
+              onChange={(e) => handleChange("email", e.target.value)}
+              placeholder={t("enter_email")}
+              required
+              fullWidth
             />
+          </div>
 
-            <Select 
-               label={<span className="flex items-center gap-1">{t('role')} <span className="text-red-500">*</span></span>}
-               options={roles.map(r => ({ value: r._id, label: r.name }))}
-               {...register('roleId')} 
-               error={errors.roleId?.message}
+          {/* Role */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("role")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.roleId}
+              onChange={(e) => handleChange("roleId", e.target.value)}
+              options={roleOptions}
+              placeholder={t("select_role")}
+              required
+              fullWidth
             />
+          </div>
 
-            <Input 
-               label={<span className="flex items-center gap-1">{t('password')} {!userToEdit && <span className="text-red-500">*</span>}</span>}
-               placeholder={userToEdit ? "Leave blank to keep current" : "Min 6 characters"}
-               type="password"
-               icon={<Key size={16} />}
-               {...register('password')} 
-               error={errors.password?.message} 
+          {/* Branch */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("branch")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.branchId}
+              onChange={(e) => handleChange("branchId", e.target.value)}
+              options={branchOptions}
+              placeholder={t("select_branch")}
+              required
+              fullWidth
             />
-         </div>
+          </div>
+
+          {/* Password */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("password")} {!userToEdit && <span className="text-red-500">*</span>}
+            </label>
+            <Input
+              type="password"
+              value={formData.password}
+              onChange={(e) => handleChange("password", e.target.value)}
+              placeholder={userToEdit ? t("leave_blank_to_keep") : t("enter_password")}
+              required={!userToEdit}
+              fullWidth
+            />
+          </div>
+
+          {/* Notes */}
+          <div className="col-span-2 space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("notes")}
+            </label>
+            <TextArea
+              value={formData.notes}
+              onChange={(e) => handleChange("notes", e.target.value)}
+              placeholder={t("enter_notes")}
+              rows={3}
+              fullWidth
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-3 mt-8">
+          <Button variant="secondary" onClick={onClose} disabled={isSubmitting || isLoading}>
+            {t("cancel")}
+          </Button>
+          <Button
+            variant="primary"
+            type="submit"
+            className="bg-indigo-600 hover:bg-indigo-700 px-8"
+            isLoading={isSubmitting || isLoading}
+            disabled={isSubmitting || isLoading}
+          >
+            {userToEdit ? t("save") : t("add_user")}
+          </Button>
+        </div>
       </form>
     </Modal>
   );

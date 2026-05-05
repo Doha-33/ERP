@@ -140,7 +140,7 @@ const hrService: HRService = {
   // Users
   async getUsers() {
     const res = await apiClient.get('/users/list');
-    return res.data.data;
+    return Array.isArray(res.data) ? res.data : (res.data?.data || []);
   },
   async addUser(data: any) {
     const res = await apiClient.post('/auth/register', data);
@@ -206,7 +206,7 @@ const hrService: HRService = {
   // Companies
   async getCompanies() {
     const res = await apiClient.get('/companies/list');
-    return res.data.data;
+    return Array.isArray(res.data) ? res.data : (res.data?.data || []);
   },
   async addCompany(data: any) {
     const res = await apiClient.post('/companies/create', data);
@@ -224,7 +224,7 @@ const hrService: HRService = {
   // Branches
   async getBranches() {
     const res = await apiClient.get('/branches/list');
-    return res.data.data;
+    return Array.isArray(res.data) ? res.data : (res.data?.data || []);
   },
   async addBranch(data: any) {
     const res = await apiClient.post('/branches/create', data);
@@ -242,7 +242,7 @@ const hrService: HRService = {
   // Departments
   async getDepartments() {
     const res = await apiClient.get('/departments/list');
-    return res.data.data;
+    return Array.isArray(res.data) ? res.data : (res.data?.data || []);
   },
   async addDepartment(data: any) {
     const res = await apiClient.post('/departments/create', data);
@@ -260,7 +260,7 @@ const hrService: HRService = {
   // Jobs
   async getJobs() {
     const res = await apiClient.get('/jobs/list');
-    return res.data.data;
+    return Array.isArray(res.data) ? res.data : (res.data?.data || []);
   },
   async getJob(id: string) {
     const res = await apiClient.get(`/jobs/${id}`);
@@ -282,7 +282,7 @@ const hrService: HRService = {
   // Employees
   async getEmployees() {
     const res = await apiClient.get('/employees/list');
-    return res.data.data;
+    return Array.isArray(res.data) ? res.data : (res.data?.data || []);
   },
   async getEmployee(id: string){
     const res = await apiClient.get(`/employees/${id}`);

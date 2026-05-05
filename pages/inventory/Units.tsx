@@ -1,158 +1,343 @@
-
-import React, { useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Plus, Search, Edit2, Trash2 } from 'lucide-react';
-import { useData } from '../../context/DataContext';
-import { Table } from '../../components/ui/Table';
-import { Modal } from '../../components/ui/Modal';
-import { Unit } from '../../types';
+import React, { useState, useMemo, useCallback } from "react";
+import { useTranslation } from "react-i18next";
+import { Plus, Search, Edit2, Trash2, Ruler, Hash, Filter, X } from "lucide-react";
+import { Card, Button, Input, Badge, ExportDropdown } from "../../components/ui/Common";
+import { Table, Column } from "../../components/ui/Table";
+import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
+import { UnitModal } from "../../components/inventory/UnitModal";
+import { useData } from "../../context/DataContext";
+import { Unit } from "../../types";
+import { toast } from "sonner";
 
 export const Units: React.FC = () => {
   const { t } = useTranslation();
   const { units, addUnit, updateUnit, deleteUnit } = useData();
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const columns = [
-    {
-      header: t('unit_name'),
-      accessorKey: 'name' as keyof Unit,
-      render: (unit: Unit) => <span className="font-medium">{unit.name}</span>
-    },
-    {
-      header: t('abbreviation'),
-      accessorKey: 'abbreviation' as keyof Unit,
-    },
-    {
-      header: t('conversion_factor'),
-      accessorKey: 'conversionFactor' as keyof Unit,
-    },
-    {
-      header: t('created_at'),
-      accessorKey: 'createdAt' as keyof Unit,
-    },
-    {
-      header: t('status'),
-      accessorKey: 'state' as keyof Unit,
-      render: (unit: Unit) => (
-        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-          unit.state === 'Active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
-        }`}>
-          {t(unit.state.toLowerCase()) || unit.state}
-        </span>
-      )
-    },
-    {
-      header: t('actions'),
-      accessorKey: 'id' as keyof Unit,
-      render: (unit: Unit) => (
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={() => {
-              setSelectedUnit(unit);
-              setIsModalOpen(true);
-            }}
-            className="p-1 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
-          >
-            <Edit2 size={18} />
-          </button>
-          <button 
-            onClick={() => deleteUnit(unit.id)}
-            className="p-1 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-          >
-            <Trash2 size={18} />
-          </button>
-        </div>
-      )
+  const handleSave = async (unit: Partial<Unit>) => {
+    try {
+      setIsLoading(true);
+      if (editingUnit) {
+        const unitId = editingUnit._id || editingUnit.id;
+        await updateUnit(unitId, unit);
+        toast.success(t("unit_updated_successfully"));
+      } else {
+        await addUnit(unit);
+        toast.success(t("unit_created_successfully"));
+      }
+      setIsModalOpen(false);
+      setEditingUnit(null);
+    } catch (error) {
+      console.error("Error saving unit:", error);
+      toast.error(t("failed_to_save_unit"));
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  const handleEdit = useCallback((unit: Unit) => {
+    setEditingUnit(unit);
+    setIsModalOpen(true);
+  }, []);
+
+  const handleDelete = useCallback((id: string) => {
+    setDeleteId(id);
+  }, []);
+
+  const confirmDelete = useCallback(async () => {
+    if (deleteId) {
+      try {
+        await deleteUnit(deleteId);
+        toast.success(t("unit_deleted_successfully"));
+        setDeleteId(null);
+        setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+      } catch (error) {
+        toast.error(t("failed_to_delete_unit"));
+      }
+    }
+  }, [deleteId, deleteUnit, t]);
+
+  const handleBulkDelete = async () => {
+    try {
+      setIsLoading(true);
+      await Promise.all(selectedIds.map(id => deleteUnit(id)));
+      toast.success(t("units_deleted_successfully", { count: selectedIds.length }));
+      setSelectedIds([]);
+      setIsBulkConfirmOpen(false);
+    } catch (error) {
+      console.error("Bulk delete failed", error);
+      toast.error(t("failed_to_delete_units"));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    return (
+      <Badge variant={status === "ACTIVE" ? "success" : "danger"}>
+        {status === "ACTIVE" ? t("active") : t("inactive")}
+      </Badge>
+    );
+  };
+
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return "-";
+    return new Date(dateStr).toLocaleDateString();
+  };
+
+  // Apply filters
+  const filteredUnits = useMemo(() => {
+    return units.filter(u => {
+      const matchesSearch = 
+        u.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        u.abbreviation?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesStatus = !statusFilter || u.status === statusFilter;
+      
+      return matchesSearch && matchesStatus;
+    });
+  }, [units, searchTerm, statusFilter]);
+
+  // Statistics
+  const totalUnits = filteredUnits.length;
+  const activeUnits = filteredUnits.filter(u => u.status === "ACTIVE").length;
+  const baseUnits = filteredUnits.filter(u => !u.parentUnitId).length;
+
+  const statusOptions = [
+    { value: "", label: t("all_statuses") },
+    { value: "ACTIVE", label: t("active") },
+    { value: "INACTIVE", label: t("inactive") },
   ];
 
-  const filteredUnits = units.filter(u => 
-    u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    u.abbreviation.toLowerCase().includes(searchTerm.toLowerCase())
+  const columns: Column<Unit>[] = useMemo(
+    () => [
+      {
+        header: t("unit_info"),
+        render: (u) => (
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center">
+              <Ruler size={18} className="text-indigo-600" />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-medium text-gray-900">{u.name}</span>
+              <span className="text-xs text-gray-500">{u.abbreviation}</span>
+            </div>
+          </div>
+        )
+      },
+      {
+        header: t("conversion"),
+        render: (u) => (
+          <div className="flex items-center gap-1.5">
+            <Hash size={14} className="text-gray-400" />
+            <span className="text-sm text-gray-600">
+              1 {u.abbreviation} = {u.conversionFactor} × base
+            </span>
+            {u.parentUnitId && (
+              <span className="text-xs text-gray-400 ml-1">
+                (linked)
+              </span>
+            )}
+          </div>
+        )
+      },
+      {
+        header: t("created_at"),
+        render: (u) => (
+          <span className="text-sm text-gray-500">{formatDate(u.createdAt)}</span>
+        )
+      },
+      {
+        header: t("status"),
+        render: (u) => getStatusBadge(u.status || u.state)
+      },
+      {
+        header: t("actions"),
+        className: "text-center",
+        render: (u) => (
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={() => handleEdit(u)}
+              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+              title={t("edit")}
+            >
+              <Edit2 size={16} />
+            </button>
+            <button
+              onClick={() => handleDelete(u._id || u.id)}
+              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+              title={t("delete")}
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
+        )
+      }
+    ],
+    [t, handleEdit, handleDelete]
   );
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('units_of_measure')}</h1>
-          <p className="text-gray-500 dark:text-gray-400">{t('manage_product_units')}</p>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {t("units_of_measure")}
+          </h1>
+          <p className="text-gray-500 mt-1">
+            {t("manage_product_units")}
+          </p>
         </div>
-        <button 
-          onClick={() => {
-            setSelectedUnit(null);
-            setIsModalOpen(true);
-          }}
-          className="flex items-center justify-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
+        <div className="flex gap-3">
+          {selectedIds.length > 0 && (
+            <Button
+              variant="danger"
+              onClick={() => setIsBulkConfirmOpen(true)}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              <Trash2 size={18} />
+              {t("delete_selected")} ({selectedIds.length})
+            </Button>
+          )}
+          <ExportDropdown data={filteredUnits} filename="units" />
+          <Button
+            variant="primary"
+            onClick={() => {
+              setEditingUnit(null);
+              setIsModalOpen(true);
+            }}
+            className="bg-indigo-600 hover:bg-indigo-700"
+          >
+            <Plus size={18} />
+            {t("add_unit")}
+          </Button>
+        </div>
+      </div>
+
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center">
+              <Ruler size={18} className="text-indigo-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">{t("total_units")}</p>
+              <p className="text-xl font-bold text-gray-900">{totalUnits}</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-green-50 rounded-lg flex items-center justify-center">
+              <Ruler size={18} className="text-green-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">{t("active")}</p>
+              <p className="text-xl font-bold text-green-600">{activeUnits}</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+              <Hash size={18} className="text-blue-600" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">{t("base_units")}</p>
+              <p className="text-xl font-bold text-blue-600">{baseUnits}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-4 items-center">
+        <div className="relative max-w-md">
+          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder={t("search_units")}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
         >
-          <Plus size={20} />
-          <span>{t('add_unit')}</span>
-        </button>
+          {statusOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+
+        {(statusFilter || searchTerm) && (
+          <button
+            onClick={() => {
+              setStatusFilter("");
+              setSearchTerm("");
+            }}
+            className="text-sm text-red-600 hover:text-red-700"
+          >
+            {t("clear_filters")}
+          </button>
+        )}
       </div>
 
-      <div className="bg-white dark:bg-dark-surface rounded-xl border border-gray-100 dark:border-gray-800 p-4">
-        <div className="flex flex-col md:flex-row gap-4 mb-6">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-            <input
-              type="text"
-              placeholder={t('search_units')}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-            />
-          </div>
-        </div>
-
-        <Table 
-          columns={columns} 
-          data={filteredUnits} 
-          keyExtractor={(item) => item.id}
+      {/* Table */}
+        <Table
+          data={filteredUnits}
+          columns={columns}
+          keyExtractor={(item) => item._id || item.id}
+          isLoading={isLoading}
+          selectable
+          selectedIds={selectedIds}
+          onSelectionChange={setSelectedIds}
         />
-      </div>
 
-      <Modal
+      {/* Modal */}
+      <UnitModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title={selectedUnit ? t('edit_unit') : t('add_unit')}
-      >
-        <form className="space-y-4" onSubmit={(e) => {
-          e.preventDefault();
+        onClose={() => {
           setIsModalOpen(false);
-        }}>
-          <div className="grid grid-cols-1 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">{t('unit_name')}</label>
-              <input type="text" className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent" defaultValue={selectedUnit?.name} />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">{t('abbreviation')}</label>
-              <input type="text" className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent" defaultValue={selectedUnit?.abbreviation} />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">{t('conversion_factor')}</label>
-              <input type="text" className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent" defaultValue={selectedUnit?.conversionFactor} />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">{t('status')}</label>
-              <select className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent" defaultValue={selectedUnit?.state}>
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-              </select>
-            </div>
-          </div>
-          <div className="flex justify-end gap-3 mt-6">
-            <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
-              {t('cancel')}
-            </button>
-            <button type="submit" className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors">
-              {t('save')}
-            </button>
-          </div>
-        </form>
-      </Modal>
+          setEditingUnit(null);
+        }}
+        onSave={handleSave}
+        unitToEdit={editingUnit}
+        isLoading={isLoading}
+      />
+
+      {/* Delete Confirmation */}
+      <ConfirmationModal
+        isOpen={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        onConfirm={confirmDelete}
+        title={t("delete_unit")}
+        message={t("are_you_sure_delete_unit")}
+      />
+
+      {/* Bulk Delete Confirmation */}
+      <ConfirmationModal
+        isOpen={isBulkConfirmOpen}
+        onClose={() => setIsBulkConfirmOpen(false)}
+        onConfirm={handleBulkDelete}
+        title={t("delete_units")}
+        message={t("are_you_sure_delete_units", { count: selectedIds.length })}
+      />
     </div>
   );
 };

@@ -95,6 +95,11 @@ export const usePurchaseModule = (fetchAllData?: () => Promise<void>) => {
     if (fetchAllData) await fetchAllData();
   }, [fetchAllData]);
 
+  const updateSupplierRating = useCallback(async (rating: SupplierRating) => {
+    await purchaseService.updateSupplierRating(rating.id, rating);
+    if (fetchAllData) await fetchAllData();
+  }, [fetchAllData]);
+
   const deleteSupplierRating = useCallback(async (id: string) => {
     await purchaseService.deleteSupplierRating(id);
     if (fetchAllData) await fetchAllData();
@@ -117,18 +122,22 @@ export const usePurchaseModule = (fetchAllData?: () => Promise<void>) => {
 
   const fetchPurchaseData = useCallback(async () => {
     try {
-      const [suppRes, orderRes, reqRes, invoiceRes, receiptRes] = await Promise.all([
+      const [suppRes, orderRes, reqRes, invoiceRes, receiptRes, supplierRes, returnsRes] = await Promise.all([
         purchaseService.getSuppliers(),
         purchaseService.getPurchaseOrders(),
         purchaseService.getPurchaseRequests(),
         purchaseService.getPurchaseInvoices(),
         purchaseService.getGoodsReceipts(),
+        purchaseService.getSupplierRatings(),
+        purchaseService.getReturnsToSupplier(),
       ]);
       setSuppliers(Array.isArray(suppRes) ? suppRes : (suppRes?.data || []));
       setPurchaseOrders(Array.isArray(orderRes) ? orderRes : (orderRes?.data || []));
       setPurchaseRequests(Array.isArray(reqRes) ? reqRes : (reqRes?.data || []));
       setPurchaseInvoices(Array.isArray(invoiceRes) ? invoiceRes : (invoiceRes?.data || []));
       setGoodsReceipts(Array.isArray(receiptRes) ? receiptRes : (receiptRes?.data || []));
+      setSupplierRatings(Array.isArray(supplierRes) ? supplierRes : (supplierRes?.data || []));
+      setReturnsToSupplier(Array.isArray(returnsRes) ? returnsRes : (returnsRes?.data || []));
     } catch (error) {
       console.error('Error fetching purchase data:', error);
     }
@@ -148,7 +157,7 @@ export const usePurchaseModule = (fetchAllData?: () => Promise<void>) => {
     addGoodsReceipt, updateGoodsReceipt, deleteGoodsReceipt,
     addPurchaseInvoice, updatePurchaseInvoice, deletePurchaseInvoice,
     addPurchaseRequest, updatePurchaseRequest, deletePurchaseRequest,
-    addSupplierRating, deleteSupplierRating,
+    addSupplierRating, deleteSupplierRating, updateSupplierRating,
     addReturnToSupplier, updateReturnToSupplier, deleteReturnToSupplier,
   }), [
     suppliers, purchaseOrders, goodsReceipts, purchaseInvoices, purchaseRequests, supplierRatings, returnsToSupplier, fetchPurchaseData,
@@ -157,7 +166,7 @@ export const usePurchaseModule = (fetchAllData?: () => Promise<void>) => {
     addGoodsReceipt, updateGoodsReceipt, deleteGoodsReceipt,
     addPurchaseInvoice, updatePurchaseInvoice, deletePurchaseInvoice,
     addPurchaseRequest, updatePurchaseRequest, deletePurchaseRequest,
-    addSupplierRating, deleteSupplierRating,
+    addSupplierRating, deleteSupplierRating, updateSupplierRating,
     addReturnToSupplier, updateReturnToSupplier, deleteReturnToSupplier,
   ]);
 };

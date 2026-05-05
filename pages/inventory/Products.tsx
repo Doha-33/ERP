@@ -1,205 +1,386 @@
-
-import React, { useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Plus, Search, Filter, Edit2, Trash2, Eye } from 'lucide-react';
-import { useData } from '../../context/DataContext';
-import { Table } from '../../components/ui/Table';
-import { Modal } from '../../components/ui/Modal';
-import { Product } from '../../types';
+import React, { useState, useMemo, useCallback } from "react";
+import { useTranslation } from "react-i18next";
+import { Plus, Search, Edit2, Trash2, Eye, Package, DollarSign, Warehouse, Filter, X, Tag } from "lucide-react";
+import { Card, Button, Input, Badge, ExportDropdown } from "../../components/ui/Common";
+import { Table, Column } from "../../components/ui/Table";
+import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
+import { InventoryProductModal } from "../../components/inventory/InventoryProductModal";
+import { useData } from "../../context/DataContext";
+import { Product } from "../../types";
+import { toast } from "sonner";
 
 export const InventoryProducts: React.FC = () => {
   const { t } = useTranslation();
-  const { inventoryProducts: products, addProduct, updateProduct, deleteProduct } = useData();
+  const { inventoryProducts, addProduct, updateProduct, deleteProduct, warehouses } = useData();
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const columns = [
-    {
-      header: t('sku'),
-      accessor: 'sku' as keyof Product,
-    },
-    {
-      header: t('product_name'),
-      accessor: 'productName' as keyof Product,
-      render: (product: Product) => (
-        <div className="flex items-center gap-3">
-          {product.image && (
-            <img 
-              src={product.image} 
-              alt={product.productName} 
-              className="w-10 h-10 rounded-lg object-cover"
-              referrerPolicy="no-referrer"
-            />
-          )}
-          <span className="font-medium">{product.productName}</span>
-        </div>
-      )
-    },
-    {
-      header: t('category'),
-      accessor: 'category' as keyof Product,
-    },
-    {
-      header: t('warehouse'),
-      accessor: 'warehouse' as keyof Product,
-    },
-    {
-      header: t('current_stock'),
-      accessor: 'currentStock' as keyof Product,
-      render: (product: Product) => (
-        <span className={`font-medium`}>
-          {product.currentStock} {product.defaultUnit}
-        </span>
-      )
-    },
-    {
-      header: t('price'),
-      accessor: 'sellingPrice' as keyof Product,
-      render: (product: Product) => (
-        <span>{product.sellingPrice} SAR</span>
-      )
-    },
-    {
-      header: t('status'),
-      accessor: 'expired' as keyof Product,
-      render: (product: Product) => (
-        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-          product.expired === true ? 'bg-red-100 text-red-700' :
-          product.expired === false ? 'bg-green-100 text-green-700' :
-          'bg-yellow-100 text-yellow-700'
-        }`}>
-          {t(product.expired === true ? 'expired' : product.expired === false ? 'not_expired' : 'near_expiry').replace(' ', '_')} || product.expired
-        </span>
-      )
-    },
-    {
-      header: t('actions'),
-      accessor: 'id' as keyof Product,
-      render: (product: Product) => (
-        <div className="flex items-center gap-2">
-          <button className="p-1 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-            <Eye size={18} />
-          </button>
-          <button 
-            onClick={() => {
-              setSelectedProduct(product);
-              setIsModalOpen(true);
-            }}
-            className="p-1 text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
-          >
-            <Edit2 size={18} />
-          </button>
-          <button 
-            onClick={() => deleteProduct(product.id)}
-            className="p-1 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-          >
-            <Trash2 size={18} />
-          </button>
-        </div>
-      )
+  const handleSave = async (product: Partial<Product>) => {
+    try {
+      setIsLoading(true);
+      if (editingProduct) {
+        await updateProduct({ id: editingProduct._id || editingProduct.id }, product);
+        toast.success(t("product_updated_successfully"));
+      } else {
+        await addProduct(product);
+        toast.success(t("product_created_successfully"));
+      }
+      setIsModalOpen(false);
+      setEditingProduct(null);
+    } catch (error) {
+      console.error("Error saving product:", error);
+      toast.error(t("failed_to_save_product"));
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  const handleEdit = useCallback((product: Product) => {
+    setEditingProduct(product);
+    setIsModalOpen(true);
+  }, []);
+
+  const handleDelete = useCallback((id: string) => {
+    setDeleteId(id);
+  }, []);
+
+  const confirmDelete = useCallback(async () => {
+    if (deleteId) {
+      try {
+        await deleteProduct(deleteId);
+        toast.success(t("product_deleted_successfully"));
+        setDeleteId(null);
+        setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+      } catch (error) {
+        toast.error(t("failed_to_delete_product"));
+      }
+    }
+  }, [deleteId, deleteProduct, t]);
+
+  const handleBulkDelete = async () => {
+    try {
+      setIsLoading(true);
+      await Promise.all(selectedIds.map(id => deleteProduct(id)));
+      toast.success(t("products_deleted_successfully", { count: selectedIds.length }));
+      setSelectedIds([]);
+      setIsBulkConfirmOpen(false);
+    } catch (error) {
+      console.error("Bulk delete failed", error);
+      toast.error(t("failed_to_delete_products"));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getWarehouseName = (product: Product): string => {
+    if (typeof product.warehouseId === "object" && product.warehouseId !== null) {
+      return (product.warehouseId as any)?.warehouseName || "-";
+    }
+    const warehouse = warehouses.find(w => (w._id || w.id) === product.warehouseId);
+    return warehouse?.warehouseName || "-";
+  };
+
+  const getStockStatus = (currentStock: number, reorderLevel: number) => {
+    if (currentStock <= 0) {
+      return { label: t("out_of_stock"), variant: "danger" as const };
+    }
+    if (currentStock <= reorderLevel) {
+      return { label: t("low_stock"), variant: "warning" as const };
+    }
+    return { label: t("in_stock"), variant: "success" as const };
+  };
+
+  // Apply filters
+  const filteredProducts = useMemo(() => {
+    return inventoryProducts.filter(p => {
+      const matchesSearch = 
+        p.productName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.barcode?.includes(searchTerm);
+      
+      const matchesCategory = !categoryFilter || p.category === categoryFilter;
+      
+      return matchesSearch && matchesCategory;
+    });
+  }, [inventoryProducts, searchTerm, categoryFilter]);
+
+  // Get unique categories for filter
+  const uniqueCategories = useMemo(() => {
+    const categories = inventoryProducts.map(p => p.category).filter(Boolean);
+    return Array.from(new Set(categories));
+  }, [inventoryProducts]);
+
+  // Statistics
+  const totalProducts = filteredProducts.length;
+  const totalValue = filteredProducts.reduce((sum, p) => sum + (p.currentStockQty * p.sellingPrice), 0);
+  const lowStockProducts = filteredProducts.filter(p => p.currentStockQty <= p.reorderLevel).length;
+  const outOfStockProducts = filteredProducts.filter(p => p.currentStockQty <= 0).length;
+
+  const categoryOptions = [
+    { value: "", label: t("all_categories") },
+    ...uniqueCategories.map(cat => ({ value: cat, label: cat })),
   ];
 
-  const filteredProducts = products.filter(p => 
-    p.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.sku.toLowerCase().includes(searchTerm.toLowerCase())
+  const columns: Column<Product>[] = useMemo(
+    () => [
+      {
+        header: t("product_info"),
+        render: (p) => (
+          <div className="flex items-center gap-3">
+            {p.image && (
+              <img
+                src={p.image}
+                alt={p.productName}
+                className="w-10 h-10 rounded-lg object-cover bg-gray-100"
+                referrerPolicy="no-referrer"
+              />
+            )}
+            {!p.image && (
+              <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center">
+                <Package size={18} className="text-indigo-600" />
+              </div>
+            )}
+            <div className="flex flex-col">
+              <span className="font-medium text-gray-900">{p.productName}</span>
+              <span className="text-xs text-gray-500">{p.sku}</span>
+            </div>
+          </div>
+        )
+      },
+      {
+        header: t("category"),
+        render: (p) => (
+          <div className="flex items-center gap-1.5">
+            <Tag size={14} className="text-gray-400" />
+            <span className="text-sm text-gray-600">{p.category || "-"}</span>
+          </div>
+        )
+      },
+      {
+        header: t("stock"),
+        render: (p) => {
+          const status = getStockStatus(p.currentStockQty, p.reorderLevel);
+          return (
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">{p.currentStockQty} {p.defaultUnit}</span>
+                <Badge variant={status.variant}>{status.label}</Badge>
+              </div>
+              <span className="text-xs text-gray-500">
+                {t("reorder_level")}: {p.reorderLevel}
+              </span>
+            </div>
+          );
+        }
+      },
+      {
+        header: t("pricing"),
+        render: (p) => (
+          <div className="flex flex-col gap-0.5">
+            <div className="flex items-center gap-1.5">
+              <DollarSign size={14} className="text-green-600" />
+              <span className="text-sm">Sell: {p.sellingPrice?.toLocaleString()} EGP</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <DollarSign size={14} className="text-gray-400" />
+              <span className="text-xs text-gray-500">Cost: {p.purchasePrice?.toLocaleString()} EGP</span>
+            </div>
+          </div>
+        )
+      },
+      {
+        header: t("warehouse"),
+        render: (p) => (
+          <div className="flex items-center gap-1.5">
+            <Warehouse size={14} className="text-gray-400" />
+            <span className="text-sm text-gray-600">{getWarehouseName(p)}</span>
+          </div>
+        )
+      },
+      {
+        header: t("actions"),
+        className: "text-center",
+        render: (p) => (
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={() => handleEdit(p)}
+              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+              title={t("edit")}
+            >
+              <Edit2 size={16} />
+            </button>
+            <button
+              onClick={() => handleDelete(p._id || p.id)}
+              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+              title={t("delete")}
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
+        )
+      }
+    ],
+    [t, handleEdit, handleDelete]
   );
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('products')}</h1>
-          <p className="text-gray-500 dark:text-gray-400">{t('manage_inventory_products')}</p>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {t("products")}
+          </h1>
+          <p className="text-gray-500 mt-1">
+            {t("manage_inventory_products")}
+          </p>
         </div>
-        <button 
-          onClick={() => {
-            setSelectedProduct(null);
-            setIsModalOpen(true);
-          }}
-          className="flex items-center justify-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
+        <div className="flex gap-3">
+          {selectedIds.length > 0 && (
+            <Button
+              variant="danger"
+              onClick={() => setIsBulkConfirmOpen(true)}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              <Trash2 size={18} />
+              {t("delete_selected")} ({selectedIds.length})
+            </Button>
+          )}
+          <ExportDropdown data={filteredProducts} filename="products" />
+          <Button
+            variant="primary"
+            onClick={() => {
+              setEditingProduct(null);
+              setIsModalOpen(true);
+            }}
+            className="bg-indigo-600 hover:bg-indigo-700"
+          >
+            <Plus size={18} />
+            {t("add_product")}
+          </Button>
+        </div>
+      </div>
+
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <Package size={18} className="text-indigo-600" />
+            <p className="text-xs text-gray-500">{t("total_products")}</p>
+          </div>
+          <p className="text-xl font-bold text-gray-900 mt-1">{totalProducts}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <DollarSign size={18} className="text-green-600" />
+            <p className="text-xs text-gray-500">{t("inventory_value")}</p>
+          </div>
+          <p className="text-xl font-bold text-green-600 mt-1">{totalValue.toLocaleString()} EGP</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <AlertCircle size={18} className="text-orange-600" />
+            <p className="text-xs text-gray-500">{t("low_stock")}</p>
+          </div>
+          <p className="text-xl font-bold text-orange-600 mt-1">{lowStockProducts}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <XCircle size={18} className="text-red-600" />
+            <p className="text-xs text-gray-500">{t("out_of_stock")}</p>
+          </div>
+          <p className="text-xl font-bold text-red-600 mt-1">{outOfStockProducts}</p>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-4 items-center">
+        <div className="relative max-w-md">
+          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder={t("search_products")}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+
+        <select
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+          className="px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
         >
-          <Plus size={20} />
-          <span>{t('add_product')}</span>
-        </button>
-      </div>
+          {categoryOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
 
-      <div className="bg-white dark:bg-dark-surface rounded-xl border border-gray-100 dark:border-gray-800 p-4">
-        <div className="flex flex-col md:flex-row gap-4 mb-6">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-            <input
-              type="text"
-              placeholder={t('search_products')}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-            />
-          </div>
-          <button className="flex items-center justify-center gap-2 px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-            <Filter size={20} />
-            <span>{t('filter')}</span>
+        {(categoryFilter || searchTerm) && (
+          <button
+            onClick={() => {
+              setCategoryFilter("");
+              setSearchTerm("");
+            }}
+            className="text-sm text-red-600 hover:text-red-700"
+          >
+            {t("clear_filters")}
           </button>
-        </div>
-
-        <Table 
-          columns={columns} 
-          data={filteredProducts} 
-          keyExtractor={(item) => item.id}
-        />
+        )}
       </div>
 
-      <Modal
+      {/* Table */}
+        <Table
+          data={filteredProducts}
+          columns={columns}
+          keyExtractor={(item) => item._id || item.id}
+          isLoading={isLoading}
+          selectable
+          selectedIds={selectedIds}
+          onSelectionChange={setSelectedIds}
+        />
+
+      {/* Modal */}
+      <InventoryProductModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title={selectedProduct ? t('edit_product') : t('add_product')}
-      >
-        <form className="space-y-4" onSubmit={(e) => {
-          e.preventDefault();
-          // Form logic would go here
+        onClose={() => {
           setIsModalOpen(false);
-        }}>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">{t('product_name')}</label>
-              <input type="text" className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent" defaultValue={selectedProduct?.productName} />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">{t('sku')}</label>
-              <input type="text" className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent" defaultValue={selectedProduct?.sku} />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">{t('category')}</label>
-              <select className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent">
-                <option value="">{t('select_category')}</option>
-              </select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">{t('warehouse')}</label>
-              <select className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent">
-                <option value="">{t('select_warehouse')}</option>
-              </select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">{t('purchase_price')}</label>
-              <input type="number" className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent" defaultValue={selectedProduct?.purchasePrice} />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">{t('selling_price')}</label>
-              <input type="number" className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent" defaultValue={selectedProduct?.sellingPrice} />
-            </div>
-          </div>
-          <div className="flex justify-end gap-3 mt-6">
-            <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
-              {t('cancel')}
-            </button>
-            <button type="submit" className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors">
-              {t('save')}
-            </button>
-          </div>
-        </form>
-      </Modal>
+          setEditingProduct(null);
+        }}
+        onSave={handleSave}
+        productToEdit={editingProduct}
+        isLoading={isLoading}
+      />
+
+      {/* Delete Confirmation */}
+      <ConfirmationModal
+        isOpen={!!deleteId}
+        onClose={() => setDeleteId(null)}
+        onConfirm={confirmDelete}
+        title={t("delete_product")}
+        message={t("are_you_sure_delete_product")}
+      />
+
+      {/* Bulk Delete Confirmation */}
+      <ConfirmationModal
+        isOpen={isBulkConfirmOpen}
+        onClose={() => setIsBulkConfirmOpen(false)}
+        onConfirm={handleBulkDelete}
+        title={t("delete_products")}
+        message={t("are_you_sure_delete_products", { count: selectedIds.length })}
+      />
     </div>
   );
 };
+
+// Add missing import
+import { AlertCircle, XCircle } from "lucide-react";

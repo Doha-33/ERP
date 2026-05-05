@@ -222,7 +222,7 @@ export const Dashboard: React.FC = () => {
       {/* Stats Cards Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Total Employees Card */}
-        <Card className="group hover:shadow-xl transition-all duration-300 hover:-translate-y-1 overflow-hidden bg-white dark:bg-gray-800">
+        <Card className="group hover:shadow-xl transition-all duration-300 hover:-translate-y-1 overflow-hidden bg-white">
           <div className="relative">
             <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500/10 to-transparent rounded-full -mr-16 -mt-16" />
             <div className="flex items-start justify-between mb-4">
@@ -584,15 +584,12 @@ export const Dashboard: React.FC = () => {
                 {t("latest_updates_and_actions")}
               </p>
             </div>
-            <button className="text-sm text-primary hover:underline">
-              {t("view_all")}
-            </button>
           </div>
           <div className="space-y-4">
             {recentActivities.map((activity) => (
               <div
                 key={activity.id}
-                className="flex items-start gap-4 p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200 group cursor-pointer"
+                className="flex items-start gap-4 p-4 rounded-xl bg-gray-50 hover:bg-gray-100 transition-all duration-200 group cursor-pointer"
               >
                 <div
                   className={`

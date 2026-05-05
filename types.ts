@@ -156,6 +156,7 @@ export interface Loan {
   remainingAmount?: string | number;
   deductionType?: 'SINGLE' | 'INSTALLMENTS' | string | null;
   installmentAmount?: string | number | null;
+  numberOfInstallments?: string | number | null;
   startMonth?: string | null;
   workflowStatus?: {
     hr: boolean;
@@ -271,11 +272,11 @@ export interface DeductionRecord {
   month?: number;
   year?: number;
   date?: string;
-  absence: string;
-  lateArrival: string;
-  earlyLeave: string;
-  loan: string;
-  penalties: string;
+  absence: string | number;
+  lateArrival: string | number;
+  earlyLeave: string | number;
+  loan: string | number;
+  penalties: string | number;
   penaltiesDeduction?: string | number;
   company: string;
   branch: string;
@@ -332,21 +333,23 @@ export type RequestRecord = HRRequest;
 
 export interface Contract {
   id: string;
+  _id?: string;
   contractId: string; // Internal Serial
   employeeId: string;
   employeeName: string;
+  employeeInfo?: any;
   empCode?: string;
   avatar?: string;
   contractType: string; // e.g. Saudi, Expat
   duration: string;
   jobTitle: string;
-  branch: string;
+  branch: string | any;
   startDate: string;
   endDate: string;
   workingHours: string;
-  allowances: string;
+  allowances: string | number;
   // Comment above fix: Renamed basic_salary to basicSalary to resolve type mismatch errors in components
-  basicSalary: string;
+  basicSalary: string | number;
   state: 'Active' | 'Expired' | 'Under Renewal' | 'Pending' | string;
 }
 
@@ -385,6 +388,9 @@ export interface Reward {
   bonusAmount?: number;
   commissionAmount?: number;
   notes?: string;
+  rewardsType?: string;
+  rewardDate?: string;
+  commissions?: number;
   createdAt?: string;
   updatedAt?: string;
   // Legacy
@@ -1083,6 +1089,8 @@ export interface Unit {
 
 export interface Category {
   id: string;
+  _id?: string;
+  status: 'ACTIVE' | 'INACTIVE' | string;
   name: string;
   description: string;
   createdAt: string;
