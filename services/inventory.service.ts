@@ -144,7 +144,7 @@ const inventoryService = {
     return res.data;
   },
 
- // Stock Management
+  // Stock Management
   async getStock() {
     const res = await apiClient.get('/stock/list');
     const data = res.data?.data || [];
@@ -199,6 +199,11 @@ const inventoryService = {
   // Alias for getStock as requested by user
   async getStockList() {
     return this.getStock();
+  },
+
+  async getInventoryReport() {
+    const res = await apiClient.get('/inventory/reports/list');
+    return res.data.data;
   },
 };
 

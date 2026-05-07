@@ -627,6 +627,7 @@ export interface Customer {
   id: string;
   _id?: string; // Added
   customerCode: string;
+  taxNumber: string;
   customerName: string;
   name?: string; // Legacy
   phoneNumber: string;
@@ -719,6 +720,9 @@ export interface SalesReturnItem {
 
 export interface SalesReturn {
   id: string;
+  _id?: string;
+  refundStatus?: string;
+  items?: SalesReturnItem[];
   returnNumber: string;
   originalInvoiceId: any;
   customerId: any;
@@ -726,8 +730,6 @@ export interface SalesReturn {
   companyId: any;
   branchId: any;
   returnDate: string;
-  items: SalesReturnItem[];
-  refundStatus: 'PENDING' | 'REFUNDED' | 'REJECTED';
   notes?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -735,6 +737,7 @@ export interface SalesReturn {
 
 export interface POSProduct {
   id: string;
+  _id?: string;
   sku: string;
   name: string;
   description: string;
@@ -1332,6 +1335,9 @@ export interface Budget {
   category: string;
   period: 'MONTHLY' | 'QUARTERLY' | 'YEARLY' | string;
   budgetedAmount: number;
+  fiscalYear: number;
+  allocatedAmount: number;
+  departmentName: string;
   spentAmount: number;
   startDate: string;
   endDate: string;
@@ -1817,4 +1823,39 @@ export interface CRMTask {
   priority?: 'Low' | 'Medium' | 'High';
   createdAt?: string;
   updatedAt?: string;
+}
+
+
+export interface SalesReport {
+  soldQty: number;
+  soldAmount: number;
+  productId: string;
+  sku: string;
+  productName: string;
+  category: string;
+}
+
+export interface CustomerReport {
+  reference: string;
+  totalOrders: number;
+  amount: number;
+  code: string;
+  customerInfo: string;
+  paymentMethod: string;
+}
+
+export interface PurchaseReport {
+  purchaseQty: number;
+  purchaseAmount: number;
+  reference: string;
+  sku: string;
+  productName: string;
+  category: string;
+}
+
+export interface InventoryReport {
+  sku: string;
+  productName: string;
+  category: string;
+  inStockQty: number;
 }

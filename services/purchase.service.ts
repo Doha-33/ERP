@@ -139,6 +139,11 @@ const purchaseService = {
     const res = await apiClient.delete(`/supplier-ratings/delete/${id}`);
     return res.data;
   },
+
+    async getPurchaseReport() {
+    const res = await apiClient.get('/purchase/reports/list');
+    return res.data.data;
+  },
 };
 
 export default purchaseService;

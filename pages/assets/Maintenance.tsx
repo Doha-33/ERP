@@ -28,6 +28,7 @@ export const Maintenance: React.FC = () => {
     addMaintenance,
     updateMaintenance,
     deleteMaintenance,
+      fetchMaintenances,
   } = useData();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -112,14 +113,16 @@ export const Maintenance: React.FC = () => {
           processedData,
         );
         toast.success(t("maintenance_updated_successfully"));
+        await fetchMaintenances(); // Refresh maintenances after update
       } else {
         await addMaintenance(processedData);
         toast.success(t("maintenance_added_successfully"));
+        await fetchMaintenances(); // Refresh maintenances after addition
       }
       setIsModalOpen(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to save maintenance:", error);
-      toast.error(t("failed_to_save_maintenance"));
+      toast.error(error.message || t("failed_to_save_maintenance"));
     }
   };
 
@@ -138,6 +141,7 @@ export const Maintenance: React.FC = () => {
 
       if (response?.success) {
         toast.success(t("maintenance_deleted_successfully"));
+        await fetchMaintenances(); // Refresh maintenances after deletion
         setIsDeleteModalOpen(false);
         setMaintenanceIdToDelete(null);
         // No need to reload - context already updated the state

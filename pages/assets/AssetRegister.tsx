@@ -29,7 +29,7 @@ import { toast } from "sonner";
 import { AssetFormModal } from "../../components/assets/AssetFormModal";
 export const AssetRegister: React.FC = () => {
   const { t } = useTranslation();
-  const { assets, assetsLoading, addAsset, updateAsset, deleteAsset } =
+  const { assets, assetsLoading, addAsset, updateAsset, deleteAsset,fetchAssets } =
     useData();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -144,14 +144,17 @@ export const AssetRegister: React.FC = () => {
           processedData,
         );
         toast.success(t("asset_updated_successfully"));
+        await fetchAssets(); // Refresh assets after update
       } else {
         await addAsset(processedData);
         toast.success(t("asset_added_successfully"));
+        await fetchAssets(); // Refresh assets after addition
       }
       setIsModalOpen(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to save asset:", error);
-      toast.error(t("failed_to_save_asset"));
+      toast.error(error.message || t("failed_to_save_asset"));
+      await fetchAssets(); // Refresh assets in case of error to ensure data consistency
     }
   };
 
@@ -162,9 +165,10 @@ export const AssetRegister: React.FC = () => {
       setIsDeleteModalOpen(false);
       setAssetIdToDelete(null);
       toast.success(t("asset_deleted_successfully"));
-    } catch (error) {
+      await fetchAssets(); // Refresh assets after deletion
+    } catch (error: any) {
       console.error("Failed to delete asset:", error);
-      toast.error(t("failed_to_delete_asset"));
+      toast.error(error.message || t("failed_to_delete_asset"));
     }
   };
 

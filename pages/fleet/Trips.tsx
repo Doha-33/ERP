@@ -38,9 +38,9 @@ export const Trips: React.FC = () => {
       setTrips(tripsData);
       setVehicles(vehiclesData);
       setDrivers(driversData);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to fetch data:", error);
-      toast.error(t("failed_to_fetch_data"));
+      toast.error(error.message || t("failed_to_fetch_data"));
     } finally {
       setLoading(false);
     }
@@ -61,9 +61,9 @@ export const Trips: React.FC = () => {
       }
       setIsModalOpen(false);
       await fetchData();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to save trip:", error);
-      toast.error(t("failed_to_save_trip"));
+      toast.error(error.message || t("failed_to_save_trip"));
     }
   };
 
@@ -75,9 +75,9 @@ export const Trips: React.FC = () => {
       setTripIdToDelete(null);
       toast.success(t("trip_deleted_successfully"));
       await fetchData();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to delete trip:", error);
-      toast.error(t("failed_to_delete_trip"));
+      toast.error(error.message || t("failed_to_delete_trip"));
     }
   };
 

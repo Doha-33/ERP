@@ -10,7 +10,7 @@ const salesService = {
     return res.data.data;
   },
   async updatePricingRule(id: string, data: any) {
-    const res = await apiClient.put(`/pricing-rules/update/${id}`, data);
+    const res = await apiClient.patch(`/pricing-rules/update/${id}`, data);
     return res.data.data;
   },
   async deletePricingRule(id: string) {
@@ -27,7 +27,7 @@ const salesService = {
     return res.data.data;
   },
   async updateDiscount(id: string, data: any) {
-    const res = await apiClient.put(`/discounts/update/${id}`, data);
+    const res = await apiClient.patch(`/discounts/update/${id}`, data);
     return res.data.data;
   },
   async deleteDiscount(id: string) {
@@ -44,7 +44,7 @@ const salesService = {
     return res.data.data;
   },
   async updatePromotion(id: string, data: any) {
-    const res = await apiClient.put(`/promotions/update/${id}`, data);
+    const res = await apiClient.patch(`/promotions/update/${id}`, data);
     return res.data.data;
   },
   async deletePromotion(id: string) {
@@ -61,7 +61,7 @@ const salesService = {
     return res.data.data;
   },
   async updateQuotation(id: string, data: any) {
-    const res = await apiClient.put(`/quotations/update/${id}`, data);
+    const res = await apiClient.patch(`/quotations/update/${id}`, data);
     return res.data.data;
   },
   async deleteQuotation(id: string) {
@@ -74,7 +74,7 @@ const salesService = {
     return res.data.data;
   },
   async updatePOSProduct(id: string, data: any) {
-    const res = await apiClient.put(`/pos-products/update/${id}`, data);
+    const res = await apiClient.patch(`/pos-products/update/${id}`, data);
     return res.data.data;
   },
   async deletePOSProduct(id: string) {
@@ -100,7 +100,7 @@ const salesService = {
     return res.data.data;
   },
   async updateCustomer(id: string, data: any) {
-    const res = await apiClient.put(`/customers/update/${id}`, data);
+    const res = await apiClient.patch(`/customers/update/${id}`, data);
     return res.data.data;
   },
   async deleteCustomer(id: string) {
@@ -117,7 +117,7 @@ const salesService = {
     return res.data.data;
   },
   async updateSalesOrder(id: string, data: any) {
-    const res = await apiClient.put(`/sales-orders/update/${id}`, data);
+    const res = await apiClient.patch(`/sales-orders/update/${id}`, data);
     return res.data.data;
   },
   async deleteSalesOrder(id: string) {
@@ -134,7 +134,7 @@ const salesService = {
     return res.data.data;
   },
   async updateSalesInvoice(id: string, data: any) {
-    const res = await apiClient.put(`/sales-invoices/update/${id}`, data);
+    const res = await apiClient.patch(`/sales-invoices/update/${id}`, data);
     return res.data.data;
   },
   async deleteSalesInvoice(id: string) {
@@ -151,7 +151,7 @@ const salesService = {
     return res.data.data;
   },
   async updateSalesReturn(id: string, data: any) {
-    const res = await apiClient.put(`/sales-returns/update/${id}`, data);
+    const res = await apiClient.patch(`/sales-returns/update/${id}`, data);
     return res.data.data;
   },
   async deleteSalesReturn(id: string) {
@@ -168,12 +168,22 @@ const salesService = {
     return res.data.data;
   },
   async updateProduct(id: string, data: any) {
-    const res = await apiClient.put(`/products/update/${id}`, data);
+    const res = await apiClient.patch(`/products/update/${id}`, data);
     return res.data.data;
   },
   async deleteProduct(id: string) {
     const res = await apiClient.delete(`/products/delete/${id}`);
     return res.data;
+  },
+
+    async getSalesReport() {
+    const res = await apiClient.get('/sales/reports/list');
+    return res.data.data;
+  },
+
+  async getCustomerReport() {
+    const res = await apiClient.get('/customer/reports/list');
+    return res.data.data;
   },
 };
 

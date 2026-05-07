@@ -24,6 +24,7 @@ export const Allocation: React.FC = () => {
     addAllocation,
     updateAllocation,
     deleteAllocation,
+    fetchAllocations
   } = useData();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -54,14 +55,17 @@ export const Allocation: React.FC = () => {
           data,
         );
         toast.success(t("allocation_updated_successfully"));
+        await fetchAllocations(); // Refresh allocations after update
       } else {
         await addAllocation(data);
         toast.success(t("allocation_added_successfully"));
+        await fetchAllocations(); // Refresh allocations after addition
       }
       setIsModalOpen(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to save allocation:", error);
-      toast.error(t("failed_to_save_allocation"));
+      toast.error(error.message || t("failed_to_save_allocation"));
+      await fetchAllocations(); // Refresh allocations in case of error to ensure data consistency
     }
   };
 
@@ -72,9 +76,11 @@ export const Allocation: React.FC = () => {
       setIsDeleteModalOpen(false);
       setAllocationIdToDelete(null);
       toast.success(t("allocation_deleted_successfully"));
-    } catch (error) {
+      await fetchAllocations(); // Refresh allocations after deletion
+    } catch (error: any) {
       console.error("Failed to delete allocation:", error);
-      toast.error(t("failed_to_delete_allocation"));
+      toast.error(error.message || t("failed_to_delete_allocation"));
+      await fetchAllocations(); // Refresh allocations in case of error to ensure data consistency
     }
   };
 

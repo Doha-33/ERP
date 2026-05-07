@@ -61,9 +61,9 @@ export const FleetDashboard: React.FC = () => {
       setLoading(true);
       const response = await fleetService.getDashboardStats(selectedPeriod);
       setDashboardData(response);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to fetch dashboard data:", error);
-      toast.error(t('failed_to_fetch_data'));
+      toast.error(error.message || t('failed_to_fetch_data'));
     } finally {
       setLoading(false);
     }

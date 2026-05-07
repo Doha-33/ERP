@@ -23,6 +23,7 @@ export const Depreciation: React.FC = () => {
     addDepreciation,
     updateDepreciation,
     deleteDepreciation,
+    fetchDepreciations,
   } = useData();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -52,14 +53,17 @@ export const Depreciation: React.FC = () => {
           data,
         );
         toast.success(t("depreciation_updated_successfully"));
+        await fetchDepreciations(); // Refresh depreciations after update
       } else {
         await addDepreciation(data);
         toast.success(t("depreciation_added_successfully"));
+        await fetchDepreciations(); // Refresh depreciations after addition
       }
       setIsModalOpen(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to save depreciation:", error);
-      toast.error(t("failed_to_save_depreciation"));
+      toast.error(error.message || t("failed_to_save_depreciation"));
+      await fetchDepreciations(); // Refresh depreciations in case of error to ensure data consistency
     }
   };
 
@@ -70,9 +74,11 @@ export const Depreciation: React.FC = () => {
       setIsDeleteModalOpen(false);
       setDepreciationIdToDelete(null);
       toast.success(t("depreciation_deleted_successfully"));
-    } catch (error) {
+      await fetchDepreciations(); // Refresh depreciations after deletion
+    } catch (error: any) {
       console.error("Failed to delete depreciation:", error);
-      toast.error(t("failed_to_delete_depreciation"));
+      toast.error(error.message || t("failed_to_delete_depreciation"));
+      await fetchDepreciations(); // Refresh depreciations in case of error to ensure data consistency
     }
   };
 

@@ -1,6 +1,17 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { UserPlus, Edit2, User, Mail, Phone, Calendar, MapPin, Briefcase, Building2, CreditCard } from "lucide-react";
+import {
+  UserPlus,
+  Edit2,
+  User,
+  Mail,
+  Phone,
+  Calendar,
+  MapPin,
+  Briefcase,
+  Building2,
+  CreditCard,
+} from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
 import { Button, Input, Select } from "../../components/ui/Common";
 import { Employee, Department, Job } from "../../types";
@@ -56,11 +67,14 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
   const filteredBranches = useMemo(() => {
     if (!formData.companyId) return [];
     console.log("Filtering branches for company:", formData.companyId);
-    const filtered = branches.filter(branch => {
-      const branchCompanyId = typeof branch.companyId === "object" 
-        ? (branch.companyId as any)?._id || (branch.companyId as any)?.id
-        : branch.companyId;
-      console.log(`Branch ${branch.name} companyId: ${branchCompanyId}, comparing with: ${formData.companyId}`);
+    const filtered = branches.filter((branch) => {
+      const branchCompanyId =
+        typeof branch.companyId === "object"
+          ? (branch.companyId as any)?._id || (branch.companyId as any)?.id
+          : branch.companyId;
+      console.log(
+        `Branch ${branch.name} companyId: ${branchCompanyId}, comparing with: ${formData.companyId}`,
+      );
       return branchCompanyId === formData.companyId;
     });
     console.log("Filtered branches:", filtered);
@@ -71,11 +85,14 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
   const filteredDepartments = useMemo(() => {
     if (!formData.companyId) return [];
     console.log("Filtering departments for company:", formData.companyId);
-    const filtered = departments.filter(dept => {
-      const deptCompanyId = typeof dept.companyId === "object" 
-        ? (dept.companyId as any)?._id || (dept.companyId as any)?.id
-        : dept.companyId;
-      console.log(`Department ${dept.departmentName} companyId: ${deptCompanyId}, comparing with: ${formData.companyId}`);
+    const filtered = departments.filter((dept) => {
+      const deptCompanyId =
+        typeof dept.companyId === "object"
+          ? (dept.companyId as any)?._id || (dept.companyId as any)?.id
+          : dept.companyId;
+      console.log(
+        `Department ${dept.departmentName} companyId: ${deptCompanyId}, comparing with: ${formData.companyId}`,
+      );
       return deptCompanyId === formData.companyId;
     });
     console.log("Filtered departments:", filtered);
@@ -89,11 +106,14 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
       return jobs;
     }
     console.log("Filtering jobs for department:", formData.departmentId);
-    const filtered = jobs.filter(job => {
-      const jobDepartmentId = typeof job.departmentId === "object" 
-        ? (job.departmentId as any)?._id || (job.departmentId as any)?.id
-        : job.departmentId;
-      console.log(`Job ${job.jobName} departmentId: ${jobDepartmentId}, comparing with: ${formData.departmentId}`);
+    const filtered = jobs.filter((job) => {
+      const jobDepartmentId =
+        typeof job.departmentId === "object"
+          ? (job.departmentId as any)?._id || (job.departmentId as any)?.id
+          : job.departmentId;
+      console.log(
+        `Job ${job.jobName} departmentId: ${jobDepartmentId}, comparing with: ${formData.departmentId}`,
+      );
       return jobDepartmentId === formData.departmentId;
     });
     console.log("Filtered jobs:", filtered);
@@ -103,20 +123,37 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
   useEffect(() => {
     if (employeeToEdit && isOpen) {
       // Get IDs from objects safely
-      const companyId = typeof employeeToEdit.companyId === "object" 
-        ? (employeeToEdit.companyId as any)?._id || (employeeToEdit.companyId as any)?.id || "" 
-        : employeeToEdit.companyId || "";
-      const branchId = typeof employeeToEdit.branchId === "object" 
-        ? (employeeToEdit.branchId as any)?._id || (employeeToEdit.branchId as any)?.id || "" 
-        : employeeToEdit.branchId || "";
-      const departmentId = typeof employeeToEdit.departmentId === "object" 
-        ? (employeeToEdit.departmentId as any)?._id || (employeeToEdit.departmentId as any)?.id || "" 
-        : employeeToEdit.departmentId || "";
-      const jobId = typeof employeeToEdit.jobId === "object" 
-        ? (employeeToEdit.jobId as any)?._id || (employeeToEdit.jobId as any)?.id || "" 
-        : employeeToEdit.jobId || "";
+      const companyId =
+        typeof employeeToEdit.companyId === "object"
+          ? (employeeToEdit.companyId as any)?._id ||
+            (employeeToEdit.companyId as any)?.id ||
+            ""
+          : employeeToEdit.companyId || "";
+      const branchId =
+        typeof employeeToEdit.branchId === "object"
+          ? (employeeToEdit.branchId as any)?._id ||
+            (employeeToEdit.branchId as any)?.id ||
+            ""
+          : employeeToEdit.branchId || "";
+      const departmentId =
+        typeof employeeToEdit.departmentId === "object"
+          ? (employeeToEdit.departmentId as any)?._id ||
+            (employeeToEdit.departmentId as any)?.id ||
+            ""
+          : employeeToEdit.departmentId || "";
+      const jobId =
+        typeof employeeToEdit.jobId === "object"
+          ? (employeeToEdit.jobId as any)?._id ||
+            (employeeToEdit.jobId as any)?.id ||
+            ""
+          : employeeToEdit.jobId || "";
 
-      console.log("Editing employee with IDs:", { companyId, branchId, departmentId, jobId });
+      console.log("Editing employee with IDs:", {
+        companyId,
+        branchId,
+        departmentId,
+        jobId,
+      });
 
       setFormData({
         fullName: employeeToEdit.fullName || "",
@@ -159,7 +196,7 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
   // Reset branch, department, job when company changes
   const handleCompanyChange = (value: string) => {
     console.log("Company changed to:", value);
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       companyId: value,
       branchId: "",
@@ -171,7 +208,7 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
   // Reset job when department changes
   const handleDepartmentChange = (value: string) => {
     console.log("Department changed to:", value);
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       departmentId: value,
       jobId: "",
@@ -200,30 +237,30 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
     { value: "WIDOWED", label: t("widowed") },
   ];
 
-  const companyOptions = companies.map(c => ({ 
-    value: c._id || c.id, 
-    label: c.name 
+  const companyOptions = companies.map((c) => ({
+    value: c._id || c.id,
+    label: c.name,
   }));
 
-  const branchOptions = filteredBranches.map(b => ({ 
-    value: b._id || b.id, 
-    label: b.name 
+  const branchOptions = filteredBranches.map((b) => ({
+    value: b._id || b.id,
+    label: b.name,
   }));
 
-  const departmentOptions = filteredDepartments.map(d => ({ 
-    value: d._id || d.id, 
-    label: d.departmentName 
+  const departmentOptions = filteredDepartments.map((d) => ({
+    value: d._id || d.id,
+    label: d.departmentName,
   }));
 
-  const jobOptions = filteredJobs.map(j => ({ 
-    value: j._id || j.id, 
-    label: j.jobName 
+  const jobOptions = filteredJobs.map((j) => ({
+    value: j._id || j.id,
+    label: j.jobName,
   }));
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
+
     try {
       await onSave(formData);
       onClose();
@@ -235,7 +272,7 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
   };
 
   const handleChange = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   return (
@@ -480,7 +517,11 @@ export const EmployeeModal: React.FC<EmployeeModalProps> = ({
         </div>
 
         <div className="flex justify-end gap-3 mt-8">
-          <Button variant="secondary" onClick={onClose} disabled={isSubmitting || isLoading}>
+          <Button
+            variant="secondary"
+            onClick={onClose}
+            disabled={isSubmitting || isLoading}
+          >
             {t("cancel")}
           </Button>
           <Button

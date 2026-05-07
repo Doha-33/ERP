@@ -78,9 +78,8 @@ export const Income: React.FC = () => {
       }
       setIsModalOpen(false);
       setSelectedIncome(null);
-    } catch (error) {
-      console.error("Failed to save income:", error);
-      toast.error(t("failed_to_save_income"));
+    } catch (error: any) {
+      toast.error(error.message || t("failed_to_save_income"));
     }
   };
 
@@ -91,9 +90,9 @@ export const Income: React.FC = () => {
       setIsDeleteModalOpen(false);
       setIncomeIdToDelete(null);
       toast.success(t("income_deleted_successfully"));
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to delete income:", error);
-      toast.error(t("failed_to_delete_income"));
+      toast.error(error.message || t("failed_to_delete_income"));
     }
   };
 

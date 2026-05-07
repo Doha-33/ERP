@@ -1,6 +1,15 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Edit2, FileText, Calendar, CreditCard, Warehouse, Package, DollarSign } from "lucide-react";
+import {
+  Plus,
+  Edit2,
+  FileText,
+  Calendar,
+  CreditCard,
+  Warehouse,
+  Package,
+  DollarSign,
+} from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
 import { Button, Input, Select, TextArea } from "../../components/ui/Common";
 import { SalesInvoice } from "../../types";
@@ -34,75 +43,146 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
     notes: "",
   });
 
+  // Helper function to extract ID from object or return value directly
+  const extractId = (value: any): string => {
+    if (!value) return "";
+    if (typeof value === "object") {
+      return value._id || value.id || "";
+    }
+    return value;
+  };
+  // خارج useEffect، داخل المكون
+  const calculateDefaultDueDate = (daysToAdd: number = 30): string => {
+    const date = new Date();
+    date.setDate(date.getDate() + daysToAdd);
+    return date.toISOString().split("T")[0];
+  };
   useEffect(() => {
-    if (invoiceToEdit && isOpen) {
-      const orderId = typeof invoiceToEdit.salesOrderId === "object"
-        ? (invoiceToEdit.salesOrderId as any)?._id
-        : invoiceToEdit.salesOrderId;
-      const warehouseId = typeof invoiceToEdit.warehouseId === "object"
-        ? (invoiceToEdit.warehouseId as any)?._id
-        : invoiceToEdit.warehouseId;
+    if (!isOpen) return; // Early exit if modal is not open
+
+    // Helper function to safely format date
+    const formatDateForInput = (
+      dateValue: string | Date | undefined,
+    ): string => {
+      if (!dateValue) return "";
+      try {
+        const date =
+          typeof dateValue === "string" ? new Date(dateValue) : dateValue;
+        if (isNaN(date.getTime())) return "";
+        return date.toISOString().split("T")[0];
+      } catch (error) {
+        console.error("Error formatting date:", error);
+        return "";
+      }
+    };
+
+    // Generate unique invoice number
+    const generateInvoiceNumber = (): string => {
+      const timestamp = Date.now();
+      const random = Math.floor(Math.random() * 1000)
+        .toString()
+        .padStart(3, "0");
+      return `INV-${timestamp}-${random}`;
+    };
+
+    if (invoiceToEdit) {
+      // Editing existing invoice
+      const orderId = extractId(invoiceToEdit.salesOrderId);
+      const warehouseId = extractId(invoiceToEdit.warehouseId);
 
       setFormData({
         salesOrderId: orderId || "",
-        invoiceNumber: invoiceToEdit.invoiceNumber || `INV-${Date.now()}`,
+        invoiceNumber: invoiceToEdit.invoiceNumber || generateInvoiceNumber(),
         paymentStatus: invoiceToEdit.paymentStatus || "UNPAID",
-        issuedDate: invoiceToEdit.issuedDate
-          ? new Date(invoiceToEdit.issuedDate).toISOString().split("T")[0]
-          : new Date().toISOString().split("T")[0],
-        dueDate: invoiceToEdit.dueDate
-          ? new Date(invoiceToEdit.dueDate).toISOString().split("T")[0]
-          : "",
+        issuedDate:
+          formatDateForInput(invoiceToEdit.issuedDate) ||
+          formatDateForInput(new Date()),
+        dueDate: formatDateForInput(invoiceToEdit.dueDate),
         warehouseId: warehouseId || "",
         notes: invoiceToEdit.notes || "",
       });
-    } else if (!invoiceToEdit && isOpen) {
+    } else {
+      // Creating new invoice
+      // Optional: Auto-select the latest order or clear selection
+      const latestOrder =
+        salesOrders.length > 0 ? extractId(salesOrders[0]) : "";
+
       setFormData({
-        salesOrderId: "",
-        invoiceNumber: `INV-${Date.now()}`,
+        salesOrderId: latestOrder, // Auto-select latest order (optional)
+        invoiceNumber: generateInvoiceNumber(),
         paymentStatus: "UNPAID",
-        issuedDate: new Date().toISOString().split("T")[0],
-        dueDate: "",
+        issuedDate: formatDateForInput(new Date()),
+        dueDate: calculateDefaultDueDate(), // Optional: calculate default due date (e.g., 30 days from now)
         warehouseId: "",
         notes: "",
       });
     }
-  }, [invoiceToEdit, isOpen]);
-
+  }, [invoiceToEdit, isOpen, salesOrders]); // Added salesOrders as dependency
   const paymentStatusOptions = [
     { value: "PAID", label: t("paid") },
     { value: "UNPAID", label: t("unpaid") },
     { value: "PARTIALLY_PAID", label: t("partially_paid") },
   ];
 
-  const orderOptions = salesOrders.map(o => ({
-    value: o._id || o.id,
+  const orderOptions = salesOrders.map((o) => ({
+    value: extractId(o),
     label: o.orderNo,
   }));
 
-  const warehouseOptions = warehouses.map(w => ({
-    value: w._id || w.id,
+  const warehouseOptions = warehouses.map((w) => ({
+    value: extractId(w),
     label: w.warehouseName,
   }));
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
+
     // Get selected order details
-    const selectedOrder = salesOrders.find(o => (o._id || o.id) === formData.salesOrderId);
-    
+    const selectedOrder = salesOrders.find(
+      (o) => extractId(o) === formData.salesOrderId,
+    );
+
+    if (!selectedOrder) {
+      console.error("No order selected");
+      setIsSubmitting(false);
+      return;
+    }
+
+    // Extract IDs from all nested objects
+    const customerId = extractId(selectedOrder.customerId);
+    const warehouseId = extractId(formData.warehouseId);
+
+    // Process items to extract product IDs
+    const processedItems =
+      selectedOrder.items?.map((item) => ({
+        ...item,
+        productId: extractId(item.productId), // Convert product object to ID string
+        // Remove any nested objects that might cause issues
+        product: undefined,
+      })) || [];
+
     try {
-      await onSave({
-        ...formData,
-        salesOrderId: formData.salesOrderId,
-        customerId: selectedOrder?.customerId,
-        items: selectedOrder?.items,
-        subtotal: selectedOrder?.subtotal,
-        taxAmount: selectedOrder?.taxAmount,
-        discountAmount: selectedOrder?.discountAmount,
-        totalAmount: selectedOrder?.totalAmount,
-      });
+      // Prepare clean data with only IDs, not objects
+      const invoiceData: Partial<SalesInvoice> = {
+        invoiceNumber: formData.invoiceNumber,
+        paymentStatus: formData.paymentStatus,
+        issuedDate: formData.issuedDate,
+        dueDate: formData.dueDate || undefined,
+        warehouseId: warehouseId, // Send as string ID
+        salesOrderId: formData.salesOrderId, // Send as string ID
+        customerId: customerId, // Send as string ID
+        notes: formData.notes,
+        // Order details
+        items: processedItems,
+        subtotal: selectedOrder.subtotal,
+        taxAmount: selectedOrder.taxAmount,
+        discountAmount: selectedOrder.discountAmount,
+        totalAmount: selectedOrder.totalAmount,
+      };
+
+      console.log("Sending invoice data:", invoiceData);
+      await onSave(invoiceData);
       onClose();
     } catch (error) {
       console.error("Error in form submission:", error);
@@ -112,11 +192,13 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
   };
 
   const handleChange = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   // Get selected order details for preview
-  const selectedOrder = salesOrders.find(o => (o._id || o.id) === formData.salesOrderId);
+  const selectedOrder = salesOrders.find(
+    (o) => extractId(o) === formData.salesOrderId,
+  );
 
   return (
     <Modal
@@ -225,24 +307,76 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
               <Package size={18} className="text-indigo-600" />
               {t("order_summary")}
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <p className="text-xs text-gray-500">{t("customer")}</p>
-                <p className="text-sm font-medium">{selectedOrder.customerId?.customerName || selectedOrder.customerId?.name || "-"}</p>
+                <p className="text-sm font-medium">
+                  {typeof selectedOrder.customerId === "object"
+                    ? (selectedOrder.customerId as any)?.customerName ||
+                      (selectedOrder.customerId as any)?.name ||
+                      "-"
+                    : selectedOrder.customerId || "-"}
+                </p>
               </div>
               <div>
                 <p className="text-xs text-gray-500">{t("order_date")}</p>
-                <p className="text-sm">{new Date(selectedOrder.orderDate).toLocaleDateString()}</p>
+                <p className="text-sm">
+                  {selectedOrder.orderDate
+                    ? new Date(selectedOrder.orderDate).toLocaleDateString()
+                    : "-"}
+                </p>
               </div>
               <div>
                 <p className="text-xs text-gray-500">{t("items_count")}</p>
                 <p className="text-sm">{selectedOrder.items?.length || 0}</p>
               </div>
               <div>
+                <p className="text-xs text-gray-500">{t("subtotal")}</p>
+                <p className="text-sm">
+                  {selectedOrder.subtotal?.toLocaleString()} EGP
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">{t("tax")}</p>
+                <p className="text-sm">
+                  {selectedOrder.taxAmount?.toLocaleString()} EGP
+                </p>
+              </div>
+              <div>
                 <p className="text-xs text-gray-500">{t("total_amount")}</p>
-                <p className="text-sm font-bold text-indigo-600">{selectedOrder.totalAmount?.toLocaleString()} EGP</p>
+                <p className="text-sm font-bold text-indigo-600">
+                  {selectedOrder.totalAmount?.toLocaleString()} EGP
+                </p>
               </div>
             </div>
+
+            {/* Items Preview */}
+            {selectedOrder.items && selectedOrder.items.length > 0 && (
+              <div className="mt-3">
+                <p className="text-xs text-gray-500 mb-2">{t("items")}</p>
+                <div className="space-y-1">
+                  {selectedOrder.items.slice(0, 3).map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="text-sm text-gray-600 flex justify-between"
+                    >
+                      <span>
+                        {typeof item.productId === "object"
+                          ? (item.productId as any)?.productName || item.sku
+                          : item.sku || item.productId}{" "}
+                        x {item.quantity}
+                      </span>
+                      <span>{item.total?.toLocaleString()} EGP</span>
+                    </div>
+                  ))}
+                  {selectedOrder.items.length > 3 && (
+                    <p className="text-xs text-gray-400">
+                      +{selectedOrder.items.length - 3} more items
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -261,7 +395,11 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
         </div>
 
         <div className="flex justify-end gap-3 mt-8">
-          <Button variant="secondary" onClick={onClose} disabled={isSubmitting || isLoading}>
+          <Button
+            variant="secondary"
+            onClick={onClose}
+            disabled={isSubmitting || isLoading}
+          >
             {t("cancel")}
           </Button>
           <Button
@@ -269,9 +407,14 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({
             type="submit"
             className="bg-indigo-600 hover:bg-indigo-700 px-8"
             isLoading={isSubmitting || isLoading}
-            disabled={isSubmitting || isLoading}
+            disabled={
+              isSubmitting ||
+              isLoading ||
+              !formData.salesOrderId ||
+              !formData.warehouseId
+            }
           >
-            {invoiceToEdit ? t("save") : t("add_invoice")}
+            {invoiceToEdit ? t("save") : t("create_invoice")}
           </Button>
         </div>
       </form>

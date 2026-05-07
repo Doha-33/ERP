@@ -44,13 +44,13 @@ export const CompanyPage: React.FC = () => {
       setIsLoading(true);
       if (editingCompany) {
         // تأكد من أن لدينا _id صالح
-        const companyId = editingCompany._id;
+        const companyId = editingCompany._id || editingCompany.id;
         if (!companyId) {
           toast.error(t("invalid_company_id"));
           return;
         }
         console.log("Updating company with ID:", companyId);
-        await updateCompany({ ...company, _id: companyId } as Company);
+        await updateCompany({ ...company, id: companyId } as Company);
         toast.success(t("company_updated_successfully"));
       } else {
         await addCompany(company as Company);
@@ -59,16 +59,21 @@ export const CompanyPage: React.FC = () => {
       setIsModalOpen(false);
       setEditingCompany(null);
       // إعادة تحميل البيانات بعد التحديث
-    } catch (error) {
-      console.error("Error saving company:", error);
-      toast.error(t("failed_to_save_company"));
+    } catch (error: any) {
+      const message =
+        error.response?.data?.message || error.message || "Operation failed";
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleEdit = useCallback((company: Company) => {
-    setEditingCompany(company);
+    const companyWithId = {
+      ...company,
+      id: company._id || company.id, // تأكد من وجود خاصية id
+    };
+    setEditingCompany(companyWithId);
     setIsModalOpen(true);
   }, []);
 

@@ -30,9 +30,9 @@ export const Vehicles: React.FC = () => {
       setLoading(true);
       const data = await fleetService.getVehicles();
       setVehicles(data);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to fetch vehicles:", error);
-      toast.error(t("failed_to_fetch_vehicles"));
+      toast.error(error.message || t("failed_to_fetch_vehicles"));
     } finally {
       setLoading(false);
     }
@@ -53,9 +53,9 @@ export const Vehicles: React.FC = () => {
       }
       setIsModalOpen(false);
       await fetchVehicles();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to save vehicle:", error);
-      toast.error(t("failed_to_save_vehicle"));
+      toast.error(error.message || t("failed_to_save_vehicle"));
     }
   };
 
@@ -67,9 +67,9 @@ export const Vehicles: React.FC = () => {
       setVehicleIdToDelete(null);
       toast.success(t("vehicle_deleted_successfully"));
       await fetchVehicles();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to delete vehicle:", error);
-      toast.error(t("failed_to_delete_vehicle"));
+      toast.error(error.message || t("failed_to_delete_vehicle"));
     }
   };
 

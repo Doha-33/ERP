@@ -81,9 +81,10 @@ export const Units: React.FC = () => {
   };
 
   const getStatusBadge = (status: string) => {
+    const s = (status || '').toUpperCase();
     return (
-      <Badge variant={status === "ACTIVE" ? "success" : "danger"}>
-        {status === "ACTIVE" ? t("active") : t("inactive")}
+      <Badge variant={s === "ACTIVE" ? "success" : "danger"}>
+        {s === "ACTIVE" ? t("active") : t("inactive")}
       </Badge>
     );
   };
@@ -97,10 +98,10 @@ export const Units: React.FC = () => {
   const filteredUnits = useMemo(() => {
     return units.filter(u => {
       const matchesSearch = 
-        u.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        u.abbreviation?.toLowerCase().includes(searchTerm.toLowerCase());
+        (u.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (u.abbreviation || '').toLowerCase().includes(searchTerm.toLowerCase());
       
-      const matchesStatus = !statusFilter || u.status === statusFilter;
+      const matchesStatus = !statusFilter || (u.status || u.state || '').toUpperCase() === statusFilter.toUpperCase();
       
       return matchesSearch && matchesStatus;
     });
@@ -108,7 +109,7 @@ export const Units: React.FC = () => {
 
   // Statistics
   const totalUnits = filteredUnits.length;
-  const activeUnits = filteredUnits.filter(u => u.status === "ACTIVE").length;
+  const activeUnits = filteredUnits.filter(u => (u.status || u.state || '').toUpperCase() === "ACTIVE").length;
   const baseUnits = filteredUnits.filter(u => !u.parentUnitId).length;
 
   const statusOptions = [

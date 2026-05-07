@@ -11,7 +11,7 @@ import { toast } from "sonner";
 
 export const SalesReturnPage: React.FC = () => {
   const { t } = useTranslation();
-  const { salesReturns, addSalesReturn, updateSalesReturn, deleteSalesReturn } = useData();
+  const { salesReturns, addSalesReturn, updateSalesReturn, deleteSalesReturn, fetchSalesReturnsData } = useData();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingReturn, setEditingReturn] = useState<SalesReturn | null>(null);
@@ -27,25 +27,35 @@ export const SalesReturnPage: React.FC = () => {
   const handleSave = async (returnData: Partial<SalesReturn>) => {
     try {
       setIsLoading(true);
+      let response;
       if (editingReturn) {
-        await updateSalesReturn({ ...returnData, _id: editingReturn._id, id: editingReturn.id } as SalesReturn);
+        const salesReturnId = editingReturn._id || editingReturn.id;
+        response = await updateSalesReturn({ ...returnData, _id: salesReturnId, id: salesReturnId } as SalesReturn);
         toast.success(t("sales_return_updated_successfully"));
+        await fetchSalesReturnsData();
       } else {
-        await addSalesReturn(returnData as SalesReturn);
+        response = await addSalesReturn(returnData as SalesReturn);
         toast.success(t("sales_return_created_successfully"));
+        await fetchSalesReturnsData();
       }
       setIsModalOpen(false);
       setEditingReturn(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving sales return:", error);
-      toast.error(t("failed_to_save_sales_return"));
+      const message = error?.message || t("failed_to_save_sales_return");
+      toast.error(message);
+      await fetchSalesReturnsData(); // Refresh data to ensure UI consistency after error
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleEdit = useCallback((returnData: SalesReturn) => {
-    setEditingReturn(returnData);
+    const salesReturnWithId = {
+      ...returnData,
+      id: returnData._id || returnData.id, // Ensure we have an 'id' field for the modal
+    };
+    setEditingReturn(salesReturnWithId);
     setIsModalOpen(true);
   }, []);
 
@@ -60,6 +70,7 @@ export const SalesReturnPage: React.FC = () => {
         toast.success(t("sales_return_deleted_successfully"));
         setDeleteId(null);
         setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+        await fetchSalesReturnsData();
       } catch (error) {
         toast.error(t("failed_to_delete_sales_return"));
       }

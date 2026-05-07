@@ -35,9 +35,9 @@ export const Drivers: React.FC = () => {
       ]);
       setDrivers(driversData);
       setVehicles(vehiclesData);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to fetch data:", error);
-      toast.error(t("failed_to_fetch_data"));
+      toast.error(error.message || t("failed_to_fetch_data"));
     } finally {
       setLoading(false);
     }
@@ -58,9 +58,9 @@ export const Drivers: React.FC = () => {
       }
       setIsModalOpen(false);
       await fetchData();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to save driver:", error);
-      toast.error(t("failed_to_save_driver"));
+      toast.error(error.message || t("failed_to_save_driver"));
     }
   };
 
@@ -72,9 +72,9 @@ export const Drivers: React.FC = () => {
       setDriverIdToDelete(null);
       toast.success(t("driver_deleted_successfully"));
       await fetchData();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to delete driver:", error);
-      toast.error(t("failed_to_delete_driver"));
+      toast.error(error.message || t("failed_to_delete_driver"));
     }
   };
 

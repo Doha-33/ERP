@@ -5,6 +5,7 @@ import { Search, ShoppingCart, Plus, Minus, Trash2, User, CreditCard } from 'luc
 import { Card, Button, Input, Select, Badge } from '../../components/ui/Common';
 import { POSProduct } from '../../types';
 import { useData } from '../../context/DataContext';
+import { toast } from 'sonner';
 
 interface CartItem extends POSProduct {
   cartQuantity: number;
@@ -12,17 +13,24 @@ interface CartItem extends POSProduct {
 
 export const POS: React.FC = () => {
   const { t } = useTranslation();
-  const { posProducts, customers } = useData();
+  const { 
+    posProducts, 
+    customers, 
+    createPOSOrder, 
+    addItemToPOSOrder, 
+    payOrder 
+  } = useData();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const categories = ['All', 'Electronics', 'Laptops', 'Accessories'];
 
   const filteredProducts = useMemo(() => {
     return posProducts.filter(p => {
-      const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = (p.name || '').toLowerCase().includes(searchTerm.toLowerCase());
       const matchesCategory = selectedCategory === 'All' || p.category === selectedCategory;
       return matchesSearch && matchesCategory;
     });
@@ -57,6 +65,42 @@ export const POS: React.FC = () => {
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.cartQuantity), 0);
   const tax = subtotal * 0.15;
   const total = subtotal + tax;
+
+  const handleCheckout = async () => {
+    if (cart.length === 0) return;
+    
+    try {
+      setIsProcessing(true);
+      // 1. Create Order
+      const order = await createPOSOrder();
+      const orderId = order.id || order._id;
+
+      // 2. Add Items
+      for (const item of cart) {
+        await addItemToPOSOrder(orderId, {
+          productId: item.id || item._id,
+          qty: item.cartQuantity,
+          price: item.price
+        });
+      }
+
+      // 3. Pay Order
+      await payOrder(orderId, {
+        paymentMethod: 'CASH',
+        amount: total,
+        customerId: selectedCustomerId || undefined
+      });
+
+      toast.success(t('order_completed_successfully'));
+      setCart([]);
+      setSelectedCustomerId('');
+    } catch (error) {
+      console.error('Checkout error:', error);
+      toast.error(t('failed_to_complete_order'));
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   return (
     <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-120px)]">
@@ -189,8 +233,14 @@ export const POS: React.FC = () => {
             <span className="font-bold text-gray-900 dark:text-white">Total</span>
             <span className="font-bold text-primary text-2xl">{total.toFixed(2)} SAR</span>
           </div>
-          <Button fullWidth size="lg" className="mt-4 h-14 text-lg font-bold" disabled={cart.length === 0}>
-            <CreditCard size={20} /> Pay Now
+          <Button 
+            fullWidth 
+            size="lg" 
+            className="mt-4 h-14 text-lg font-bold" 
+            disabled={cart.length === 0 || isProcessing}
+            onClick={handleCheckout}
+          >
+            <CreditCard size={20} /> {isProcessing ? t('processing') : t('pay_now')}
           </Button>
         </div>
       </Card>

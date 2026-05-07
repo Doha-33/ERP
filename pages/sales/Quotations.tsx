@@ -8,10 +8,11 @@ import { QuotationModal } from "../../components/sales/QuotationModal";
 import { useData } from "../../context/DataContext";
 import { Quotation } from "../../types";
 import { toast } from "sonner";
+import salesService from "../../services/sales.service";
 
 export const Quotations: React.FC = () => {
   const { t } = useTranslation();
-  const { quotations, addQuotation, updateQuotation, deleteQuotation, customers } = useData();
+  const { quotations, addQuotation, updateQuotation, deleteQuotation, customers, fetchQuotations } = useData();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingQuotation, setEditingQuotation] = useState<Quotation | null>(null);
@@ -28,25 +29,38 @@ export const Quotations: React.FC = () => {
   const handleSave = async (quotation: Partial<Quotation>) => {
     try {
       setIsLoading(true);
+      let response;
       if (editingQuotation) {
-        await updateQuotation({ ...quotation, id: editingQuotation.id, _id: editingQuotation._id } as Quotation);
+        const quotationId = editingQuotation._id || editingQuotation.id;
+        response = await updateQuotation({...quotation, id: quotationId } as Quotation);
         toast.success(t("quotation_updated_successfully"));
+        await fetchQuotations(); // إعادة جلب البيانات بعد التحديث
       } else {
         await addQuotation(quotation as Quotation);
         toast.success(t("quotation_created_successfully"));
+        await fetchQuotations(); // إعادة جلب البيانات بعد الإنشاء
       }
       setIsModalOpen(false);
       setEditingQuotation(null);
-    } catch (error) {
-      console.error("Error saving quotation:", error);
-      toast.error(t("failed_to_save_quotation"));
+      await fetchQuotations(); // إعادة جلب البيانات بعد الحفظ
+    } catch (error: any) {
+        const message = error?.message || t("failed_to_save_order");
+        toast.error(message);
+        await fetchQuotations(); // إعادة جلب البيانات حتى في حالة الخطأ للتأكد من تحديث الواجهة
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleEdit = useCallback((quotation: Quotation) => {
-    setEditingQuotation(quotation);
+    const quotationToEdit = {
+      ...quotation,
+      id: quotation._id || quotation.id,
+      customerId: typeof quotation.customerId === "object" && quotation.customerId !== null
+        ? (quotation.customerId as any)._id
+        : quotation.customerId
+    };
+    setEditingQuotation(quotationToEdit);
     setIsModalOpen(true);
   }, []);
 
@@ -60,9 +74,10 @@ export const Quotations: React.FC = () => {
         await deleteQuotation(deleteId);
         toast.success(t("quotation_deleted_successfully"));
         setDeleteId(null);
+        await fetchQuotations();
         setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
-      } catch (error) {
-        toast.error(t("failed_to_delete_quotation"));
+      } catch (error: any) {
+        toast.error(error?.message || t("failed_to_delete_quotation"));
       }
     }
   }, [deleteId, deleteQuotation, t]);

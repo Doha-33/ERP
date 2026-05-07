@@ -22,10 +22,11 @@ export const VehicleFormModal: React.FC<VehicleFormModalProps> = ({
 
   const vehicleTypes = [
     { value: "Sedan", label: "Sedan" },
-    { value: "SUV", label: "SUV" },
+    { value: "Car", label: "Car" },
     { value: "Truck", label: "Truck" },
     { value: "Van", label: "Van" },
     { value: "Bus", label: "Bus" },
+    { value: "Motorcycle", label: "Motorcycle" },
   ];
 
   const fuelTypes = [

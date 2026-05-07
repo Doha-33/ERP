@@ -35,9 +35,9 @@ export const VehicleExpenses: React.FC = () => {
       ]);
       setExpenses(expensesData);
       setVehicles(vehiclesData);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to fetch data:", error);
-      toast.error(t("failed_to_fetch_expenses"));
+      toast.error(error.message || t("failed_to_fetch_expenses"));
     } finally {
       setLoading(false);
     }
@@ -58,9 +58,9 @@ export const VehicleExpenses: React.FC = () => {
       }
       setIsModalOpen(false);
       await fetchData();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to save expense:", error);
-      toast.error(t("failed_to_save_expense"));
+      toast.error(error.message || t("failed_to_save_expense"));
       throw error;
     }
   };
@@ -73,9 +73,9 @@ export const VehicleExpenses: React.FC = () => {
       setExpenseIdToDelete(null);
       toast.success(t("expense_deleted_successfully"));
       await fetchData();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to delete expense:", error);
-      toast.error(t("failed_to_delete_expense"));
+      toast.error(error.message || t("failed_to_delete_expense"));
     }
   };
 

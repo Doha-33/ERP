@@ -33,6 +33,7 @@ export const Disposal: React.FC = () => {
     addDisposal,
     updateDisposal,
     deleteDisposal,
+      fetchDisposals,
   } = useData();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -71,14 +72,17 @@ export const Disposal: React.FC = () => {
           processedData,
         );
         toast.success(t("disposal_updated_successfully"));
+        await fetchDisposals(); // Refresh disposals after update
       } else {
         await addDisposal(processedData);
         toast.success(t("disposal_added_successfully"));
+        await fetchDisposals(); // Refresh disposals after addition
       }
       setIsModalOpen(false);
-    } catch (error) {
+      await fetchDisposals(); // Refresh disposals after saving
+    } catch (error: any) {
       console.error("Failed to save disposal:", error);
-      toast.error(t("failed_to_save_disposal"));
+      toast.error(error.message || t("failed_to_save_disposal"));
     }
   };
 
@@ -89,6 +93,7 @@ export const Disposal: React.FC = () => {
       setIsDeleteModalOpen(false);
       setDisposalIdToDelete(null);
       toast.success(t("disposal_deleted_successfully"));
+      await fetchDisposals(); // Refresh disposals after deletion
     } catch (error) {
       console.error("Failed to delete disposal:", error);
       toast.error(t("failed_to_delete_disposal"));

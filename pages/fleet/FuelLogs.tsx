@@ -37,9 +37,9 @@ export const FuelLogs: React.FC = () => {
       setFuelLogs(fuelLogsData);
       setVehicles(vehiclesData);
       setDrivers(driversData);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to fetch data:", error);
-      toast.error(t("failed_to_fetch_fuel_logs"));
+      toast.error(error.message || t("failed_to_fetch_fuel_logs"));
     } finally {
       setLoading(false);
     }
@@ -60,9 +60,9 @@ export const FuelLogs: React.FC = () => {
       }
       setIsModalOpen(false);
       await fetchData();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to save fuel log:", error);
-      toast.error(t("failed_to_save_fuel_log"));
+      toast.error(error.message || t("failed_to_save_fuel_log"));
       throw error;
     }
   };
@@ -75,9 +75,9 @@ export const FuelLogs: React.FC = () => {
       setLogIdToDelete(null);
       toast.success(t("fuel_log_deleted_successfully"));
       await fetchData();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to delete fuel log:", error);
-      toast.error(t("failed_to_delete_fuel_log"));
+      toast.error(error.message || t("failed_to_delete_fuel_log"));
     }
   };
 

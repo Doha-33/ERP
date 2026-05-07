@@ -197,26 +197,6 @@ export const Dashboard: React.FC = () => {
             {new Date().toLocaleDateString()}
           </p>
         </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleRefresh}
-            className="p-2.5 rounded-xl bg-white dark:bg-gray-800 shadow-md hover:shadow-lg transition-all duration-200 hover:scale-105"
-            disabled={isRefreshing}
-          >
-            <RefreshCw
-              size={20}
-              className={`text-gray-600 dark:text-gray-400 ${isRefreshing ? "animate-spin" : ""}`}
-            />
-          </button>
-          <button className="p-2.5 rounded-xl bg-white dark:bg-gray-800 shadow-md hover:shadow-lg transition-all duration-200">
-            <Download size={20} className="text-gray-600 dark:text-gray-400" />
-          </button>
-          <Button className="gap-2">
-            <Filter size={18} />
-            {t("filter")}
-          </Button>
-        </div>
       </div>
 
       {/* Stats Cards Row */}
@@ -525,7 +505,7 @@ export const Dashboard: React.FC = () => {
                   paddingAngle={5}
                   dataKey="value"
                   label={({ name, percent }) =>
-                    `${name}: ${(percent * 100).toFixed(0)}%`
+                    `${name}: ${(percent ? percent * 100 : 0).toFixed(0)}%`
                   }
                   labelLine={false}
                 >

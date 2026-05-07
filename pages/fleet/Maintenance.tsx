@@ -35,9 +35,9 @@ export const Maintenance: React.FC = () => {
       ]);
       setMaintenanceRecords(maintenanceData);
       setVehicles(vehiclesData);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to fetch data:", error);
-      toast.error(t("failed_to_fetch_maintenance"));
+      toast.error(error.message || t("failed_to_fetch_maintenance"));
     } finally {
       setLoading(false);
     }
@@ -58,9 +58,9 @@ export const Maintenance: React.FC = () => {
       }
       setIsModalOpen(false);
       await fetchData();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to save maintenance record:", error);
-      toast.error(t("failed_to_save_maintenance"));
+      toast.error(error.message || t("failed_to_save_maintenance"));
       throw error;
     }
   };
@@ -73,9 +73,9 @@ export const Maintenance: React.FC = () => {
       setRecordIdToDelete(null);
       toast.success(t("maintenance_deleted_successfully"));
       await fetchData();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to delete maintenance record:", error);
-      toast.error(t("failed_to_delete_maintenance"));
+      toast.error(error.message || t("failed_to_delete_maintenance"));
     }
   };
 

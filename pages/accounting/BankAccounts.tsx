@@ -1,251 +1,406 @@
-import React, { useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Plus, Edit2, Trash2, Search } from 'lucide-react';
-import { Card, Button, Input, Select, Badge, ExportDropdown } from '../../components/ui/Common';
-import { Modal } from '../../components/ui/Modal';
-import { Table, Column } from '../../components/ui/Table';
-import { ConfirmationModal } from '../../components/ui/ConfirmationModal';
-import { useData } from '../../context/DataContext';
-import { BankAccount } from '../../types';
-import { toast } from 'sonner';
+import React, { useState, useMemo, useCallback } from "react";
+import { useTranslation } from "react-i18next";
+import {
+  Plus,
+  Edit2,
+  Trash2,
+  Search,
+  Building2,
+  CreditCard,
+  Landmark,
+  DollarSign,
+  Filter,
+  X,
+} from "lucide-react";
+import {
+  Card,
+  Button,
+  Input,
+  Select,
+  Badge,
+  ExportDropdown,
+} from "../../components/ui/Common";
+import { Table, Column } from "../../components/ui/Table";
+import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
+import { BankAccountModal } from "../../components/accounting/BankAccountModal";
+import { useData } from "../../context/DataContext";
+import { BankAccount } from "../../types";
+import { toast } from "sonner";
 
 export const BankAccounts: React.FC = () => {
   const { t } = useTranslation();
-  const { bankAccounts, currencies, accountingLoading, addBankAccount, updateBankAccount, deleteBankAccount } = useData();
-  
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const { bankAccounts, accountingLoading, addBankAccount, updateBankAccount, deleteBankAccount } = useData();
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [selectedAccount, setSelectedAccount] = useState<BankAccount | null>(null);
+  const [editingAccount, setEditingAccount] = useState<BankAccount | null>(null);
   const [accountIdToDelete, setAccountIdToDelete] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [companyFilter, setCompanyFilter] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
+  const [currencyFilter, setCurrencyFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const filteredAccounts = bankAccounts.filter(account => {
-    const matchesSearch = 
-      (account.bankName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (account.accountNumber || '').toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesCompany = companyFilter ? account.company === companyFilter : true;
-    
-    return matchesSearch && matchesCompany;
-  });
-
-  const columns: Column<BankAccount>[] = [
-    { header: t('company'), accessorKey: 'company' },
-    { header: t('account_number'), accessorKey: 'accountNumber' },
-    { header: t('iban'), accessorKey: 'iban' },
-    { header: t('currency'), accessorKey: 'currency' },
-    { header: t('bank_name'), accessorKey: 'bankName' },
-    { header: t('branch'), accessorKey: 'branch' },
-    { 
-      header: t('current_balance'), 
-      render: (item) => `${item.currentBalance?.toLocaleString() || 0} ${item.currency}`
-    },
-    { 
-      header: t('status'), 
-      render: (item) => (
-        <Badge variant={item.status === 'Active' ? 'success' : 'secondary'}>
-          {t((item.status || 'inactive').toLowerCase())}
-        </Badge>
-      )
-    },
-    {
-      header: t('actions'),
-      render: (item) => (
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={() => { setSelectedAccount(item); setIsEditModalOpen(true); }}
-            className="p-1.5 text-gray-400 hover:text-primary transition-colors border border-gray-200 dark:border-gray-700 rounded-lg"
-          >
-            <Edit2 size={16} />
-          </button>
-          <button 
-            onClick={() => { setAccountIdToDelete(item._id || item.id); setIsDeleteModalOpen(true); }}
-            className="p-1.5 text-gray-400 hover:text-red-500 transition-colors border border-gray-200 dark:border-gray-700 rounded-lg"
-          >
-            <Trash2 size={16} />
-          </button>
-        </div>
-      )
+  const handleSave = async (account: Partial<BankAccount>) => {
+    try {
+      setIsLoading(true);
+      if (editingAccount) {
+        await updateBankAccount(editingAccount._id || editingAccount.id, account);
+        toast.success(t("bank_account_updated_successfully"));
+      } else {
+        await addBankAccount(account);
+        toast.success(t("bank_account_created_successfully"));
+      }
+      setIsModalOpen(false);
+      setEditingAccount(null);
+    } catch (error) {
+      console.error("Error saving bank account:", error);
+      toast.error(t("failed_to_save_bank_account"));
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  const handleEdit = useCallback((account: BankAccount) => {
+    setEditingAccount(account);
+    setIsModalOpen(true);
+  }, []);
+
+  const handleDelete = useCallback((id: string) => {
+    setAccountIdToDelete(id);
+    setIsDeleteModalOpen(true);
+  }, []);
+
+  const confirmDelete = useCallback(async () => {
+    if (accountIdToDelete) {
+      try {
+        await deleteBankAccount(accountIdToDelete);
+        toast.success(t("bank_account_deleted_successfully"));
+        setAccountIdToDelete(null);
+        setIsDeleteModalOpen(false);
+        setSelectedIds(prev => prev.filter(sid => sid !== accountIdToDelete));
+      } catch (error) {
+        console.error("Error deleting bank account:", error);
+        toast.error(t("failed_to_delete_bank_account"));
+      }
+    }
+  }, [accountIdToDelete, deleteBankAccount, t]);
+
+  const handleBulkDelete = async () => {
+    try {
+      setIsLoading(true);
+      await Promise.all(selectedIds.map(id => deleteBankAccount(id)));
+      toast.success(t("bank_accounts_deleted_successfully", { count: selectedIds.length }));
+      setSelectedIds([]);
+      setIsBulkConfirmOpen(false);
+    } catch (error) {
+      console.error("Bulk delete failed", error);
+      toast.error(t("failed_to_delete_bank_accounts"));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getStatusBadge = (isActive: boolean) => {
+    return (
+      <Badge variant={isActive ? "success" : "danger"}>
+        {isActive ? t("active") : t("inactive")}
+      </Badge>
+    );
+  };
+
+  // Get unique currencies for filter
+  const uniqueCurrencies = useMemo(() => {
+    const currencies = bankAccounts.map(a => a.currency).filter(Boolean);
+    return Array.from(new Set(currencies));
+  }, [bankAccounts]);
+
+  // Apply filters
+  const filteredAccounts = useMemo(() => {
+    return bankAccounts.filter(a => {
+      const matchesSearch = 
+        a.bankName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        a.accountNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        a.accountName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        a.company?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesCurrency = !currencyFilter || a.currency === currencyFilter;
+      const matchesStatus = !statusFilter || 
+        (statusFilter === "active" && a.isActive) ||
+        (statusFilter === "inactive" && !a.isActive);
+      
+      return matchesSearch && matchesCurrency && matchesStatus;
+    });
+  }, [bankAccounts, searchTerm, currencyFilter, statusFilter]);
+
+  // Statistics
+  const totalAccounts = filteredAccounts.length;
+  const totalBalance = filteredAccounts.reduce((sum, a) => sum + (a.currentBalance || 0), 0);
+  const activeAccounts = filteredAccounts.filter(a => a.isActive).length;
+  const inactiveAccounts = filteredAccounts.filter(a => !a.isActive).length;
+
+  const currencyOptions = [
+    { value: "", label: t("all_currencies") },
+    ...uniqueCurrencies.map(c => ({ value: c, label: c })),
   ];
 
-  const handleAdd = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const data = {
-      bankName: formData.get('bankName'),
-      accountNumber: formData.get('accountNumber'),
-      iban: formData.get('iban'),
-      currency: formData.get('currency'),
-      branch: formData.get('branch'),
-      currentBalance: Number(formData.get('currentBalance')),
-      company: formData.get('company'),
-      status: 'Active'
-    };
-    try {
-      await addBankAccount(data);
-      setIsAddModalOpen(false);
-      toast.success(t('account_added_successfully'));
-    } catch (error) {
-      console.error(error);
-      toast.error(t('failed_to_add_account'));
-    }
-  };
+  const statusOptions = [
+    { value: "", label: t("all_statuses") },
+    { value: "active", label: t("active") },
+    { value: "inactive", label: t("inactive") },
+  ];
 
-  const handleEdit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!selectedAccount?._id && !selectedAccount?.id) return;
-    const formData = new FormData(e.currentTarget);
-    const data = {
-      bankName: formData.get('bankName'),
-      accountNumber: formData.get('accountNumber'),
-      iban: formData.get('iban'),
-      currency: formData.get('currency'),
-      branch: formData.get('branch'),
-      currentBalance: Number(formData.get('currentBalance')),
-      company: formData.get('company'),
-      status: formData.get('status')
-    };
-    try {
-      await updateBankAccount((selectedAccount._id || selectedAccount.id)!, data);
-      setIsEditModalOpen(false);
-      setSelectedAccount(null);
-      toast.success(t('account_updated_successfully'));
-    } catch (error) {
-      console.error(error);
-      toast.error(t('failed_to_update_account'));
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!accountIdToDelete) return;
-    try {
-      await deleteBankAccount(accountIdToDelete);
-      setIsDeleteModalOpen(false);
-      setAccountIdToDelete(null);
-      toast.success(t('account_deleted_successfully'));
-    } catch (error) {
-      console.error(error);
-      toast.error(t('failed_to_delete_account'));
-    }
-  };
-
-  const companies = Array.from(new Set(bankAccounts.map(a => a.company))).filter(Boolean);
+  const columns: Column<BankAccount>[] = useMemo(
+    () => [
+      {
+        header: t("account_info"),
+        render: (a) => (
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center">
+              <Landmark size={18} className="text-indigo-600" />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-medium text-gray-900">{a.accountName}</span>
+              <span className="text-xs text-gray-500">{a.company}</span>
+            </div>
+          </div>
+        )
+      },
+      {
+        header: t("bank_details"),
+        render: (a) => (
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-1.5">
+              <Building2 size={14} className="text-gray-400" />
+              <span className="text-sm text-gray-600">{a.bankName}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <CreditCard size={14} className="text-gray-400" />
+              <span className="text-sm text-gray-500">{a.accountNumber}</span>
+            </div>
+          </div>
+        )
+      },
+      {
+        header: t("balance"),
+        render: (a) => (
+          <div className="flex items-center gap-1.5">
+            <DollarSign size={14} className="text-green-600" />
+            <span className="text-sm font-semibold text-green-600">
+              {a.currentBalance?.toLocaleString()} {a.currency}
+            </span>
+          </div>
+        )
+      },
+      {
+        header: t("iban"),
+        render: (a) => (
+          <span className="text-sm font-mono text-gray-500">{a.iban || "-"}</span>
+        )
+      },
+      {
+        header: t("branch"),
+        render: (a) => (
+          <span className="text-sm text-gray-600">{a.branch || "-"}</span>
+        )
+      },
+      {
+        header: t("status"),
+        render: (a) => getStatusBadge(a.isActive)
+      },
+      {
+        header: t("actions"),
+        className: "text-center",
+        render: (a) => (
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={() => handleEdit(a)}
+              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+              title={t("edit")}
+            >
+              <Edit2 size={16} />
+            </button>
+            <button
+              onClick={() => handleDelete(a._id || a.id)}
+              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+              title={t("delete")}
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
+        )
+      }
+    ],
+    [t, handleEdit, handleDelete]
+  );
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('bank_accounts')}</h1>
-          <p className="text-gray-500 dark:text-gray-400">{t('manage_your_bank_accounts')}</p>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {t("bank_accounts")}
+          </h1>
+          <p className="text-gray-500 mt-1">
+            {t("manage_your_bank_accounts")}
+          </p>
         </div>
         <div className="flex gap-3">
-          <ExportDropdown data={bankAccounts} filename="bank_accounts" />
-          <Button onClick={() => setIsAddModalOpen(true)}>
-            <Plus size={20} /> {t('add_bank_account')}
+          {selectedIds.length > 0 && (
+            <Button
+              variant="danger"
+              onClick={() => setIsBulkConfirmOpen(true)}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              <Trash2 size={18} />
+              {t("delete_selected")} ({selectedIds.length})
+            </Button>
+          )}
+          <ExportDropdown data={filteredAccounts} filename="bank-accounts" />
+          <Button
+            variant="primary"
+            onClick={() => {
+              setEditingAccount(null);
+              setIsModalOpen(true);
+            }}
+            className="bg-indigo-600 hover:bg-indigo-700"
+          >
+            <Plus size={18} />
+            {t("add_bank_account")}
           </Button>
         </div>
       </div>
 
-      <Card>
-        <div className="flex flex-col md:flex-row justify-between gap-4 mb-4">
-          <Input 
-            placeholder={t('search_bank_accounts')} 
-            icon={<Search size={18} />} 
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <Landmark size={18} className="text-indigo-600" />
+            <p className="text-xs text-gray-500">{t("total_accounts")}</p>
+          </div>
+          <p className="text-xl font-bold text-gray-900 mt-1">{totalAccounts}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <DollarSign size={18} className="text-green-600" />
+            <p className="text-xs text-gray-500">{t("total_balance")}</p>
+          </div>
+          <p className="text-xl font-bold text-green-600 mt-1">{totalBalance.toLocaleString()} EGP</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <CheckCircle size={18} className="text-green-500" />
+            <p className="text-xs text-gray-500">{t("active")}</p>
+          </div>
+          <p className="text-xl font-bold text-green-600 mt-1">{activeAccounts}</p>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <XCircle size={18} className="text-red-600" />
+            <p className="text-xs text-gray-500">{t("inactive")}</p>
+          </div>
+          <p className="text-xl font-bold text-red-600 mt-1">{inactiveAccounts}</p>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-4 items-center">
+        <div className="relative max-w-md">
+          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder={t("search_bank_accounts")}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="max-w-md"
-          />
-          <Select 
-            options={[
-              { value: '', label: t('all_companies') },
-              ...companies.map(c => ({ value: c!, label: c! }))
-            ]} 
-            value={companyFilter}
-            onChange={(e) => setCompanyFilter(e.target.value)}
-            className="w-48"
+            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           />
         </div>
-        <Table 
-          data={filteredAccounts} 
-          columns={columns} 
-          keyExtractor={(item) => item._id || item.id} 
-          isLoading={accountingLoading}
+
+        <select
+          value={currencyFilter}
+          onChange={(e) => setCurrencyFilter(e.target.value)}
+          className="px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          {currencyOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="px-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          {statusOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+
+        {(currencyFilter || statusFilter || searchTerm) && (
+          <button
+            onClick={() => {
+              setCurrencyFilter("");
+              setStatusFilter("");
+              setSearchTerm("");
+            }}
+            className="text-sm text-red-600 hover:text-red-700"
+          >
+            {t("clear_filters")}
+          </button>
+        )}
+      </div>
+
+      {/* Table */}
+      <Card className="bg-white">
+        <Table
+          data={filteredAccounts}
+          columns={columns}
+          keyExtractor={(item) => item._id || item.id}
+          isLoading={accountingLoading || isLoading}
+          selectable
+          selectedIds={selectedIds}
+          onSelectionChange={setSelectedIds}
         />
       </Card>
 
-      {/* Add Modal */}
-      <Modal 
-        isOpen={isAddModalOpen} 
-        onClose={() => setIsAddModalOpen(false)}
-        title={t('add_bank_account')}
-      >
-        <form onSubmit={handleAdd} className="grid grid-cols-2 gap-4 mt-4">
-          <Input label={t('company')} name="company" placeholder="Company Name" required />
-          <Input label={t('account_number')} name="accountNumber" placeholder="Account Number" required />
-          <Select 
-            label={t('currency')} 
-            name="currency"
-            options={currencies.map(c => ({ value: c.code, label: `${c.name} (${c.code})` }))} 
-            required 
-          />
-          <Input label={t('bank_name')} name="bankName" placeholder="Bank Name" required />
-          <Input label={t('branch')} name="branch" placeholder="Branch" required />
-          <Input label={t('opening_balance')} name="currentBalance" type="number" placeholder="$" required />
-          <Input label={t('iban')} name="iban" placeholder="IBAN" required />
-          <div className="col-span-2 flex justify-end gap-3 mt-6">
-            <Button variant="outline" type="button" onClick={() => setIsAddModalOpen(false)}>{t('cancel')}</Button>
-            <Button type="submit" isLoading={accountingLoading}>{t('add_bank_account')}</Button>
-          </div>
-        </form>
-      </Modal>
+      {/* Modal */}
+      <BankAccountModal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingAccount(null);
+        }}
+        onSave={handleSave}
+        accountToEdit={editingAccount}
+        isLoading={accountingLoading || isLoading}
+      />
 
-      {/* Edit Modal */}
-      <Modal 
-        isOpen={isEditModalOpen} 
-        onClose={() => setIsEditModalOpen(false)}
-        title={t('edit_bank_account')}
-      >
-        <form onSubmit={handleEdit} className="grid grid-cols-2 gap-4 mt-4">
-          <Input label={t('company')} name="company" defaultValue={selectedAccount?.company} required />
-          <Input label={t('account_number')} name="accountNumber" defaultValue={selectedAccount?.accountNumber} required />
-          <Select 
-            label={t('currency')} 
-            name="currency"
-            defaultValue={selectedAccount?.currency}
-            options={currencies.map(c => ({ value: c.code, label: `${c.name} (${c.code})` }))} 
-            required 
-          />
-          <Input label={t('bank_name')} name="bankName" defaultValue={selectedAccount?.bankName} required />
-          <Input label={t('branch')} name="branch" defaultValue={selectedAccount?.branch} required />
-          <Select 
-            label={t('status')} 
-            name="status"
-            defaultValue={selectedAccount?.status}
-            options={[
-              { value: 'Active', label: t('active') },
-              { value: 'Inactive', label: t('inactive') },
-            ]} 
-            required 
-          />
-          <Input label={t('current_balance')} name="currentBalance" type="number" defaultValue={selectedAccount?.currentBalance} required />
-          <Input label={t('iban')} name="iban" defaultValue={selectedAccount?.iban} required />
-          <div className="col-span-2 flex justify-end gap-3 mt-6">
-            <Button variant="outline" type="button" onClick={() => setIsEditModalOpen(false)}>{t('cancel')}</Button>
-            <Button type="submit" isLoading={accountingLoading}>{t('save')}</Button>
-          </div>
-        </form>
-      </Modal>
-      
-      <ConfirmationModal 
+      {/* Delete Confirmation */}
+      <ConfirmationModal
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
-        onConfirm={handleDelete}
-        title={t('delete_bank_account')}
-        message={t('are_you_sure_delete_bank_account')}
+        onConfirm={confirmDelete}
+        title={t("delete_bank_account")}
+        message={t("are_you_sure_delete_bank_account")}
+      />
+
+      {/* Bulk Delete Confirmation */}
+      <ConfirmationModal
+        isOpen={isBulkConfirmOpen}
+        onClose={() => setIsBulkConfirmOpen(false)}
+        onConfirm={handleBulkDelete}
+        title={t("delete_bank_accounts")}
+        message={t("are_you_sure_delete_bank_accounts", { count: selectedIds.length })}
       />
     </div>
   );
 };
+
+// Add missing imports
+import { CheckCircle, XCircle } from "lucide-react";

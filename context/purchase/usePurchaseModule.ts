@@ -3,7 +3,7 @@ import { useState, useCallback, useMemo } from 'react';
 import purchaseService from '../../services/purchase.service';
 import { 
   Supplier, PurchaseOrder, GoodsReceipt, PurchaseInvoice, 
-  PurchaseRequest, SupplierRating, ReturnToSupplier 
+  PurchaseRequest, SupplierRating, ReturnToSupplier, PurchaseReport
 } from '../../types';
 
 export const usePurchaseModule = (fetchAllData?: () => Promise<void>) => {
@@ -14,6 +14,7 @@ export const usePurchaseModule = (fetchAllData?: () => Promise<void>) => {
   const [purchaseRequests, setPurchaseRequests] = useState<PurchaseRequest[]>([]);
   const [supplierRatings, setSupplierRatings] = useState<SupplierRating[]>([]);
   const [returnsToSupplier, setReturnsToSupplier] = useState<ReturnToSupplier[]>([]);
+  const [purchaseReports, setPurchaseReports] = useState<PurchaseReport[]>([]);
 
   const addSupplier = useCallback(async (supplier: Supplier) => {
     await purchaseService.addSupplier(supplier as any);
@@ -122,7 +123,7 @@ export const usePurchaseModule = (fetchAllData?: () => Promise<void>) => {
 
   const fetchPurchaseData = useCallback(async () => {
     try {
-      const [suppRes, orderRes, reqRes, invoiceRes, receiptRes, supplierRes, returnsRes] = await Promise.all([
+      const [suppRes, orderRes, reqRes, invoiceRes, receiptRes, supplierRes, returnsRes, reportRes] = await Promise.all([
         purchaseService.getSuppliers(),
         purchaseService.getPurchaseOrders(),
         purchaseService.getPurchaseRequests(),
@@ -130,6 +131,7 @@ export const usePurchaseModule = (fetchAllData?: () => Promise<void>) => {
         purchaseService.getGoodsReceipts(),
         purchaseService.getSupplierRatings(),
         purchaseService.getReturnsToSupplier(),
+        purchaseService.getPurchaseReport(),
       ]);
       setSuppliers(Array.isArray(suppRes) ? suppRes : (suppRes?.data || []));
       setPurchaseOrders(Array.isArray(orderRes) ? orderRes : (orderRes?.data || []));
@@ -138,6 +140,7 @@ export const usePurchaseModule = (fetchAllData?: () => Promise<void>) => {
       setGoodsReceipts(Array.isArray(receiptRes) ? receiptRes : (receiptRes?.data || []));
       setSupplierRatings(Array.isArray(supplierRes) ? supplierRes : (supplierRes?.data || []));
       setReturnsToSupplier(Array.isArray(returnsRes) ? returnsRes : (returnsRes?.data || []));
+      setPurchaseReports(Array.isArray(reportRes) ? reportRes : (reportRes?.data || []));
     } catch (error) {
       console.error('Error fetching purchase data:', error);
     }
@@ -151,6 +154,7 @@ export const usePurchaseModule = (fetchAllData?: () => Promise<void>) => {
     purchaseRequests, setPurchaseRequests,
     supplierRatings, setSupplierRatings,
     returnsToSupplier, setReturnsToSupplier,
+    purchaseReports,
     fetchPurchaseData,
     addSupplier, updateSupplier, deleteSupplier,
     addPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder,
@@ -160,7 +164,7 @@ export const usePurchaseModule = (fetchAllData?: () => Promise<void>) => {
     addSupplierRating, deleteSupplierRating, updateSupplierRating,
     addReturnToSupplier, updateReturnToSupplier, deleteReturnToSupplier,
   }), [
-    suppliers, purchaseOrders, goodsReceipts, purchaseInvoices, purchaseRequests, supplierRatings, returnsToSupplier, fetchPurchaseData,
+    suppliers, purchaseOrders, goodsReceipts, purchaseInvoices, purchaseRequests, supplierRatings, returnsToSupplier, purchaseReports, fetchPurchaseData,
     addSupplier, updateSupplier, deleteSupplier,
     addPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder,
     addGoodsReceipt, updateGoodsReceipt, deleteGoodsReceipt,

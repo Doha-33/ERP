@@ -11,7 +11,7 @@ import { toast } from "sonner";
 
 export const PricingRules: React.FC = () => {
   const { t } = useTranslation();
-  const { pricingRules, addPricingRule, updatePricingRule, deletePricingRule } = useData();
+  const { pricingRules, addPricingRule, updatePricingRule, deletePricingRule, fetchPricingRules } = useData();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<PricingRule | null>(null);
@@ -22,30 +22,102 @@ export const PricingRules: React.FC = () => {
   const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSave = async (rule: Partial<PricingRule>) => {
+  // Helper function to extract ID
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "object") {
+      return value._id || value.id || "";
+    }
+    return value;
+  }, []);
+
+  const handleSave = async (ruleData: Partial<PricingRule>) => {
     try {
       setIsLoading(true);
+      
       if (editingRule) {
-        await updatePricingRule({ ...rule, _id: editingRule._id, id: editingRule.id } as PricingRule);
+        // Get the ID from editingRule
+        const ruleId = extractId(editingRule);
+        
+        if (!ruleId) {
+          toast.error(t("pricing_rule_id_missing"));
+          return;
+        }
+        
+        // Clean the data - remove any fields that might cause issues
+        const cleanData: any = {
+          ruleName: ruleData.ruleName,
+          condition: ruleData.condition,
+          priceChange: ruleData.priceChange,
+          status: ruleData.status,
+        };
+        
+        // Add optional fields only if they exist
+        if (ruleData.product) cleanData.product = ruleData.product;
+        if (ruleData.customer) cleanData.customer = ruleData.customer;
+        if ((ruleData as any).priceType) cleanData.priceType = (ruleData as any).priceType;
+        if ((ruleData as any).value) cleanData.value = (ruleData as any).value;
+        if ((ruleData as any).appliesTo) cleanData.appliesTo = (ruleData as any).appliesTo;
+        
+        console.log("Updating pricing rule with ID:", ruleId, cleanData);
+        
+        // Try to update with ID in the URL or body based on your API
+        await updatePricingRule({ ...cleanData, _id: ruleId, id: ruleId } as PricingRule);
         toast.success(t("pricing_rule_updated_successfully"));
       } else {
-        await addPricingRule(rule as PricingRule);
+        // Clean the data for creation
+        const cleanData: any = {
+          ruleName: ruleData.ruleName,
+          condition: ruleData.condition,
+          priceChange: ruleData.priceChange,
+          status: ruleData.status,
+        };
+        
+        // Add optional fields only if they exist
+        if (ruleData.product) cleanData.product = ruleData.product;
+        if (ruleData.customer) cleanData.customer = ruleData.customer;
+        if ((ruleData as any).priceType) cleanData.priceType = (ruleData as any).priceType;
+        if ((ruleData as any).value) cleanData.value = (ruleData as any).value;
+        if ((ruleData as any).appliesTo) cleanData.appliesTo = (ruleData as any).appliesTo;
+        
+        console.log("Creating pricing rule:", cleanData);
+        await addPricingRule(cleanData as PricingRule);
         toast.success(t("pricing_rule_created_successfully"));
       }
+      
+      await fetchPricingRules(); // Refresh list
       setIsModalOpen(false);
       setEditingRule(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving pricing rule:", error);
-      toast.error(t("failed_to_save_pricing_rule"));
+      const message = error?.response?.data?.message || error?.message || t("failed_to_save_pricing_rule");
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleEdit = useCallback((rule: PricingRule) => {
-    setEditingRule(rule);
+    // Extract ID correctly from the rule object
+    const ruleId = extractId(rule);
+    
+    if (!ruleId) {
+      console.error("Pricing rule ID not found", rule);
+      toast.error(t("pricing_rule_id_not_found"));
+      return;
+    }
+    
+    // Create a clean rule object with proper ID
+    const ruleToEdit: PricingRule = {
+      ...rule,
+      _id: ruleId,
+      id: ruleId,
+    };
+    
+    console.log("Editing pricing rule:", ruleToEdit);
+    setEditingRule(ruleToEdit);
     setIsModalOpen(true);
-  }, []);
+  }, [extractId, t]);
 
   const handleDelete = useCallback((id: string) => {
     setDeleteId(id);
@@ -58,11 +130,12 @@ export const PricingRules: React.FC = () => {
         toast.success(t("pricing_rule_deleted_successfully"));
         setDeleteId(null);
         setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+        await fetchPricingRules();
       } catch (error) {
         toast.error(t("failed_to_delete_pricing_rule"));
       }
     }
-  }, [deleteId, deletePricingRule, t]);
+  }, [deleteId, deletePricingRule, fetchPricingRules, t]);
 
   const handleBulkDelete = async () => {
     try {
@@ -71,6 +144,7 @@ export const PricingRules: React.FC = () => {
       toast.success(t("pricing_rules_deleted_successfully", { count: selectedIds.length }));
       setSelectedIds([]);
       setIsBulkConfirmOpen(false);
+      await fetchPricingRules();
     } catch (error) {
       console.error("Bulk delete failed", error);
       toast.error(t("failed_to_delete_pricing_rules"));
@@ -80,9 +154,10 @@ export const PricingRules: React.FC = () => {
   };
 
   const getStatusBadge = (status: string) => {
+    const s = (status || '').toUpperCase();
     return (
-      <Badge variant={status === "Active" ? "success" : "danger"}>
-        {status === "Active" ? t("active") : t("inactive")}
+      <Badge variant={s === "ACTIVE" ? "success" : "danger"}>
+        {s === "ACTIVE" ? t("active") : t("inactive")}
       </Badge>
     );
   };
@@ -91,11 +166,10 @@ export const PricingRules: React.FC = () => {
   const filteredRules = useMemo(() => {
     return pricingRules.filter(r => {
       const matchesSearch = 
-        r.ruleName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        r.customer?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        r.product?.toLowerCase().includes(searchTerm.toLowerCase());
+        (r.ruleName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (r.condition || '').toLowerCase().includes(searchTerm.toLowerCase());
       
-      const matchesStatus = !statusFilter || r.status === statusFilter;
+      const matchesStatus = !statusFilter || (r.status || '').toUpperCase() === statusFilter.toUpperCase();
       
       return matchesSearch && matchesStatus;
     });
@@ -103,13 +177,13 @@ export const PricingRules: React.FC = () => {
 
   // Statistics
   const totalRules = filteredRules.length;
-  const activeRules = filteredRules.filter(r => r.status === "ACTIVE").length;
-  const inactiveRules = filteredRules.filter(r => r.status === "INACTIVE").length;
+  const activeRules = filteredRules.filter(r => (r.status || '').toUpperCase() === "ACTIVE").length;
+  const inactiveRules = filteredRules.filter(r => (r.status || '').toUpperCase() === "INACTIVE").length;
 
   const statusOptions = [
     { value: "", label: t("all_statuses") },
-    { value: "Active", label: t("active") },
-    { value: "Inactive", label: t("inactive") },
+    { value: "ACTIVE", label: t("active") },
+    { value: "INACTIVE", label: t("inactive") },
   ];
 
   const columns: Column<PricingRule>[] = useMemo(
@@ -159,27 +233,30 @@ export const PricingRules: React.FC = () => {
       {
         header: t("actions"),
         className: "text-center",
-        render: (r) => (
-          <div className="flex items-center justify-center gap-2">
-            <button
-              onClick={() => handleEdit(r)}
-              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("edit")}
-            >
-              <Edit2 size={16} />
-            </button>
-            <button
-              onClick={() => handleDelete(r._id || r.id)}
-              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("delete")}
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-        )
+        render: (r) => {
+          const ruleId = extractId(r);
+          return (
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => handleEdit(r)}
+                className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("edit")}
+              >
+                <Edit2 size={16} />
+              </button>
+              <button
+                onClick={() => handleDelete(ruleId)}
+                className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("delete")}
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          );
+        }
       }
     ],
-    [t, handleEdit, handleDelete]
+    [t, handleEdit, handleDelete, extractId]
   );
 
   return (
@@ -296,15 +373,15 @@ export const PricingRules: React.FC = () => {
       </div>
 
       {/* Table */}
-        <Table
-          data={filteredRules}
-          columns={columns}
-          keyExtractor={(item) => item._id || item.id}
-          isLoading={isLoading}
-          selectable
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-        />
+      <Table
+        data={filteredRules}
+        columns={columns}
+        keyExtractor={(item) => extractId(item)}
+        isLoading={isLoading}
+        selectable
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+      />
 
       {/* Modal */}
       <PricingRuleModal

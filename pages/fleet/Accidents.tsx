@@ -38,9 +38,9 @@ export const Accidents: React.FC = () => {
       setAccidents(accidentsData);
       setVehicles(vehiclesData);
       setDrivers(driversData);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to fetch data:", error);
-      toast.error(t("failed_to_fetch_data"));
+      toast.error(error.message || t("failed_to_fetch_data"));
     } finally {
       setLoading(false);
     }
@@ -61,9 +61,9 @@ export const Accidents: React.FC = () => {
       }
       setIsModalOpen(false);
       await fetchData();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to save accident:", error);
-      toast.error(t("failed_to_save_accident"));
+      toast.error(error.message || t("failed_to_save_accident"));
       throw error;
     }
   };
@@ -76,9 +76,9 @@ export const Accidents: React.FC = () => {
       setAccidentIdToDelete(null);
       toast.success(t("accident_deleted_successfully"));
       await fetchData();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to delete accident:", error);
-      toast.error(t("failed_to_delete_accident"));
+      toast.error(error.message || t("failed_to_delete_accident"));
     }
   };
 

@@ -35,9 +35,9 @@ export const VehicleBooking: React.FC = () => {
       ]);
       setBookings(bookingsData);
       setVehicles(vehiclesData);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to fetch data:", error);
-      toast.error(t("failed_to_fetch_bookings"));
+      toast.error(error.message || t("failed_to_fetch_bookings"));
     } finally {
       setLoading(false);
     }
@@ -58,9 +58,9 @@ export const VehicleBooking: React.FC = () => {
       }
       setIsModalOpen(false);
       await fetchData();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to save booking:", error);
-      toast.error(t("failed_to_save_booking"));
+      toast.error(error.message || t("failed_to_save_booking"));
       throw error;
     }
   };
@@ -73,9 +73,9 @@ export const VehicleBooking: React.FC = () => {
       setBookingIdToDelete(null);
       toast.success(t("booking_deleted_successfully"));
       await fetchData();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to delete booking:", error);
-      toast.error(t("failed_to_delete_booking"));
+      toast.error(error.message || t("failed_to_delete_booking"));
     }
   };
 

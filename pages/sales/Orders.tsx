@@ -17,7 +17,7 @@ import {
   Building2,
   DollarSign,
   CreditCard,
-  Truck
+  Truck,
 } from "lucide-react";
 import {
   Card,
@@ -31,6 +31,7 @@ import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
 import { OrderModal } from "../../components/sales/OrderModal";
 import { useData } from "../../context/DataContext";
 import { useAuth } from "../../context/AuthContext";
+import salesService from "../../services/sales.service";
 import { SalesOrder } from "../../types";
 import { toast } from "sonner";
 
@@ -46,7 +47,7 @@ export const Orders: React.FC = () => {
     currentUserEmployee,
     customers,
   } = useData();
-  
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<SalesOrder | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -59,31 +60,77 @@ export const Orders: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [orders, setOrders] = useState<SalesOrder[]>(salesOrders);
 
   const isAdmin = user?.role === "admin";
 
-  const handleSave = async (order: Partial<SalesOrder>) => {
-    try {
-      setIsLoading(true);
-      if (editingOrder) {
-        await updateSalesOrder({ ...order, id: editingOrder.id, _id: editingOrder._id } as SalesOrder);
-        toast.success(t("order_updated_successfully"));
-      } else {
-        await addSalesOrder(order as SalesOrder);
-        toast.success(t("order_created_successfully"));
-      }
-      setIsModalOpen(false);
-      setEditingOrder(null);
-    } catch (error) {
-      console.error("Error saving order:", error);
-      toast.error(t("failed_to_save_order"));
-    } finally {
-      setIsLoading(false);
+  const fetchOrders = useCallback(async () => {
+  try {
+    setIsLoading(true);
+    const data = await salesService.getAllSalesOrders();
+    setOrders(data);
+  } catch (error) {
+    console.error("Error fetching orders:", error);
+    toast.error(t("failed_to_fetch_orders"));
+  } finally {
+    setIsLoading(false);
+  }
+}, [t]);
+
+const handleSave = async (order: Partial<SalesOrder>) => {
+  try {
+    setIsLoading(true);
+    let response;
+    if (editingOrder) {
+      const orderId = editingOrder._id || editingOrder.id;
+      response = await updateSalesOrder(orderId, {...order, id: orderId } as SalesOrder);
+      toast.success(t("order_updated_successfully"));
+      await fetchOrders(); // إعادة جلب البيانات بعد التحديث
+    } else {
+      response = await addSalesOrder(order as SalesOrder);
+      toast.success(t("order_created_successfully"));
+      await fetchOrders(); // إعادة جلب البيانات بعد الإنشاء
     }
-  };
+    setIsModalOpen(false);
+    setEditingOrder(null);
+    // إعادة جلب البيانات بعد الحفظ مباشرة
+    await fetchOrders();
+  } catch (error: any) {
+    const message = error?.response?.data?.message || error?.message || t("failed_to_save_order");
+    toast.error(message);
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+  const handleView = useCallback(
+    (id: string) => {
+      navigate(`/sales/orders/${id}`);
+    },
+    [navigate],
+  );
 
   const handleEdit = useCallback((order: SalesOrder) => {
-    setEditingOrder(order);
+    const orderWithIds = {
+      ...order,
+      id: order._id || order.id,
+      customerId:
+        typeof order.customerId === "object"
+          ? (order.customerId as any)._id
+          : order.customerId,
+      salespersonId:
+        typeof order.salespersonId === "object"
+          ? (order.salespersonId as any)._id
+          : order.salespersonId,
+      items: order.items?.map((item) => ({
+        ...item,
+        productId:
+          typeof item.productId === "object"
+            ? (item.productId as any)._id
+            : item.productId,
+      })),
+    };
+    setEditingOrder(orderWithIds);
     setIsModalOpen(true);
   }, []);
 
@@ -97,7 +144,8 @@ export const Orders: React.FC = () => {
         await deleteSalesOrder(deleteId);
         toast.success(t("order_deleted_successfully"));
         setDeleteId(null);
-        setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+        setSelectedIds((prev) => prev.filter((sid) => sid !== deleteId));
+        await fetchOrders(); // Refresh data after deletion to ensure UI is in sync
       } catch (error) {
         toast.error(t("failed_to_delete_order"));
       }
@@ -107,8 +155,10 @@ export const Orders: React.FC = () => {
   const handleBulkDelete = async () => {
     try {
       setIsLoading(true);
-      await Promise.all(selectedIds.map(id => deleteSalesOrder(id)));
-      toast.success(t("orders_deleted_successfully", { count: selectedIds.length }));
+      await Promise.all(selectedIds.map((id) => deleteSalesOrder(id)));
+      toast.success(
+        t("orders_deleted_successfully", { count: selectedIds.length }),
+      );
       setSelectedIds([]);
       setIsBulkConfirmOpen(false);
     } catch (error) {
@@ -123,42 +173,80 @@ export const Orders: React.FC = () => {
   const accessibleOrders = useMemo(() => {
     if (isAdmin || user?.role === "manager") return salesOrders;
     const currentId = currentUserEmployee?._id || currentUserEmployee?.id;
-    return salesOrders.filter(o => {
-      const salespersonId = typeof o.salespersonId === "object" ? (o.salespersonId as any)._id : o.salespersonId;
+    return salesOrders.filter((o) => {
+      const salespersonId =
+        typeof o.salespersonId === "object"
+          ? (o.salespersonId as any)._id
+          : o.salespersonId;
       return salespersonId === currentId;
     });
   }, [isAdmin, user, salesOrders, currentUserEmployee]);
 
   // Apply filters
   const filteredOrders = useMemo(() => {
-    return accessibleOrders.filter(o => {
-      const customerName = typeof o.customerId === "object" ? (o.customerId as any).customerName : "";
+    return accessibleOrders.filter((o) => {
+      const customerName =
+        typeof o.customerId === "object"
+          ? (o.customerId as any).customerName
+          : "";
       const orderNo = o.orderNo || "";
-      const matchesSearch = orderNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      const matchesSearch =
+        orderNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
         customerName.toLowerCase().includes(searchTerm.toLowerCase());
-      
+
       const matchesStatus = !statusFilter || o.status === statusFilter;
-      const matchesPayment = !paymentFilter || o.paymentStatus === paymentFilter;
-      const matchesCustomer = !customerFilter || 
-        (typeof o.customerId === "object" ? (o.customerId as any)._id === customerFilter : o.customerId === customerFilter);
-      
+      const matchesPayment =
+        !paymentFilter || o.paymentStatus === paymentFilter;
+      const matchesCustomer =
+        !customerFilter ||
+        (typeof o.customerId === "object"
+          ? (o.customerId as any)._id === customerFilter
+          : o.customerId === customerFilter);
+
       const orderDate = new Date(o.orderDate);
       const matchesDateFrom = !dateFrom || orderDate >= new Date(dateFrom);
       const matchesDateTo = !dateTo || orderDate <= new Date(dateTo);
-      
-      return matchesSearch && matchesStatus && matchesPayment && matchesCustomer && matchesDateFrom && matchesDateTo;
+
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesPayment &&
+        matchesCustomer &&
+        matchesDateFrom &&
+        matchesDateTo
+      );
     });
-  }, [accessibleOrders, searchTerm, statusFilter, paymentFilter, customerFilter, dateFrom, dateTo]);
+  }, [
+    accessibleOrders,
+    searchTerm,
+    statusFilter,
+    paymentFilter,
+    customerFilter,
+    dateFrom,
+    dateTo,
+  ]);
 
   // Statistics
   const totalOrders = filteredOrders.length;
-  const totalValue = filteredOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
-  const pendingOrders = filteredOrders.filter(o => o.status === "DRAFT").length;
-  const confirmedOrders = filteredOrders.filter(o => o.status === "CONFIRMED").length;
-  const paidOrders = filteredOrders.filter(o => o.paymentStatus === "PAID").length;
+  const totalValue = filteredOrders.reduce(
+    (sum, o) => sum + (o.totalAmount || 0),
+    0,
+  );
+  const pendingOrders = filteredOrders.filter(
+    (o) => o.status === "DRAFT",
+  ).length;
+  const confirmedOrders = filteredOrders.filter(
+    (o) => o.status === "CONFIRMED",
+  ).length;
+  const paidOrders = filteredOrders.filter(
+    (o) => o.paymentStatus === "PAID",
+  ).length;
 
   const getStatusBadge = (status: string) => {
-    const statusMap: Record<string, { variant: "success" | "warning" | "danger" | "info"; label: string }> = {
+    const statusMap: Record<
+      string,
+      { variant: "success" | "warning" | "danger" | "info"; label: string }
+    > = {
       CONFIRMED: { variant: "success", label: t("confirmed") },
       DRAFT: { variant: "warning", label: t("draft") },
       CANCELLED: { variant: "danger", label: t("cancelled") },
@@ -168,7 +256,10 @@ export const Orders: React.FC = () => {
   };
 
   const getPaymentBadge = (status: string) => {
-    const statusMap: Record<string, { variant: "success" | "warning" | "danger" | "info"; label: string }> = {
+    const statusMap: Record<
+      string,
+      { variant: "success" | "warning" | "danger" | "info"; label: string }
+    > = {
       PAID: { variant: "success", label: t("paid") },
       UNPAID: { variant: "danger", label: t("unpaid") },
       PARTIALLY_PAID: { variant: "warning", label: t("partially_paid") },
@@ -178,7 +269,10 @@ export const Orders: React.FC = () => {
   };
 
   const getDeliveryBadge = (status: string) => {
-    const statusMap: Record<string, { variant: "success" | "warning" | "info" | "danger"; label: string }> = {
+    const statusMap: Record<
+      string,
+      { variant: "success" | "warning" | "info" | "danger"; label: string }
+    > = {
       DELIVERED: { variant: "success", label: t("delivered") },
       SHIPPED: { variant: "info", label: t("shipped") },
       PENDING: { variant: "warning", label: t("pending") },
@@ -195,7 +289,7 @@ export const Orders: React.FC = () => {
 
   const customerOptions = [
     { value: "", label: t("all_customers") },
-    ...customers.map(c => ({ value: c._id || c.id, label: c.customerName }))
+    ...customers.map((c) => ({ value: c._id || c.id, label: c.customerName })),
   ];
 
   const statusOptions = [
@@ -220,21 +314,28 @@ export const Orders: React.FC = () => {
         render: (o) => (
           <div className="flex flex-col">
             <span className="font-medium text-gray-900">{o.orderNo}</span>
-            <span className="text-xs text-gray-500">{formatDate(o.orderDate)}</span>
+            <span className="text-xs text-gray-500">
+              {formatDate(o.orderDate)}
+            </span>
           </div>
-        )
+        ),
       },
       {
         header: t("customer"),
         render: (o) => {
-          const customer = typeof o.customerId === "object" ? o.customerId : null;
+          const customer =
+            typeof o.customerId === "object" ? o.customerId : null;
           return (
             <div className="flex flex-col">
-              <span className="font-medium text-gray-900">{customer?.customerName || "N/A"}</span>
-              <span className="text-xs text-gray-500">{customer?.phoneNumber || ""}</span>
+              <span className="font-medium text-gray-900">
+                {customer?.customerName || "N/A"}
+              </span>
+              <span className="text-xs text-gray-500">
+                {customer?.phoneNumber || ""}
+              </span>
             </div>
           );
-        }
+        },
       },
       {
         header: t("items"),
@@ -244,49 +345,60 @@ export const Orders: React.FC = () => {
               <div key={idx} className="flex items-center gap-2 text-sm">
                 <Package size={12} className="text-gray-400" />
                 <span className="text-gray-600">
-                  {typeof item.productId === "object" ? (item.productId as any).productName : item.sku}
+                  {typeof item.productId === "object"
+                    ? (item.productId as any).productName
+                    : item.sku}
                 </span>
                 <span className="text-gray-400">x{item.quantity}</span>
               </div>
             ))}
             {o.items && o.items.length > 2 && (
-              <span className="text-xs text-gray-400">+{o.items.length - 2} more</span>
+              <span className="text-xs text-gray-400">
+                +{o.items.length - 2} more
+              </span>
             )}
           </div>
-        )
+        ),
       },
       {
         header: t("total"),
         render: (o) => (
           <div className="flex flex-col">
-            <span className="font-bold text-indigo-600">{o.totalAmount?.toLocaleString()} EGP</span>
-            <span className="text-xs text-gray-400">{t("tax")}: {o.taxAmount?.toLocaleString()}</span>
+            <span className="font-bold text-indigo-600">
+              {o.totalAmount?.toLocaleString()} EGP
+            </span>
+            <span className="text-xs text-gray-400">
+              {t("tax")}: {o.taxAmount?.toLocaleString()}
+            </span>
           </div>
-        )
+        ),
       },
       {
         header: t("status"),
-        render: (o) => getStatusBadge(o.status)
+        render: (o) => getStatusBadge(o.status),
       },
       {
         header: t("payment"),
-        render: (o) => getPaymentBadge(o.paymentStatus)
+        render: (o) => getPaymentBadge(o.paymentStatus),
       },
       {
         header: t("delivery"),
-        render: (o) => getDeliveryBadge(o.deliveryStatus)
+        render: (o) => getDeliveryBadge(o.deliveryStatus),
       },
       {
         header: t("salesperson"),
         render: (o) => {
-          const salesperson = typeof o.salespersonId === "object" ? o.salespersonId : null;
+          const salesperson =
+            typeof o.salespersonId === "object" ? o.salespersonId : null;
           return (
             <div className="flex items-center gap-1.5">
               <User size={14} className="text-gray-400" />
-              <span className="text-sm text-gray-600">{salesperson?.username || salesperson?.fullName || "N/A"}</span>
+              <span className="text-sm text-gray-600">
+                {salesperson?.username || salesperson?.fullName || "N/A"}
+              </span>
             </div>
           );
-        }
+        },
       },
       {
         header: t("actions"),
@@ -294,7 +406,7 @@ export const Orders: React.FC = () => {
         render: (o) => (
           <div className="flex items-center justify-center gap-2">
             <button
-              onClick={() => navigate(`/sales/orders/${o._id || o.id}`)}
+              onClick={() => handleView(o._id || o.id)}
               className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
               title={t("view_details")}
             >
@@ -315,10 +427,10 @@ export const Orders: React.FC = () => {
               <Trash2 size={16} />
             </button>
           </div>
-        )
-      }
+        ),
+      },
     ],
-    [t, handleEdit, handleDelete, navigate]
+    [t, handleEdit, handleDelete, navigate],
   );
 
   return (
@@ -326,12 +438,8 @@ export const Orders: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            {t("orders")}
-          </h1>
-          <p className="text-gray-500 mt-1">
-            {t("manage_your_orders")}
-          </p>
+          <h1 className="text-2xl font-bold text-gray-900">{t("orders")}</h1>
+          <p className="text-gray-500 mt-1">{t("manage_your_orders")}</p>
         </div>
         <div className="flex gap-3">
           {selectedIds.length > 0 && (
@@ -367,7 +475,9 @@ export const Orders: React.FC = () => {
         </div>
         <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
           <p className="text-xs text-gray-500">{t("total_value")}</p>
-          <p className="text-xl font-bold text-indigo-600">{totalValue.toLocaleString()} EGP</p>
+          <p className="text-xl font-bold text-indigo-600">
+            {totalValue.toLocaleString()} EGP
+          </p>
         </div>
         <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
           <p className="text-xs text-gray-500">{t("pending_orders")}</p>
@@ -386,7 +496,10 @@ export const Orders: React.FC = () => {
       {/* Filters */}
       <div className="flex flex-wrap gap-4 items-center">
         <div className="relative max-w-md">
-          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search
+            size={18}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+          />
           <input
             type="text"
             placeholder={t("search_orders")}
@@ -448,15 +561,15 @@ export const Orders: React.FC = () => {
       </div>
 
       {/* Table */}
-        <Table
-          data={filteredOrders}
-          columns={columns}
-          keyExtractor={(item) => item._id || item.id}
-          isLoading={isLoading}
-          selectable
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-        />
+      <Table
+        data={filteredOrders}
+        columns={columns}
+        keyExtractor={(item) => item._id || item.id}
+        isLoading={isLoading}
+        selectable
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+      />
 
       {/* Modal */}
       <OrderModal

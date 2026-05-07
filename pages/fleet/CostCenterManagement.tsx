@@ -30,9 +30,9 @@ export const CostCenterManagement: React.FC = () => {
       setLoading(true);
       const data = await fleetService.getCostCenters();
       setCostCenters(data);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to fetch cost centers:", error);
-      toast.error(t("failed_to_fetch_cost_centers"));
+      toast.error(error.message || t("failed_to_fetch_cost_centers"));
     } finally {
       setLoading(false);
     }
@@ -53,9 +53,9 @@ export const CostCenterManagement: React.FC = () => {
       }
       setIsModalOpen(false);
       await fetchData();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to save cost center:", error);
-      toast.error(t("failed_to_save_cost_center"));
+      toast.error(error.message || t("failed_to_save_cost_center"));
       throw error;
     }
   };
@@ -68,9 +68,9 @@ export const CostCenterManagement: React.FC = () => {
       setCostCenterIdToDelete(null);
       toast.success(t("cost_center_deleted_successfully"));
       await fetchData();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to delete cost center:", error);
-      toast.error(t("failed_to_delete_cost_center"));
+      toast.error(error.message || t("failed_to_delete_cost_center"));
     }
   };
 

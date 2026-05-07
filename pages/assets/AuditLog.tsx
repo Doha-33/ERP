@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 
 export const AuditLog: React.FC = () => {
   const { t } = useTranslation();
-  const { auditLogs, assets, assetsLoading, addAuditLog, updateAuditLog, deleteAuditLog } = useData();
+  const { auditLogs, assets, assetsLoading, addAuditLog, updateAuditLog, deleteAuditLog, fetchAuditLogs } = useData();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedAuditLog, setSelectedAuditLog] = useState<AuditLogType | null>(null);
@@ -36,14 +36,17 @@ export const AuditLog: React.FC = () => {
       if (selectedAuditLog) {
         await updateAuditLog(selectedAuditLog._id || selectedAuditLog.id!, processedData);
         toast.success(t('audit_log_updated_successfully'));
+        await fetchAuditLogs(); // Refresh audit logs after update
       } else {
         await addAuditLog(processedData);
         toast.success(t('audit_log_added_successfully'));
+        await fetchAuditLogs(); // Refresh audit logs after addition
       }
       setIsModalOpen(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to save audit log:', error);
-      toast.error(t('failed_to_save_audit_log'));
+      toast.error(error.message || t('failed_to_save_audit_log'));
+      await fetchAuditLogs(); // Refresh audit logs in case of error to ensure data consistency
     }
   };
 
@@ -54,9 +57,11 @@ export const AuditLog: React.FC = () => {
       setIsDeleteModalOpen(false);
       setAuditLogIdToDelete(null);
       toast.success(t('audit_log_deleted_successfully'));
-    } catch (error) {
+      await fetchAuditLogs(); // Refresh audit logs after deletion
+    } catch (error: any) {
       console.error('Failed to delete audit log:', error);
-      toast.error(t('failed_to_delete_audit_log'));
+      toast.error(error.message || t('failed_to_delete_audit_log'));
+      await fetchAuditLogs(); // Refresh audit logs in case of error to ensure data consistency
     }
   };
 

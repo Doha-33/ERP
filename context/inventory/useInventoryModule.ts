@@ -7,6 +7,7 @@ import {
   Unit,
   Category,
   StockMovement,
+  InventoryReport,
 } from "../../types";
 import { toast } from "sonner";
 
@@ -17,16 +18,20 @@ export const useInventoryModule = () => {
   const [units, setUnits] = useState<Unit[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [stockMovements, setStockMovements] = useState<StockMovement[]>([]);
+  const [inventoryReports, setInventoryReports] = useState<InventoryReport[]>(
+    [],
+  );
   const [loading, setLoading] = useState(false);
 
   const fetchInventoryData = useCallback(async () => {
     setLoading(true);
     try {
-      const [prodRes, stockRes, whRes, catRes] = await Promise.all([
+      const [prodRes, stockRes, whRes, catRes, invRepRes] = await Promise.all([
         inventoryService.getStockItems(),
         inventoryService.getStock(),
         inventoryService.getWarehouses(),
         inventoryService.getCategories(),
+        inventoryService.getInventoryReport(),
       ]);
       setInventoryProducts(
         Array.isArray(prodRes) ? prodRes : prodRes?.data || [],
@@ -34,6 +39,9 @@ export const useInventoryModule = () => {
       setStocks(Array.isArray(stockRes) ? stockRes : stockRes?.data || []);
       setWarehouses(Array.isArray(whRes) ? whRes : whRes?.data || []);
       setCategories(Array.isArray(catRes) ? catRes : catRes?.data || []);
+      setInventoryReports(
+        Array.isArray(invRepRes) ? invRepRes : invRepRes?.data || [],
+      );
     } catch (error) {
       console.error("Error fetching inventory data:", error);
     } finally {
@@ -121,83 +129,103 @@ export const useInventoryModule = () => {
   }, []);
 
   // Categories CRUD
-  const addCategory = useCallback(async (category: Partial<Category>) => {
-    try {
-      const newCategory = await inventoryService.addCategory(category);
-      toast.success("Category added successfully");
-      await fetchInventoryData();
-      return newCategory;
-    } catch (error) {
-      console.error("Error adding category:", error);
-      toast.error("Failed to add category");
-      throw error;
-    }
-  }, [fetchInventoryData]);
+  const addCategory = useCallback(
+    async (category: Partial<Category>) => {
+      try {
+        const newCategory = await inventoryService.addCategory(category);
+        toast.success("Category added successfully");
+        await fetchInventoryData();
+        return newCategory;
+      } catch (error) {
+        console.error("Error adding category:", error);
+        toast.error("Failed to add category");
+        throw error;
+      }
+    },
+    [fetchInventoryData],
+  );
 
-  const updateCategory = useCallback(async (category: Partial<Category>) => {
-    try {
-      const id = ((category as any)._id || (category as any).id) as string;
-      const updatedCategory = await inventoryService.updateCategory(id, category);
-      toast.success("Category updated successfully");
-      await fetchInventoryData();
-      return updatedCategory;
-    } catch (error) {
-      console.error("Error updating category:", error);
-      toast.error("Failed to update category");
-      throw error;
-    }
-  }, [fetchInventoryData]);
+  const updateCategory = useCallback(
+    async (category: Partial<Category>) => {
+      try {
+        const id = ((category as any)._id || (category as any).id) as string;
+        const updatedCategory = await inventoryService.updateCategory(
+          id,
+          category,
+        );
+        toast.success("Category updated successfully");
+        await fetchInventoryData();
+        return updatedCategory;
+      } catch (error) {
+        console.error("Error updating category:", error);
+        toast.error("Failed to update category");
+        throw error;
+      }
+    },
+    [fetchInventoryData],
+  );
 
-  const deleteCategory = useCallback(async (id: string) => {
-    try {
-      await inventoryService.deleteCategory(id);
-      toast.success("Category deleted successfully");
-      await fetchInventoryData();
-    } catch (error) {
-      console.error("Error deleting category:", error);
-      toast.error("Failed to delete category");
-      throw error;
-    }
-  }, [fetchInventoryData]);
-
+  const deleteCategory = useCallback(
+    async (id: string) => {
+      try {
+        await inventoryService.deleteCategory(id);
+        toast.success("Category deleted successfully");
+        await fetchInventoryData();
+      } catch (error) {
+        console.error("Error deleting category:", error);
+        toast.error("Failed to delete category");
+        throw error;
+      }
+    },
+    [fetchInventoryData],
+  );
 
   // Stocks and Units CRUD
-  const addStock = useCallback(async (stock: any) => {
-    try {
-      // Usually stock is managed via stockIn
-      const res = await inventoryService.stockIn(stock);
-      toast.success("Stock added successfully");
-      await fetchInventoryData();
-      return res;
-    } catch (error) {
-      console.error("Error adding stock:", error);
-      toast.error("Failed to add stock");
-      throw error;
-    }
-  }, [fetchInventoryData]);
+  const addStock = useCallback(
+    async (stock: any) => {
+      try {
+        // Usually stock is managed via stockIn
+        const res = await inventoryService.stockIn(stock);
+        toast.success("Stock added successfully");
+        await fetchInventoryData();
+        return res;
+      } catch (error) {
+        console.error("Error adding stock:", error);
+        toast.error("Failed to add stock");
+        throw error;
+      }
+    },
+    [fetchInventoryData],
+  );
 
-  const updateStock = useCallback(async (stock: Partial<Stock>) => {
-    try {
-      const id = ((stock as any)._id || (stock as any).id) as string;
-      // If there's an update stock endpoint, use it. Otherwise placeholder
-      await inventoryService.updateStockItem(id, stock);
-      await fetchInventoryData();
-    } catch (error) {
-      console.error("Error updating stock:", error);
-      throw error;
-    }
-  }, [fetchInventoryData]);
+  const updateStock = useCallback(
+    async (stock: Partial<Stock>) => {
+      try {
+        const id = ((stock as any)._id || (stock as any).id) as string;
+        // If there's an update stock endpoint, use it. Otherwise placeholder
+        await inventoryService.updateStockItem(id, stock);
+        await fetchInventoryData();
+      } catch (error) {
+        console.error("Error updating stock:", error);
+        throw error;
+      }
+    },
+    [fetchInventoryData],
+  );
 
-  const deleteStock = useCallback(async (id: string) => {
-    try {
-      // if needed
-      console.log("Delete stock:", id);
-      await fetchInventoryData();
-    } catch (error) {
-      console.error("Error deleting stock:", error);
-      throw error;
-    }
-  }, [fetchInventoryData]);
+  const deleteStock = useCallback(
+    async (id: string) => {
+      try {
+        // if needed
+        console.log("Delete stock:", id);
+        await fetchInventoryData();
+      } catch (error) {
+        console.error("Error deleting stock:", error);
+        throw error;
+      }
+    },
+    [fetchInventoryData],
+  );
 
   const addUnit = useCallback(async (unit: Partial<Unit>) => {
     try {
@@ -328,6 +356,7 @@ export const useInventoryModule = () => {
       units,
       categories,
       stockMovements,
+      inventoryReports,
       loading,
       fetchInventoryData,
 
@@ -360,6 +389,7 @@ export const useInventoryModule = () => {
       units,
       categories,
       stockMovements,
+      inventoryReports,
       loading,
       fetchInventoryData,
       addProduct,

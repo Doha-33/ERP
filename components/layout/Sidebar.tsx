@@ -669,18 +669,6 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
               icon: BarChart3,
             },
             {
-              id: "hr-report-requests",
-              label: "employee_requests",
-              path: "/reports/hr/employee-requests",
-              icon: BarChart3,
-            },
-            {
-              id: "hr-report-logs",
-              label: "payroll_file_logs",
-              path: "/reports/hr/payroll-file-logs",
-              icon: BarChart3,
-            },
-            {
               id: "hr-report-gosi",
               label: "gosi_contribution",
               path: "/reports/hr/gosi-contribution",
@@ -750,12 +738,6 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
               id: "hr-report-hiring",
               label: "hiring_report",
               path: "/reports/hr/hiring",
-              icon: BarChart3,
-            },
-            {
-              id: "hr-report-insurance",
-              label: "insurance_report",
-              path: "/reports/hr/insurance",
               icon: BarChart3,
             },
           ],
@@ -939,7 +921,7 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
                 <div
                   className={`overflow-hidden transition-all duration-300 ${isGroupExpanded ? "max-h-[1000px] opacity-100" : "max-h-0 opacity-0"}`}
                 >
-                  <nav className="mt-2 space-y-1 mr-2 border-r-2 rtl:border-r-0 rtl:border-l-2 border-gray-100 dark:border-dark-border">
+                  <nav className="mt-2 space-y-1 mr-2 ">
                     {group.items.map((item: any) => {
                       const isActive = location.pathname === item.path;
                       const hasSubItems =
@@ -955,8 +937,8 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
                                 w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200
                                 ${
                                   isItemExpanded
-                                    ? "text-primary bg-primary/10 dark:bg-primary/20 shadow-sm"
-                                    : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:text-primary"
+                                    ? "text-primary bg-primary/10 shadow-sm"
+                                    : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 hover:text-primary"
                                 }
                               `}
                             >
@@ -982,7 +964,7 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
                             </button>
 
                             {isItemExpanded && (
-                              <div className="pl-9 space-y-1 border-l-2 rtl:border-l-0 rtl:border-r-2 border-gray-100 dark:border-dark-border ml-5 rtl:mr-5 rtl:ml-0">
+                              <div className=" space-y-1">
                                 {item.subItems.map((subItem: any) => (
                                   <NavLink
                                     key={subItem.id}
@@ -994,15 +976,15 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
                                       flex items-center gap-3 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200
                                       ${
                                         isActive
-                                          ? "text-primary bg-primary/5 dark:bg-primary/10"
-                                          : "text-gray-500 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:text-primary"
+                                          ? "text-primary bg-primary/5"
+                                          : "text-gray-500 dark:text-gray-500 hover:bg-gray-100 hover:text-primary"
                                       }
                                     `}
                                   >
                                     {({ isActive }) => (
                                       <>
                                         <span
-                                          className={`w-1.5 h-1.5 rounded-full transition-all ${isActive ? "bg-primary" : "bg-gray-300 dark:bg-gray-600"}`}
+                                          className={`w-1.5 h-1.5 rounded-full transition-all ${isActive ? "bg-primary" : "bg-gray-300"}`}
                                         ></span>
                                         <span>
                                           {t(subItem.label) || subItem.label}
@@ -1027,8 +1009,8 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
                             flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200
                             ${
                               isActive
-                                ? "text-primary bg-primary/10 dark:bg-primary/20 shadow-sm"
-                                : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800/50 hover:text-primary"
+                                ? "text-primary bg-primary/10 shadow-sm"
+                                : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 hover:text-primary"
                             }
                           `}
                         >
@@ -1067,9 +1049,6 @@ export const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
         .custom-scrollbar::-webkit-scrollbar-thumb {
           background: #cbd5e1;
           border-radius: 20px;
-        }
-        .dark .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #475569;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
           background: #94a3b8;

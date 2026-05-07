@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 
 export const Tracking: React.FC = () => {
   const { t } = useTranslation();
-  const { trackings, assets, assetsLoading, addTracking, updateTracking, deleteTracking } = useData();
+  const { trackings, assets, assetsLoading, addTracking, updateTracking, deleteTracking, fetchTrackings } = useData();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedTracking, setSelectedTracking] = useState<TrackingType | null>(null);
@@ -32,14 +32,17 @@ export const Tracking: React.FC = () => {
       if (selectedTracking) {
         await updateTracking(selectedTracking._id || selectedTracking.id!, data);
         toast.success(t('tracking_updated_successfully'));
+        await fetchTrackings(); // Refresh trackings after update
       } else {
         await addTracking(data);
         toast.success(t('tracking_added_successfully'));
+        await fetchTrackings(); // Refresh trackings after addition
       }
       setIsModalOpen(false);
-    } catch (error) {
+      await fetchTrackings(); // Refresh trackings after saving
+    } catch (error: any) {
       console.error('Failed to save tracking:', error);
-      toast.error(t('failed_to_save_tracking'));
+      toast.error(error.message || t('failed_to_save_tracking'));
     }
   };
 
@@ -50,9 +53,10 @@ export const Tracking: React.FC = () => {
       setIsDeleteModalOpen(false);
       setTrackingIdToDelete(null);
       toast.success(t('tracking_deleted_successfully'));
-    } catch (error) {
+      await fetchTrackings(); // Refresh trackings after deletion
+    } catch (error: any) {
       console.error('Failed to delete tracking:', error);
-      toast.error(t('failed_to_delete_tracking'));
+      toast.error(error.message || t('failed_to_delete_tracking'));
     }
   };
 

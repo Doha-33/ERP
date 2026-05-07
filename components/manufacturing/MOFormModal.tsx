@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Edit2, Plus, Package, Calendar, User, Hash } from "lucide-react";
+import { Edit2, Plus, Package, Calendar, User, Hash, ClipboardList, AlertCircle } from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
-import { Button, Input, Select } from "../../components/ui/Common";
+import { Button, Input, Select, TextArea } from "../../components/ui/Common";
 import { ManufacturingOrder as MOType } from "../../types";
 
 interface MOFormModalProps {
@@ -22,22 +22,76 @@ export const MOFormModal: React.FC<MOFormModalProps> = ({
 }) => {
   const { t } = useTranslation();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState<Partial<MOType>>({});
+  const [formData, setFormData] = useState({
+    mo_number: "",
+    product_code: "",
+    product_name: "",
+    planned_quantity: 0,
+    produced_quantity: 0,
+    bom_used: "",
+    start_date: "",
+    end_date: "",
+    responsible: "",
+    state: "Draft",
+    work_center: "",
+    raw_material_availability: "Available",
+    cost_summary: 0,
+    notes: "",
+  });
 
   useEffect(() => {
-    if (selectedOrder) {
-      setFormData(selectedOrder);
-    } else {
-      setFormData({});
+    if (selectedOrder && isOpen) {
+      setFormData({
+        mo_number: selectedOrder.mo_number || "",
+        product_code: selectedOrder.product_code || "",
+        product_name: selectedOrder.product_name || "",
+        planned_quantity: selectedOrder.planned_quantity || 0,
+        produced_quantity: selectedOrder.produced_quantity || 0,
+        bom_used: selectedOrder.bom_used || "",
+        start_date: selectedOrder.start_date
+          ? new Date(selectedOrder.start_date).toISOString().split("T")[0]
+          : "",
+        end_date: selectedOrder.end_date
+          ? new Date(selectedOrder.end_date).toISOString().split("T")[0]
+          : "",
+        responsible: selectedOrder.responsible || "",
+        state: selectedOrder.state || "Draft",
+        work_center: (selectedOrder as any).work_center || "",
+        raw_material_availability: (selectedOrder as any).raw_material_availability || "Available",
+        cost_summary: (selectedOrder as any).cost_summary || 0,
+        notes: (selectedOrder as any).notes || "",
+      });
+    } else if (!selectedOrder && isOpen) {
+      setFormData({
+        mo_number: "",
+        product_code: "",
+        product_name: "",
+        planned_quantity: 0,
+        produced_quantity: 0,
+        bom_used: "",
+        start_date: new Date().toISOString().split("T")[0],
+        end_date: new Date().toISOString().split("T")[0],
+        responsible: "",
+        state: "Draft",
+        work_center: "",
+        raw_material_availability: "Available",
+        cost_summary: 0,
+        notes: "",
+      });
     }
   }, [selectedOrder, isOpen]);
 
   const statusOptions = [
     { value: "Draft", label: t("draft") },
-    { value: "Confirmed", label: t("confirmed") },
     { value: "In Progress", label: t("in_progress") },
-    { value: "Completed", label: t("completed") },
+    { value: "Done", label: t("done") },
     { value: "Cancelled", label: t("cancelled") },
+  ];
+
+  const rawMaterialOptions = [
+    { value: "Available", label: t("available") },
+    { value: "Partially Available", label: t("partially_available") },
+    { value: "Not Available", label: t("not_available") },
   ];
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -47,7 +101,6 @@ export const MOFormModal: React.FC<MOFormModalProps> = ({
     try {
       await onSave(formData);
       onClose();
-      setFormData({});
     } catch (error) {
       console.error("Error in form submission:", error);
     } finally {
@@ -55,9 +108,13 @@ export const MOFormModal: React.FC<MOFormModalProps> = ({
     }
   };
 
-  const handleChange = (field: keyof MOType, value: any) => {
+  const handleChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
+
+  const progress = formData.planned_quantity > 0
+    ? Math.round((formData.produced_quantity / formData.planned_quantity) * 100)
+    : 0;
 
   return (
     <Modal
@@ -69,9 +126,9 @@ export const MOFormModal: React.FC<MOFormModalProps> = ({
           {selectedOrder ? t("edit_mo") : t("create_mo")}
         </div>
       }
-      size="4xl"
+      size="xl"
     >
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-6 max-h-[70vh] overflow-y-auto px-2">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
           {/* MO Number */}
           <div className="space-y-1">
@@ -79,7 +136,7 @@ export const MOFormModal: React.FC<MOFormModalProps> = ({
               {t("mo_number")} <span className="text-red-500">*</span>
             </label>
             <Input
-              value={formData.mo_number || ""}
+              value={formData.mo_number}
               onChange={(e) => handleChange("mo_number", e.target.value)}
               placeholder="MO-001"
               required
@@ -93,7 +150,7 @@ export const MOFormModal: React.FC<MOFormModalProps> = ({
               {t("bom_used")} <span className="text-red-500">*</span>
             </label>
             <Input
-              value={formData.bom_used || ""}
+              value={formData.bom_used}
               onChange={(e) => handleChange("bom_used", e.target.value)}
               placeholder="BOM-001"
               required
@@ -107,7 +164,7 @@ export const MOFormModal: React.FC<MOFormModalProps> = ({
               {t("product_name")} <span className="text-red-500">*</span>
             </label>
             <Input
-              value={formData.product_name || ""}
+              value={formData.product_name}
               onChange={(e) => handleChange("product_name", e.target.value)}
               placeholder={t("enter_product_name")}
               required
@@ -121,7 +178,7 @@ export const MOFormModal: React.FC<MOFormModalProps> = ({
               {t("product_code")} <span className="text-red-500">*</span>
             </label>
             <Input
-              value={formData.product_code || ""}
+              value={formData.product_code}
               onChange={(e) => handleChange("product_code", e.target.value)}
               placeholder="PRD-001"
               required
@@ -136,8 +193,25 @@ export const MOFormModal: React.FC<MOFormModalProps> = ({
             </label>
             <Input
               type="number"
-              value={formData.planned_quantity || ""}
+              min="0"
+              value={formData.planned_quantity}
               onChange={(e) => handleChange("planned_quantity", Number(e.target.value))}
+              placeholder="0"
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Produced Quantity */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("produced_quantity")} <span className="text-red-500">*</span>
+            </label>
+            <Input
+              type="number"
+              min="0"
+              value={formData.produced_quantity}
+              onChange={(e) => handleChange("produced_quantity", Number(e.target.value))}
               placeholder="0"
               required
               fullWidth
@@ -151,7 +225,7 @@ export const MOFormModal: React.FC<MOFormModalProps> = ({
             </label>
             <Input
               type="date"
-              value={formData.start_date || ""}
+              value={formData.start_date}
               onChange={(e) => handleChange("start_date", e.target.value)}
               required
               fullWidth
@@ -165,7 +239,7 @@ export const MOFormModal: React.FC<MOFormModalProps> = ({
             </label>
             <Input
               type="date"
-              value={formData.end_date || ""}
+              value={formData.end_date}
               onChange={(e) => handleChange("end_date", e.target.value)}
               required
               fullWidth
@@ -178,9 +252,54 @@ export const MOFormModal: React.FC<MOFormModalProps> = ({
               {t("responsible")} <span className="text-red-500">*</span>
             </label>
             <Input
-              value={formData.responsible || ""}
+              value={formData.responsible}
               onChange={(e) => handleChange("responsible", e.target.value)}
               placeholder={t("enter_responsible_name")}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Work Center */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("work_center")} <span className="text-red-500">*</span>
+            </label>
+            <Input
+              value={formData.work_center}
+              onChange={(e) => handleChange("work_center", e.target.value)}
+              placeholder={t("enter_work_center")}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Raw Material Availability */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("raw_material_availability")} <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={formData.raw_material_availability}
+              onChange={(e) => handleChange("raw_material_availability", e.target.value)}
+              options={rawMaterialOptions}
+              required
+              fullWidth
+            />
+          </div>
+
+          {/* Cost Summary */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("cost_summary")} (EGP) <span className="text-red-500">*</span>
+            </label>
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              value={formData.cost_summary}
+              onChange={(e) => handleChange("cost_summary", Number(e.target.value))}
+              placeholder="0.00"
               required
               fullWidth
             />
@@ -192,14 +311,45 @@ export const MOFormModal: React.FC<MOFormModalProps> = ({
               {t("status")} <span className="text-red-500">*</span>
             </label>
             <Select
-              value={formData.state || ""}
+              value={formData.state}
               onChange={(e) => handleChange("state", e.target.value)}
               options={statusOptions}
-              placeholder={t("select_status")}
               required
               fullWidth
             />
           </div>
+        </div>
+
+        {/* Progress Preview */}
+        <div className="bg-gray-50 rounded-xl p-4">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-sm font-medium text-gray-700">{t("production_progress")}</span>
+            <span className="text-sm font-bold text-indigo-600">{progress}%</span>
+          </div>
+          <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-indigo-600 rounded-full transition-all duration-500"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <div className="flex justify-between mt-2 text-xs text-gray-500">
+            <span>{t("produced")}: {formData.produced_quantity}</span>
+            <span>{t("planned")}: {formData.planned_quantity}</span>
+          </div>
+        </div>
+
+        {/* Notes */}
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-gray-700">
+            {t("notes")}
+          </label>
+          <TextArea
+            value={formData.notes}
+            onChange={(e) => handleChange("notes", e.target.value)}
+            placeholder={t("enter_notes")}
+            rows={3}
+            fullWidth
+          />
         </div>
 
         <div className="flex justify-end gap-3 mt-8">

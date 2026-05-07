@@ -1,7 +1,26 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Search, Edit2, Trash2, User, Mail, Phone, MapPin, Building2, Filter, X, ChevronDown } from "lucide-react";
-import { Card, Button, Input, Badge, ExportDropdown } from "../../components/ui/Common";
+import {
+  Plus,
+  Search,
+  Edit2,
+  Trash2,
+  User,
+  Mail,
+  Phone,
+  MapPin,
+  Building2,
+  Filter,
+  X,
+  ChevronDown,
+} from "lucide-react";
+import {
+  Card,
+  Button,
+  Input,
+  Badge,
+  ExportDropdown,
+} from "../../components/ui/Common";
 import { Table, Column } from "../../components/ui/Table";
 import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
 import { CustomerModal } from "../../components/sales/CustomerModal";
@@ -11,8 +30,14 @@ import { toast } from "sonner";
 
 export const Customers: React.FC = () => {
   const { t } = useTranslation();
-  const { customers, addCustomer, updateCustomer, deleteCustomer } = useData();
-  
+  const {
+    customers,
+    addCustomer,
+    updateCustomer,
+    deleteCustomer,
+    fetchCustomers,
+  } = useData();
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -22,30 +47,80 @@ export const Customers: React.FC = () => {
   const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSave = async (customer: Partial<Customer>) => {
+  const handleEdit = useCallback(
+    (customer: Customer) => {
+      // Extract ID correctly from the customer object
+      const customerId = (customer as any)._id || customer.id;
+
+      if (!customerId) {
+        console.error("Customer ID not found", customer);
+        toast.error(t("customer_id_not_found"));
+        return;
+      }
+
+      const customerToEdit = {
+        _id: customerId,
+        id: customerId,
+        customerName: customer.customerName || "",
+        customerCode: customer.customerCode || "",
+        email: customer.email || "",
+        phoneNumber: customer.phoneNumber || "",
+        address: customer.address || "",
+        companyName: customer.companyName || "",
+        status: customer.status || "ACTIVE",
+        taxNumber: (customer as any).taxNumber || "",
+        website: (customer as any).website || "",
+      };
+
+      setEditingCustomer(customerToEdit);
+      setIsModalOpen(true);
+    },
+    [t],
+  );
+
+  const handleSave = async (customerData: Partial<Customer>) => {
     try {
       setIsLoading(true);
+
       if (editingCustomer) {
-        await updateCustomer({ ...customer, _id: editingCustomer._id, id: editingCustomer.id } as Customer);
+        // Get the ID from editingCustomer, not from customerData
+        const customerId = (editingCustomer as any)._id || editingCustomer.id;
+
+        if (!customerId) {
+          toast.error(t("customer_id_missing"));
+          return;
+        }
+
+        // Create a clean object with the ID
+        const updateData = {
+          ...customerData,
+          _id: customerId,
+          id: customerId,
+        } as Customer;
+
+        console.log("Updating customer with ID:", customerId, updateData);
+        await updateCustomer(updateData);
         toast.success(t("customer_updated_successfully"));
       } else {
-        await addCustomer(customer as Customer);
+        await addCustomer(customerData as Customer);
         toast.success(t("customer_created_successfully"));
       }
+
+      await fetchCustomers(); // Refresh list
       setIsModalOpen(false);
       setEditingCustomer(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving customer:", error);
-      toast.error(t("failed_to_save_customer"));
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        t("failed_to_save_customer");
+      toast.error(message);
+      await fetchCustomers();
     } finally {
       setIsLoading(false);
     }
   };
-
-  const handleEdit = useCallback((customer: Customer) => {
-    setEditingCustomer(customer);
-    setIsModalOpen(true);
-  }, []);
 
   const handleDelete = useCallback((id: string) => {
     setDeleteId(id);
@@ -57,9 +132,11 @@ export const Customers: React.FC = () => {
         await deleteCustomer(deleteId);
         toast.success(t("customer_deleted_successfully"));
         setDeleteId(null);
-        setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+        setSelectedIds((prev) => prev.filter((sid) => sid !== deleteId));
+        await fetchCustomers(); // Refresh list
       } catch (error) {
         toast.error(t("failed_to_delete_customer"));
+        await fetchCustomers(); // Refresh list to ensure UI is up to date
       }
     }
   }, [deleteId, deleteCustomer, t]);
@@ -67,8 +144,10 @@ export const Customers: React.FC = () => {
   const handleBulkDelete = async () => {
     try {
       setIsLoading(true);
-      await Promise.all(selectedIds.map(id => deleteCustomer(id)));
-      toast.success(t("customers_deleted_successfully", { count: selectedIds.length }));
+      await Promise.all(selectedIds.map((id) => deleteCustomer(id)));
+      toast.success(
+        t("customers_deleted_successfully", { count: selectedIds.length }),
+      );
       setSelectedIds([]);
       setIsBulkConfirmOpen(false);
     } catch (error) {
@@ -89,23 +168,27 @@ export const Customers: React.FC = () => {
 
   // Apply filters
   const filteredCustomers = useMemo(() => {
-    return customers.filter(c => {
-      const matchesSearch = 
+    return customers.filter((c) => {
+      const matchesSearch =
         c.customerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         c.customerCode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         c.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         c.phoneNumber?.includes(searchTerm);
-      
+
       const matchesStatus = !statusFilter || c.status === statusFilter;
-      
+
       return matchesSearch && matchesStatus;
     });
   }, [customers, searchTerm, statusFilter]);
 
   // Statistics
   const totalCustomers = filteredCustomers.length;
-  const activeCustomers = filteredCustomers.filter(c => c.status === "ACTIVE").length;
-  const inactiveCustomers = filteredCustomers.filter(c => c.status === "INACTIVE").length;
+  const activeCustomers = filteredCustomers.filter(
+    (c) => c.status === "ACTIVE",
+  ).length;
+  const inactiveCustomers = filteredCustomers.filter(
+    (c) => c.status === "INACTIVE",
+  ).length;
 
   const statusOptions = [
     { value: "", label: t("all_statuses") },
@@ -123,11 +206,13 @@ export const Customers: React.FC = () => {
               <User size={18} className="text-indigo-600" />
             </div>
             <div className="flex flex-col">
-              <span className="font-medium text-gray-900">{c.customerName}</span>
+              <span className="font-medium text-gray-900">
+                {c.customerName}
+              </span>
               <span className="text-xs text-gray-500">{c.customerCode}</span>
             </div>
           </div>
-        )
+        ),
       },
       {
         header: t("contact"),
@@ -146,29 +231,33 @@ export const Customers: React.FC = () => {
               </div>
             )}
           </div>
-        )
+        ),
       },
       {
         header: t("location"),
         render: (c) => (
           <div className="flex items-center gap-1.5">
             <MapPin size={14} className="text-gray-400" />
-            <span className="text-sm text-gray-600 line-clamp-1">{c.address || "-"}</span>
+            <span className="text-sm text-gray-600 line-clamp-1">
+              {c.address || "-"}
+            </span>
           </div>
-        )
+        ),
       },
       {
         header: t("company"),
         render: (c) => (
           <div className="flex items-center gap-1.5">
             <Building2 size={14} className="text-gray-400" />
-            <span className="text-sm text-gray-600">{c.companyName || "-"}</span>
+            <span className="text-sm text-gray-600">
+              {c.companyName || "-"}
+            </span>
           </div>
-        )
+        ),
       },
       {
         header: t("status"),
-        render: (c) => getStatusBadge(c.status)
+        render: (c) => getStatusBadge(c.status),
       },
       {
         header: t("actions"),
@@ -190,10 +279,10 @@ export const Customers: React.FC = () => {
               <Trash2 size={16} />
             </button>
           </div>
-        )
-      }
+        ),
+      },
     ],
-    [t, handleEdit, handleDelete]
+    [t, handleEdit, handleDelete],
   );
 
   return (
@@ -201,12 +290,8 @@ export const Customers: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            {t("customers")}
-          </h1>
-          <p className="text-gray-500 mt-1">
-            {t("manage_your_customers")}
-          </p>
+          <h1 className="text-2xl font-bold text-gray-900">{t("customers")}</h1>
+          <p className="text-gray-500 mt-1">{t("manage_your_customers")}</p>
         </div>
         <div className="flex gap-3">
           {selectedIds.length > 0 && (
@@ -243,7 +328,9 @@ export const Customers: React.FC = () => {
             </div>
             <div>
               <p className="text-xs text-gray-500">{t("total_customers")}</p>
-              <p className="text-xl font-bold text-gray-900">{totalCustomers}</p>
+              <p className="text-xl font-bold text-gray-900">
+                {totalCustomers}
+              </p>
             </div>
           </div>
         </div>
@@ -254,7 +341,9 @@ export const Customers: React.FC = () => {
             </div>
             <div>
               <p className="text-xs text-gray-500">{t("active")}</p>
-              <p className="text-xl font-bold text-green-600">{activeCustomers}</p>
+              <p className="text-xl font-bold text-green-600">
+                {activeCustomers}
+              </p>
             </div>
           </div>
         </div>
@@ -265,7 +354,9 @@ export const Customers: React.FC = () => {
             </div>
             <div>
               <p className="text-xs text-gray-500">{t("inactive")}</p>
-              <p className="text-xl font-bold text-red-600">{inactiveCustomers}</p>
+              <p className="text-xl font-bold text-red-600">
+                {inactiveCustomers}
+              </p>
             </div>
           </div>
         </div>
@@ -274,7 +365,10 @@ export const Customers: React.FC = () => {
       {/* Filters */}
       <div className="flex flex-wrap gap-4 items-center">
         <div className="relative max-w-md">
-          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search
+            size={18}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+          />
           <input
             type="text"
             placeholder={t("search_customers")}
@@ -310,15 +404,15 @@ export const Customers: React.FC = () => {
       </div>
 
       {/* Table */}
-        <Table
-          data={filteredCustomers}
-          columns={columns}
-          keyExtractor={(item) => item._id || item.id}
-          isLoading={isLoading}
-          selectable
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-        />
+      <Table
+        data={filteredCustomers}
+        columns={columns}
+        keyExtractor={(item) => item._id || item.id}
+        isLoading={isLoading}
+        selectable
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+      />
 
       {/* Modal */}
       <CustomerModal
@@ -347,7 +441,9 @@ export const Customers: React.FC = () => {
         onClose={() => setIsBulkConfirmOpen(false)}
         onConfirm={handleBulkDelete}
         title={t("delete_customers")}
-        message={t("are_you_sure_delete_customers", { count: selectedIds.length })}
+        message={t("are_you_sure_delete_customers", {
+          count: selectedIds.length,
+        })}
       />
     </div>
   );

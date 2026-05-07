@@ -35,9 +35,7 @@ export const BOMFormModal: React.FC<BOMFormModalProps> = ({
   const uomOptions = [
     { value: "kg", label: "kg" },
     { value: "pcs", label: "pcs" },
-    { value: "sheets", label: "sheets" },
     { value: "liters", label: "liters" },
-    { value: "meters", label: "meters" },
   ];
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {

@@ -48,9 +48,9 @@ export const Expenses: React.FC = () => {
       }
       setIsModalOpen(false);
       setSelectedExpense(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to save expense:', error);
-      toast.error(t('failed_to_save_expense'));
+      toast.error(error.message || t('failed_to_save_expense'));
     }
   };
 
@@ -61,9 +61,9 @@ export const Expenses: React.FC = () => {
       setIsDeleteModalOpen(false);
       setExpenseIdToDelete(null);
       toast.success(t('expense_deleted_successfully'));
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to delete expense:', error);
-      toast.error(t('failed_to_delete_expense'));
+      toast.error(error.message || t('failed_to_delete_expense'));
     }
   };
 

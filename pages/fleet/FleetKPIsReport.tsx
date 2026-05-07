@@ -53,9 +53,9 @@ export const FleetKPIsReport: React.FC = () => {
       const data = await fleetService.getKPIs();
       setKpis(data.table || []);
       setMainKpis(data.main || null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to fetch KPIs:", error);
-      toast.error(t('failed_to_fetch_data'));
+      toast.error(error.message || t('failed_to_fetch_data'));
     } finally {
       setLoading(false);
     }

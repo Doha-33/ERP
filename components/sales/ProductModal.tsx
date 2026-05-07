@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Edit2, Package, Barcode, Tag, DollarSign, Layers, Box } from "lucide-react";
+import { Plus, Edit2, Package, Barcode, Tag, DollarSign, Layers, Box, Hash, CircleDollarSign } from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
 import { Button, Input, Select, TextArea, Switch } from "../../components/ui/Common";
 import { Product } from "../../types";
@@ -37,7 +37,10 @@ export const ProductModal: React.FC<ProductModalProps> = ({
   });
 
   useEffect(() => {
-    if (productToEdit && isOpen) {
+    if (!isOpen) return;
+
+    if (productToEdit) {
+      // Editing existing product
       setFormData({
         sku: productToEdit.sku || "",
         productName: productToEdit.productName || "",
@@ -51,7 +54,8 @@ export const ProductModal: React.FC<ProductModalProps> = ({
         hasExpiry: productToEdit.hasExpiry || false,
         status: productToEdit.status || "ACTIVE",
       });
-    } else if (!productToEdit && isOpen) {
+    } else {
+      // Creating new product
       setFormData({
         sku: "",
         productName: "",
@@ -133,13 +137,18 @@ export const ProductModal: React.FC<ProductModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("sku")} <span className="text-red-500">*</span>
             </label>
-            <Input
-              value={formData.sku}
-              onChange={(e) => handleChange("sku", e.target.value)}
-              placeholder="PRD-001"
-              required
-              fullWidth
-            />
+            <div className="relative">
+              <Hash size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Input
+                value={formData.sku}
+                onChange={(e) => handleChange("sku", e.target.value)}
+                placeholder="PRD-001"
+                required
+                fullWidth
+                className="pl-10"
+                disabled={!!productToEdit}
+              />
+            </div>
           </div>
 
           {/* Product Name */}
@@ -147,13 +156,17 @@ export const ProductModal: React.FC<ProductModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("product_name")} <span className="text-red-500">*</span>
             </label>
-            <Input
-              value={formData.productName}
-              onChange={(e) => handleChange("productName", e.target.value)}
-              placeholder={t("enter_product_name")}
-              required
-              fullWidth
-            />
+            <div className="relative">
+              <Package size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Input
+                value={formData.productName}
+                onChange={(e) => handleChange("productName", e.target.value)}
+                placeholder={t("enter_product_name")}
+                required
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
 
           {/* Category */}
@@ -161,14 +174,18 @@ export const ProductModal: React.FC<ProductModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("category")} <span className="text-red-500">*</span>
             </label>
-            <Select
-              value={formData.category}
-              onChange={(e) => handleChange("category", e.target.value)}
-              options={categoryOptions}
-              placeholder={t("select_category")}
-              required
-              fullWidth
-            />
+            <div className="relative">
+              <Tag size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Select
+                value={formData.category}
+                onChange={(e) => handleChange("category", e.target.value)}
+                options={categoryOptions}
+                placeholder={t("select_category")}
+                required
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
 
           {/* Product Type */}
@@ -176,13 +193,17 @@ export const ProductModal: React.FC<ProductModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("product_type")} <span className="text-red-500">*</span>
             </label>
-            <Select
-              value={formData.productType}
-              onChange={(e) => handleChange("productType", e.target.value)}
-              options={productTypeOptions}
-              required
-              fullWidth
-            />
+            <div className="relative">
+              <Layers size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Select
+                value={formData.productType}
+                onChange={(e) => handleChange("productType", e.target.value)}
+                options={productTypeOptions}
+                required
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
 
           {/* Sales Price */}
@@ -190,15 +211,20 @@ export const ProductModal: React.FC<ProductModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("sales_price")} (EGP) <span className="text-red-500">*</span>
             </label>
-            <Input
-              type="number"
-              step="0.01"
-              value={formData.salesPrice}
-              onChange={(e) => handleChange("salesPrice", Number(e.target.value))}
-              placeholder="0.00"
-              required
-              fullWidth
-            />
+            <div className="relative">
+              <DollarSign size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={formData.salesPrice}
+                onChange={(e) => handleChange("salesPrice", Number(e.target.value))}
+                placeholder="0.00"
+                required
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
 
           {/* Cost */}
@@ -206,15 +232,20 @@ export const ProductModal: React.FC<ProductModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("cost")} (EGP) <span className="text-red-500">*</span>
             </label>
-            <Input
-              type="number"
-              step="0.01"
-              value={formData.cost}
-              onChange={(e) => handleChange("cost", Number(e.target.value))}
-              placeholder="0.00"
-              required
-              fullWidth
-            />
+            <div className="relative">
+              <CircleDollarSign size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={formData.cost}
+                onChange={(e) => handleChange("cost", Number(e.target.value))}
+                placeholder="0.00"
+                required
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
 
           {/* Unit of Measure */}
@@ -222,13 +253,17 @@ export const ProductModal: React.FC<ProductModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("unit_of_measure")} <span className="text-red-500">*</span>
             </label>
-            <Select
-              value={formData.unitOfMeasure}
-              onChange={(e) => handleChange("unitOfMeasure", e.target.value)}
-              options={unitOptions}
-              required
-              fullWidth
-            />
+            <div className="relative">
+              <Box size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Select
+                value={formData.unitOfMeasure}
+                onChange={(e) => handleChange("unitOfMeasure", e.target.value)}
+                options={unitOptions}
+                required
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
 
           {/* Barcode */}
@@ -236,12 +271,16 @@ export const ProductModal: React.FC<ProductModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("barcode")}
             </label>
-            <Input
-              value={formData.barcode}
-              onChange={(e) => handleChange("barcode", e.target.value)}
-              placeholder="123456789"
-              fullWidth
-            />
+            <div className="relative">
+              <Barcode size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Input
+                value={formData.barcode}
+                onChange={(e) => handleChange("barcode", e.target.value)}
+                placeholder="123456789"
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
 
           {/* Status */}
@@ -284,8 +323,13 @@ export const ProductModal: React.FC<ProductModalProps> = ({
           />
         </div>
 
-        <div className="flex justify-end gap-3 mt-8">
-          <Button variant="secondary" onClick={onClose} disabled={isSubmitting || isLoading}>
+        <div className="flex justify-end gap-3 mt-8 pt-4 border-t border-gray-100">
+          <Button 
+            variant="secondary" 
+            onClick={onClose} 
+            disabled={isSubmitting || isLoading}
+            type="button"
+          >
             {t("cancel")}
           </Button>
           <Button
@@ -295,7 +339,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
             isLoading={isSubmitting || isLoading}
             disabled={isSubmitting || isLoading}
           >
-            {productToEdit ? t("save") : t("add_product")}
+            {productToEdit ? t("update_product") : t("add_product")}
           </Button>
         </div>
       </form>
