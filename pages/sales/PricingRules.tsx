@@ -218,11 +218,18 @@ export const PricingRules: React.FC = () => {
         )
       },
       {
-        header: t("price_change"),
+        header: t("price_type"),
         render: (r) => (
           <div className="flex items-center gap-1.5">
-            <Percent size={14} className="text-green-600" />
-            <span className="text-sm font-medium text-green-600">{r.priceChange}</span>
+            <span className="text-sm font-medium text-green-600">{r.priceType}</span>
+          </div>
+        )
+      },
+      {
+        header: t("value"),
+        render: (r) => (
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm font-medium text-green-600">{r.value}</span>
           </div>
         )
       },

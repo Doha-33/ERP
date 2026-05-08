@@ -739,9 +739,9 @@ export interface POSProduct {
   id: string;
   _id?: string;
   sku: string;
-  name: string;
+  productName: string;
   description: string;
-  price: number;
+  salesPrice: number;
   cost: number;
   stock: number;
   image: string;
@@ -749,6 +749,49 @@ export interface POSProduct {
   productType: string;
   unitOfMeasure: string;
   expiredDate: string;
+  barcode:string;
+}
+
+export interface POSOrderItem {
+  _id?: string;
+  productId: string;
+  sku: string;
+  productName: string;
+  barcode: string;
+  qty: number;
+  unitPrice: number;
+  lineTotal: number;
+}
+
+export interface POSOrder {
+  id: string;
+  _id?: string;
+  orderNumber: string;
+  status: 'DRAFT' | 'PAID' | 'CANCELLED' | 'HOLD' | string;
+  customerId: any; // populated
+  warehouseId: any; // populated
+  companyId: string;
+  branchId: string;
+  cashierId: any; // populated
+  items: POSOrderItem[];
+  shippingAmount: number;
+  subtotal: number;
+  discountAmount: number;
+  taxAmount: number;
+  totalAmount: number;
+  holdReference: string;
+  paidAt?: string | null;
+  discount: {
+    type: 'AMOUNT' | 'PERCENT' | string;
+    value: number;
+  };
+  tax: {
+    type: 'AMOUNT' | 'PERCENT' | string;
+    value: number;
+  };
+  payments: any[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface PricingRule {
@@ -756,6 +799,8 @@ export interface PricingRule {
   _id?: string;
   ruleName: string;
   customer: string;
+  priceType:string;
+  value:number;
   product: string;
   condition: string;
   priceChange: string;
@@ -765,8 +810,9 @@ export interface PricingRule {
 
 export interface Discount {
   id: string;
+  _id:string;
   discountName: string;
-  type: 'PERCENTAGE' | 'FIXED_AMOUNT' | 'BUY_X_GET_Y';
+  type: 'PERCENTAGE' | 'FIXED';
   appliesTo: 'PRODUCT' | 'CATEGORY' | 'CUSTOMER' | 'CUSTOMER_GROUP' | 'ORDER_TOTAL';
   productId?: any;
   categoryId?: string;
@@ -1317,10 +1363,12 @@ export interface BankAccount {
   _id?: string;
   bankName: string;
   accountNumber: string;
+  accountName:string;
+  isActive:boolean;
   iban: string;
   currency: string;
   branch: string;
-  currentBalance: number;
+  balance: number;
   chartAccount?: string | any;
   status: 'Active' | 'Inactive';
   company?: string;

@@ -1,26 +1,17 @@
-import { useState, useCallback, useMemo } from "react";
-import salesService from "../../services/sales.service";
-import {
-  Customer,
-  SalesOrder,
-  SalesInvoice,
-  SalesReturn,
-  POSProduct,
-  PricingRule,
-  Discount,
-  Promotion,
-  Quotation,
-  SalesSettings,
-  Product,
-  SalesReport,
-  CustomerReport,
-} from "../../types";
-import posService from "@/services/pos.service";
+
+import { useState, useCallback, useMemo } from 'react';
+import salesService from '../../services/sales.service';
+import posService from '../../services/pos.service';
+import { 
+  Customer, SalesOrder, SalesInvoice, SalesReturn, POSProduct,
+  PricingRule, Discount, Promotion, Quotation, SalesSettings, Product, SalesReport, CustomerReport, POSOrder
+} from '../../types';
 
 export const useSalesModule = (fetchAllData?: () => Promise<void>) => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [salesOrders, setSalesOrders] = useState<SalesOrder[]>([]);
+  const [posOrders, setPosOrders] = useState<POSOrder[]>([]);
   const [salesInvoices, setSalesInvoices] = useState<SalesInvoice[]>([]);
   const [salesReturns, setSalesReturns] = useState<SalesReturn[]>([]);
   const [posProducts, setPosProducts] = useState<POSProduct[]>([]);
@@ -32,10 +23,10 @@ export const useSalesModule = (fetchAllData?: () => Promise<void>) => {
   const [customerReports, setCustomerReports] = useState<CustomerReport[]>([]);
   const [salesSettings, setSalesSettings] = useState<SalesSettings>({
     vatPercentage: 15,
-    invoiceNumberingMethod: "Manual",
-    defaultPricelist: "Standard",
-    defaultPaymentTerms: "Net 30",
-    defaultCurrency: "USD",
+    invoiceNumberingMethod: 'Manual',
+    defaultPricelist: 'Standard',
+    defaultPaymentTerms: 'Net 30',
+    defaultCurrency: 'USD',
     allowReturnsWithoutInvoice: false,
     allowSellingOutOfStock: false,
   });
@@ -54,64 +45,37 @@ export const useSalesModule = (fetchAllData?: () => Promise<void>) => {
         salesRepRes,
         custRepRes,
         posProductsRes,
+        posOrdersRes,
         pricingRes,
       ] = await Promise.all([
         salesService.getAllCustomers(),
         salesService.getAllSalesOrders(),
         salesService.getAllSalesInvoices(),
         salesService.getAllSalesReturns(),
-        salesService.getAllPricingRules(),
         salesService.getAllDiscounts(),
         salesService.getAllPromotions(),
         salesService.getAllQuotations(),
         salesService.getAllProducts(),
         salesService.getSalesReport(),
         salesService.getCustomerReport(),
+        salesService.getPosProducts(),
         posService.getPosOrders(),
+        salesService.getAllPricingRules(),
       ]);
 
-      setCustomers(
-        Array.isArray(customersRes) ? customersRes : customersRes?.data || [],
-      );
-      setSalesOrders(
-        Array.isArray(ordersRes) ? ordersRes : ordersRes?.data || [],
-      );
-      setSalesInvoices(
-        Array.isArray(invoicesRes) ? invoicesRes : invoicesRes?.data || [],
-      );
-      setSalesReturns(
-        Array.isArray(returnsRes) ? returnsRes : returnsRes?.data || [],
-      );
-      setDiscounts(
-        Array.isArray(discountsRes) ? discountsRes : discountsRes?.data || [],
-      );
-      setPricingRules(
-        Array.isArray(pricingRes) ? pricingRes : pricingRes?.data || [],
-      );
-      setPromotions(
-        Array.isArray(promotionsRes)
-          ? promotionsRes
-          : promotionsRes?.data || [],
-      );
-      setQuotations(
-        Array.isArray(quotationsRes)
-          ? quotationsRes
-          : quotationsRes?.data || [],
-      );
-      setProducts(
-        Array.isArray(productsRes) ? productsRes : productsRes?.data || [],
-      );
-      setSalesReports(
-        Array.isArray(salesRepRes) ? salesRepRes : salesRepRes?.data || [],
-      );
-      setCustomerReports(
-        Array.isArray(custRepRes) ? custRepRes : custRepRes?.data || [],
-      );
-      setPosProducts(
-        Array.isArray(posProductsRes)
-          ? posProductsRes
-          : posProductsRes?.data || [],
-      );
+      setCustomers(Array.isArray(customersRes) ? customersRes : customersRes?.data || []);
+      setSalesOrders(Array.isArray(ordersRes) ? ordersRes : ordersRes?.data || []);
+      setPosOrders(Array.isArray(posOrdersRes) ? posOrdersRes : posOrdersRes?.data || []);
+      setSalesInvoices(Array.isArray(invoicesRes) ? invoicesRes : invoicesRes?.data || []);
+      setSalesReturns(Array.isArray(returnsRes) ? returnsRes : returnsRes?.data || []);
+      setDiscounts(Array.isArray(discountsRes) ? discountsRes : discountsRes?.data || []);
+      setPromotions(Array.isArray(promotionsRes) ? promotionsRes : promotionsRes?.data || []);
+      setQuotations(Array.isArray(quotationsRes) ? quotationsRes : quotationsRes?.data || []);
+      setProducts(Array.isArray(productsRes) ? productsRes : productsRes?.data || []);
+      setSalesReports(Array.isArray(salesRepRes) ? salesRepRes : salesRepRes?.data || []);
+      setCustomerReports(Array.isArray(custRepRes) ? custRepRes : custRepRes?.data || []);
+      setPosProducts(Array.isArray(posProductsRes) ? posProductsRes : posProductsRes?.data || []);
+      setPricingRules(Array.isArray(pricingRes) ? pricingRes : pricingRes?.data || []);
     } catch (error) {
       console.error("Error fetching sales data:", error);
     }
@@ -152,6 +116,14 @@ export const useSalesModule = (fetchAllData?: () => Promise<void>) => {
   );
 
   // --- Discounts ---
+    const fetchDiscounts = useCallback(async () => {
+    try {
+      const data = await salesService.getAllDiscounts();
+      setDiscounts(Array.isArray(data) ? data : data?.data || []);
+    } catch (error) {
+      console.error("Error fetching Discount:", error);
+    }
+  }, []);
   const addDiscount = useCallback(
     async (discount: Discount) => {
       await salesService.addDiscount(discount);
@@ -177,6 +149,14 @@ export const useSalesModule = (fetchAllData?: () => Promise<void>) => {
   );
 
   // --- Promotions ---
+    const fetchPromotions = useCallback(async () => {
+    try {
+      const data = await salesService.getAllPromotions();
+      setPromotions(Array.isArray(data) ? data : data?.data || []);
+    } catch (error) {
+      console.error("Error fetching promotions:", error);
+    }
+  }, []);
   const addPromotion = useCallback(
     async (promotion: Promotion) => {
       await salesService.addPromotion(promotion);
@@ -253,6 +233,7 @@ export const useSalesModule = (fetchAllData?: () => Promise<void>) => {
       console.error("Error fetching customers:", error);
     }
   }, []);
+
   const addCustomer = useCallback(
     async (customer: Customer) => {
       try {
@@ -293,45 +274,56 @@ export const useSalesModule = (fetchAllData?: () => Promise<void>) => {
   const fetchOrders = useCallback(async () => {
     try {
       const data = await salesService.getAllSalesOrders();
-      setSalesOrders(data);
+      setSalesOrders(Array.isArray(data) ? data : data?.data || []);
     } catch (error) {
       console.error("Error fetching orders:", error);
     }
   }, []);
 
-  const addSalesOrder = async (order: SalesOrder) => {
+  const fetchPosOrders = useCallback(async () => {
     try {
-      const newOrder = await salesService.addSalesOrder(order);
-      setSalesOrders((prev) => [...prev, newOrder]);
-      return newOrder;
+      const data = await posService.getPosOrders();
+      setPosOrders(Array.isArray(data) ? data : data?.data || []);
     } catch (error) {
-      console.error("Error adding order:", error);
-      throw error;
+      console.error("Error fetching POS orders:", error);
     }
-  };
+  }, []);
 
-  const updateSalesOrder = async (id: string, order: Partial<SalesOrder>) => {
-    try {
-      const updatedOrder = await salesService.updateSalesOrder(id, order);
-      setSalesOrders((prev) =>
-        prev.map((o) => (o._id === id || o.id === id ? updatedOrder : o)),
-      );
-      return updatedOrder;
-    } catch (error) {
-      console.error("Error updating order:", error);
-      throw error;
-    }
-  };
+  const addSalesOrder = useCallback(
+    async (order: SalesOrder) => {
+      try {
+        await salesService.addSalesOrder(order);
+        if (fetchAllData) await fetchAllData();
+      } catch (error) {
+        console.error(error);
+      }
+    },
+    [fetchAllData],
+  );
 
-  const deleteSalesOrder = async (id: string) => {
-    try {
-      await salesService.deleteSalesOrder(id);
-      setSalesOrders((prev) => prev.filter((o) => o._id !== id && o.id !== id));
-    } catch (error) {
-      console.error("Error deleting order:", error);
-      throw error;
-    }
-  };
+  const updateSalesOrder = useCallback(
+    async (order: SalesOrder) => {
+      try {
+        await salesService.updateSalesOrder(order.id, order);
+        if (fetchAllData) await fetchAllData();
+      } catch (error) {
+        console.error(error);
+      }
+    },
+    [fetchAllData],
+  );
+
+  const deleteSalesOrder = useCallback(
+    async (id: string) => {
+      try {
+        await salesService.deleteSalesOrder(id);
+        if (fetchAllData) await fetchAllData();
+      } catch (error) {
+        console.error(error);
+      }
+    },
+    [fetchAllData],
+  );
 
   // --- Sales Invoices ---
   const fetchSalesInvoicesData = useCallback(async () => {
@@ -342,6 +334,7 @@ export const useSalesModule = (fetchAllData?: () => Promise<void>) => {
       console.error("Error fetching sales invoices:", error);
     }
   }, []);
+
   const addSalesInvoice = useCallback(
     async (invoice: SalesInvoice) => {
       try {
@@ -387,6 +380,7 @@ export const useSalesModule = (fetchAllData?: () => Promise<void>) => {
       console.error("Error fetching sales returns:", error);
     }
   }, []);
+
   const addSalesReturn = useCallback(
     async (ret: SalesReturn) => {
       try {
@@ -432,6 +426,7 @@ export const useSalesModule = (fetchAllData?: () => Promise<void>) => {
       console.error("Error fetching products:", error);
     }
   }, []);
+
   const addSalesProduct = useCallback(
     async (product: Product) => {
       try {
@@ -467,6 +462,31 @@ export const useSalesModule = (fetchAllData?: () => Promise<void>) => {
     },
     [fetchAllData],
   );
+
+  const addPOSProduct = useCallback(
+    async (product: POSProduct) => {
+      await salesService.addPOSProduct(product);
+      if (fetchAllData) await fetchAllData();
+    },
+    [fetchAllData],
+  );
+
+  const updatePOSProduct = useCallback(
+    async (product: POSProduct) => {
+      await salesService.updatePOSProduct(product.id, product);
+      if (fetchAllData) await fetchAllData();
+    },
+    [fetchAllData],
+  );
+
+  const deletePOSProduct = useCallback(
+    async (id: string) => {
+      await salesService.deletePOSProduct(id);
+      if (fetchAllData) await fetchAllData();
+    },
+    [fetchAllData],
+  );
+
   const addItemToPOSOrder = useCallback(
     async (orderId: string, itemData: any) => {
       const res = await posService.addItem(orderId, itemData);
@@ -485,11 +505,59 @@ export const useSalesModule = (fetchAllData?: () => Promise<void>) => {
     [fetchSalesData],
   );
 
-  const createPOSOrder = useCallback(async () => {
-    const res = await posService.createPosOrder();
-    await fetchSalesData();
+  const createPOSOrder = useCallback(
+    async (data?: any) => {
+      const res = await posService.createPosOrder(data);
+      await fetchSalesData();
+      return res;
+    },
+    [fetchSalesData],
+  );
+
+  const updateItemQty = useCallback(async (orderId: string, itemId: string, qty: number) => {
+    const res = await posService.updateItemQty(orderId, itemId, qty);
     return res;
-  }, [fetchSalesData]);
+  }, []);
+
+  const removeItemFromPOSOrder = useCallback(async (orderId: string, itemId: string) => {
+    const res = await posService.removeItem(orderId, itemId);
+    return res;
+  }, []);
+
+  const setPOSDiscount = useCallback(async (orderId: string, discount: any) => {
+    const res = await posService.setDiscount(orderId, discount);
+    return res;
+  }, []);
+
+  const setPOSTax = useCallback(async (orderId: string, tax: any) => {
+    const res = await posService.setTax(orderId, tax);
+    return res;
+  }, []);
+
+  const setPOSShipping = useCallback(async (orderId: string, shipping: any) => {
+    const res = await posService.setShipping(orderId, shipping);
+    return res;
+  }, []);
+
+  const holdPOSOrder = useCallback(async (orderId: string, data?: any) => {
+    const res = await posService.holdOrder(orderId, data);
+    return res;
+  }, []);
+
+  const cancelPOSOrder = useCallback(async (orderId: string) => {
+    const res = await posService.cancelOrder(orderId);
+    return res;
+  }, []);
+
+  const getPOSReceipt = useCallback(async (orderId: string) => {
+    const res = await posService.getReceipt(orderId);
+    return res;
+  }, []);
+
+  const getPOSOrderById = useCallback(async (orderId: string) => {
+    const res = await posService.getPosOrderById(orderId);
+    return res;
+  }, []);
 
   return useMemo(
     () => ({
@@ -505,19 +573,19 @@ export const useSalesModule = (fetchAllData?: () => Promise<void>) => {
       setSalesReturns,
       posProducts,
       setPosProducts,
+      posOrders,
+      setPosOrders,
       pricingRules,
       setPricingRules,
-
       discounts,
       setDiscounts,
       promotions,
       setPromotions,
       quotations,
       setQuotations,
-      salesSettings,
       salesReports,
       customerReports,
-
+      salesSettings,
       setSalesSettings,
       addCustomer,
       updateCustomer,
@@ -538,18 +606,22 @@ export const useSalesModule = (fetchAllData?: () => Promise<void>) => {
       addPricingRule,
       updatePricingRule,
       deletePricingRule,
-
       fetchPricingRules,
       addDiscount,
       updateDiscount,
       deleteDiscount,
+      fetchDiscounts,
       addPromotion,
       updatePromotion,
       deletePromotion,
+      fetchPromotions,
       addQuotation,
       updateQuotation,
       deleteQuotation,
       fetchQuotations,
+      addPOSProduct,
+      updatePOSProduct,
+      deletePOSProduct,
       addSalesProduct,
       updateSalesProduct,
       deleteSalesProduct,
@@ -558,12 +630,24 @@ export const useSalesModule = (fetchAllData?: () => Promise<void>) => {
       addItemToPOSOrder,
       payOrder,
       createPOSOrder,
+      updateItemQty,
+      removeItemFromPOSOrder,
+      setPOSDiscount,
+      setPOSTax,
+      setPOSShipping,
+      holdPOSOrder,
+      cancelPOSOrder,
+      getPOSReceipt,
+      getPOSOrderById,
+      fetchPosOrders,
+
       fetchSalesData,
     }),
     [
       customers,
       products,
       salesOrders,
+      posOrders,
       salesInvoices,
       salesReturns,
       posProducts,
@@ -571,10 +655,11 @@ export const useSalesModule = (fetchAllData?: () => Promise<void>) => {
       discounts,
       promotions,
       quotations,
-      salesSettings,
       salesReports,
       customerReports,
+      salesSettings,
       addCustomer,
+      fetchDiscounts,
       updateCustomer,
       deleteCustomer,
       fetchCustomers,
@@ -582,6 +667,7 @@ export const useSalesModule = (fetchAllData?: () => Promise<void>) => {
       updateSalesOrder,
       deleteSalesOrder,
       fetchOrders,
+      fetchPosOrders,
       addSalesInvoice,
       updateSalesInvoice,
       deleteSalesInvoice,
@@ -600,19 +686,31 @@ export const useSalesModule = (fetchAllData?: () => Promise<void>) => {
       addPromotion,
       updatePromotion,
       deletePromotion,
+      fetchPromotions,
       addQuotation,
       updateQuotation,
       deleteQuotation,
       fetchQuotations,
-      addItemToPOSOrder,
-      payOrder,
-      createPOSOrder,
-
+      addPOSProduct,
+      updatePOSProduct,
+      deletePOSProduct,
       addSalesProduct,
       updateSalesProduct,
       deleteSalesProduct,
       fetchProducts,
       updateSalesSettings,
+      addItemToPOSOrder,
+      payOrder,
+      createPOSOrder,
+      updateItemQty,
+      removeItemFromPOSOrder,
+      setPOSDiscount,
+      setPOSTax,
+      setPOSShipping,
+      holdPOSOrder,
+      cancelPOSOrder,
+      getPOSReceipt,
+      getPOSOrderById,
       fetchSalesData,
     ],
   );

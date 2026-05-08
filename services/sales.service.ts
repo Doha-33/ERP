@@ -74,7 +74,7 @@ const salesService = {
     return res.data.data;
   },
   async updatePOSProduct(id: string, data: any) {
-    const res = await apiClient.patch(`/pos-products/update/${id}`, data);
+    const res = await apiClient.put(`/pos-products/update/${id}`, data);
     return res.data.data;
   },
   async deletePOSProduct(id: string) {
@@ -184,6 +184,11 @@ const salesService = {
   async getCustomerReport() {
     const res = await apiClient.get('/customer/reports/list');
     return res.data.data;
+  },
+    async getPosProducts() {
+    const res = await apiClient.get('/products/list'); // Assuming products list for POS
+    const data = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+    return data;
   },
 };
 

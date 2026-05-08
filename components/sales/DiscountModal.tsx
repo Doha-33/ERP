@@ -1,6 +1,19 @@
 import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Edit2, Percent, DollarSign, Tag, Users, Package, Calendar, Gift } from "lucide-react";
+import {
+  Plus,
+  Edit2,
+  Percent,
+  DollarSign,
+  Tag,
+  Users,
+  Package,
+  Calendar,
+  Gift,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+} from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
 import { Button, Input, Select, TextArea } from "../../components/ui/Common";
 import { Discount } from "../../types";
@@ -29,7 +42,6 @@ export const DiscountModal: React.FC<DiscountModalProps> = ({
     type: "PERCENTAGE",
     appliesTo: "PRODUCT",
     productId: "",
-    categoryId: "",
     customerId: "",
     value: 0,
     startDate: "",
@@ -39,20 +51,20 @@ export const DiscountModal: React.FC<DiscountModalProps> = ({
 
   useEffect(() => {
     if (discountToEdit && isOpen) {
-      const productId = typeof discountToEdit.productId === "object"
-        ? (discountToEdit.productId as any)?._id
-        : discountToEdit.productId;
-      const customerId = typeof discountToEdit.customerId === "object"
-        ? (discountToEdit.customerId as any)?._id
-        : discountToEdit.customerId;
-      const categoryId = discountToEdit.categoryId;
+      const productId =
+        typeof discountToEdit.productId === "object"
+          ? (discountToEdit.productId as any)?._id
+          : discountToEdit.productId;
+      const customerId =
+        typeof discountToEdit.customerId === "object"
+          ? (discountToEdit.customerId as any)?._id
+          : discountToEdit.customerId;
 
       setFormData({
         discountName: discountToEdit.discountName || "",
         type: discountToEdit.type || "PERCENTAGE",
         appliesTo: discountToEdit.appliesTo || "PRODUCT",
         productId: productId || "",
-        categoryId: categoryId || "",
         customerId: customerId || "",
         value: discountToEdit.value || 0,
         startDate: discountToEdit.startDate
@@ -69,7 +81,6 @@ export const DiscountModal: React.FC<DiscountModalProps> = ({
         type: "PERCENTAGE",
         appliesTo: "PRODUCT",
         productId: "",
-        categoryId: "",
         customerId: "",
         value: 0,
         startDate: "",
@@ -81,35 +92,31 @@ export const DiscountModal: React.FC<DiscountModalProps> = ({
 
   const typeOptions = [
     { value: "PERCENTAGE", label: t("percentage"), icon: Percent },
-    { value: "FIXED_AMOUNT", label: t("fixed_amount"), icon: DollarSign },
-    { value: "BUY_X_GET_Y", label: t("buy_x_get_y"), icon: Gift },
+    { value: "FIXED", label: t("fixed_amount"), icon: DollarSign },
   ];
 
   const appliesToOptions = [
     { value: "PRODUCT", label: t("product") },
-    { value: "CATEGORY", label: t("category") },
     { value: "CUSTOMER", label: t("customer") },
-    { value: "CUSTOMER_GROUP", label: t("customer_group") },
     { value: "ORDER_TOTAL", label: t("order_total") },
   ];
 
   const statusOptions = [
-    { value: "ACTIVE", label: t("active") },
-    { value: "INACTIVE", label: t("inactive") },
-    { value: "EXPIRED", label: t("expired") },
+    { value: "ACTIVE", label: t("active"), icon: CheckCircle, color: "green" },
+    { value: "INACTIVE", label: t("inactive"), icon: XCircle, color: "red" },
+    {
+      value: "EXPIRED",
+      label: t("expired"),
+      icon: AlertCircle,
+      color: "orange",
+    },
   ];
-
-  const productOptions = products.map(p => ({
+  const productOptions = products.map((p) => ({
     value: p._id || p.id,
     label: `${p.productName} (${p.sku})`,
   }));
 
-  const categoryOptions = categories.map(c => ({
-    value: c._id || c.id,
-    label: c.name || c.categoryName,
-  }));
-
-  const customerOptions = customers.map(c => ({
+  const customerOptions = customers.map((c) => ({
     value: c._id || c.id,
     label: c.customerName,
   }));
@@ -117,9 +124,30 @@ export const DiscountModal: React.FC<DiscountModalProps> = ({
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
+
     try {
-      await onSave(formData);
+      // Prepare the data to send based on appliesTo value
+      const dataToSend: Partial<Discount> = {
+        discountName: formData.discountName,
+        type: formData.type as "PERCENTAGE" | "FIXED",
+        appliesTo: formData.appliesTo as "PRODUCT" | "CUSTOMER" | "ORDER_TOTAL",
+        value: formData.value,
+        startDate: formData.startDate || undefined,
+        endDate: formData.endDate || undefined,
+        status: formData.status as "ACTIVE" | "INACTIVE" | "EXPIRED",
+      };
+
+      // Only include productId if appliesTo is PRODUCT
+      if (formData.appliesTo === "PRODUCT") {
+        dataToSend.productId = formData.productId;
+      }
+
+      // Only include customerId if appliesTo is CUSTOMER
+      if (formData.appliesTo === "CUSTOMER") {
+        dataToSend.customerId = formData.customerId;
+      }
+
+      await onSave(dataToSend);
       onClose();
     } catch (error) {
       console.error("Error in form submission:", error);
@@ -129,7 +157,7 @@ export const DiscountModal: React.FC<DiscountModalProps> = ({
   };
 
   const handleChange = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   const appliesTo = formData.appliesTo;
@@ -206,7 +234,9 @@ export const DiscountModal: React.FC<DiscountModalProps> = ({
               fullWidth
             />
             {discountType === "PERCENTAGE" && (
-              <p className="text-xs text-gray-500">{t("percentage_of_total")}</p>
+              <p className="text-xs text-gray-500">
+                {t("percentage_of_total")}
+              </p>
             )}
           </div>
         </div>
@@ -224,7 +254,16 @@ export const DiscountModal: React.FC<DiscountModalProps> = ({
               </label>
               <Select
                 value={formData.appliesTo}
-                onChange={(e) => handleChange("appliesTo", e.target.value)}
+                onChange={(e) => {
+                  handleChange("appliesTo", e.target.value);
+                  // Clear productId and customerId when switching appliesTo type
+                  if (e.target.value !== "PRODUCT") {
+                    handleChange("productId", "");
+                  }
+                  if (e.target.value !== "CUSTOMER") {
+                    handleChange("customerId", "");
+                  }
+                }}
                 options={appliesToOptions}
                 required
                 fullWidth
@@ -241,22 +280,6 @@ export const DiscountModal: React.FC<DiscountModalProps> = ({
                   onChange={(e) => handleChange("productId", e.target.value)}
                   options={productOptions}
                   placeholder={t("select_product")}
-                  required
-                  fullWidth
-                />
-              </div>
-            )}
-
-            {appliesTo === "CATEGORY" && (
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-gray-700">
-                  {t("category")} <span className="text-red-500">*</span>
-                </label>
-                <Select
-                  value={formData.categoryId}
-                  onChange={(e) => handleChange("categoryId", e.target.value)}
-                  options={categoryOptions}
-                  placeholder={t("select_category")}
                   required
                   fullWidth
                 />
@@ -314,14 +337,18 @@ export const DiscountModal: React.FC<DiscountModalProps> = ({
         </div>
 
         <div className="flex justify-end gap-3 mt-8">
-          <Button variant="secondary" onClick={onClose} disabled={isSubmitting || isLoading}>
+          <Button
+            variant="secondary"
+            onClick={onClose}
+            disabled={isSubmitting || isLoading}
+          >
             {t("cancel")}
           </Button>
           <Button
             variant="primary"
             type="submit"
             className="bg-indigo-600 hover:bg-indigo-700 px-8"
-            loading={isSubmitting || isLoading}
+            isLoading={isSubmitting || isLoading}
             disabled={isSubmitting || isLoading}
           >
             {discountToEdit ? t("save") : t("add_discount")}

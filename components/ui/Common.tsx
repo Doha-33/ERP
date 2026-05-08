@@ -609,6 +609,41 @@ export const StatCard: React.FC<StatCardProps> = ({
   );
 };
 
+// --- Dialog ---
+export const Dialog: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  children: React.ReactNode;
+  maxWidth?: "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "4xl" | "5xl";
+}> = ({ isOpen, onClose, children, maxWidth = "md" }) => {
+  if (!isOpen) return null;
+
+  const maxWidths = {
+    sm: "max-w-sm",
+    md: "max-w-md",
+    lg: "max-w-lg",
+    xl: "max-w-xl",
+    "2xl": "max-w-2xl",
+    "3xl": "max-w-3xl",
+    "4xl": "max-w-4xl",
+    "5xl": "max-w-5xl",
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm animate-in fade-in duration-300"
+        onClick={onClose}
+      />
+      <div
+        className={`relative w-full ${maxWidths[maxWidth]} bg-white rounded-[2rem] shadow-2xl animate-in zoom-in-95 duration-300 overflow-hidden`}
+      >
+        {children}
+      </div>
+    </div>
+  );
+};
+
 // --- FileUpload ---
 interface FileUploadProps {
   label: any;

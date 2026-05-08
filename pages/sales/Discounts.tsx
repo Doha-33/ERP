@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Search, Edit2, Trash2, Percent, DollarSign, Tag, Filter, X, Calendar, Users, Package } from "lucide-react";
+import { Plus, Search, Edit2, Trash2, Percent, DollarSign, Tag, Filter, X, Calendar, Users, Package, CheckCircle } from "lucide-react";
 import { Card, Button, Input, Badge, ExportDropdown } from "../../components/ui/Common";
 import { Table, Column } from "../../components/ui/Table";
 import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
@@ -11,7 +11,7 @@ import { toast } from "sonner";
 
 export const Discounts: React.FC = () => {
   const { t } = useTranslation();
-  const { discounts, addDiscount, updateDiscount, deleteDiscount } = useData();
+  const { discounts, addDiscount, updateDiscount, deleteDiscount, fetchDiscounts } = useData();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingDiscount, setEditingDiscount] = useState<Discount | null>(null);
@@ -23,30 +23,76 @@ export const Discounts: React.FC = () => {
   const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSave = async (discount: Partial<Discount>) => {
+  // Helper function to extract ID
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "object") {
+      return value._id || value.id || "";
+    }
+    return value;
+  }, []);
+
+  const handleSave = async (discountData: Partial<Discount>) => {
     try {
       setIsLoading(true);
+      
       if (editingDiscount) {
-        await updateDiscount({ ...discount, _id: editingDiscount._id, id: editingDiscount.id } as Discount);
+        // Get the ID from editingDiscount
+        const discountId = extractId(editingDiscount);
+        
+        if (!discountId) {
+          toast.error(t("discount_id_missing"));
+          return;
+        }
+        
+        // Create update data with ID
+        const updateData = {
+          ...discountData,
+          _id: discountId,
+          id: discountId
+        } as Discount;
+        
+        console.log("Updating discount with ID:", discountId, updateData);
+        await updateDiscount(updateData);
         toast.success(t("discount_updated_successfully"));
       } else {
-        await addDiscount(discount as Discount);
+        await addDiscount(discountData as Discount);
         toast.success(t("discount_created_successfully"));
       }
+      
+      await fetchDiscounts(); // Refresh list
       setIsModalOpen(false);
       setEditingDiscount(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving discount:", error);
-      toast.error(t("failed_to_save_discount"));
+      const message = error?.response?.data?.message || error?.message || t("failed_to_save_discount");
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleEdit = useCallback((discount: Discount) => {
-    setEditingDiscount(discount);
+    // Extract ID correctly from the discount object
+    const discountId = extractId(discount);
+    
+    if (!discountId) {
+      console.error("Discount ID not found", discount);
+      toast.error(t("discount_id_not_found"));
+      return;
+    }
+    
+    // Create a clean discount object with proper ID
+    const discountToEdit: Discount = {
+      ...discount,
+      _id: discountId,
+      id: discountId,
+    };
+    
+    console.log("Editing discount:", discountToEdit);
+    setEditingDiscount(discountToEdit);
     setIsModalOpen(true);
-  }, []);
+  }, [extractId, t]);
 
   const handleDelete = useCallback((id: string) => {
     setDeleteId(id);
@@ -59,11 +105,12 @@ export const Discounts: React.FC = () => {
         toast.success(t("discount_deleted_successfully"));
         setDeleteId(null);
         setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+        await fetchDiscounts();
       } catch (error) {
         toast.error(t("failed_to_delete_discount"));
       }
     }
-  }, [deleteId, deleteDiscount, t]);
+  }, [deleteId, deleteDiscount, fetchDiscounts, t]);
 
   const handleBulkDelete = async () => {
     try {
@@ -72,6 +119,7 @@ export const Discounts: React.FC = () => {
       toast.success(t("discounts_deleted_successfully", { count: selectedIds.length }));
       setSelectedIds([]);
       setIsBulkConfirmOpen(false);
+      await fetchDiscounts();
     } catch (error) {
       console.error("Bulk delete failed", error);
       toast.error(t("failed_to_delete_discounts"));
@@ -104,7 +152,7 @@ export const Discounts: React.FC = () => {
     if (discount.type === "PERCENTAGE") {
       return `${discount.value}%`;
     }
-    if (discount.type === "FIXED_AMOUNT") {
+    if (discount.type === "FIXED") {
       return `${discount.value?.toLocaleString()} EGP`;
     }
     return discount.value?.toString() || "0";
@@ -128,7 +176,7 @@ export const Discounts: React.FC = () => {
   const totalDiscounts = filteredDiscounts.length;
   const activeDiscounts = filteredDiscounts.filter(d => d.status === "ACTIVE").length;
   const percentageDiscounts = filteredDiscounts.filter(d => d.type === "PERCENTAGE").length;
-  const fixedAmountDiscounts = filteredDiscounts.filter(d => d.type === "FIXED_AMOUNT").length;
+  const fixedAmountDiscounts = filteredDiscounts.filter(d => d.type === "FIXED").length;
 
   const getStatusBadge = (status: string) => {
     const statusMap: Record<string, { variant: "success" | "danger" | "warning"; label: string }> = {
@@ -231,27 +279,30 @@ export const Discounts: React.FC = () => {
       {
         header: t("actions"),
         className: "text-center",
-        render: (d) => (
-          <div className="flex items-center justify-center gap-2">
-            <button
-              onClick={() => handleEdit(d)}
-              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("edit")}
-            >
-              <Edit2 size={16} />
-            </button>
-            <button
-              onClick={() => handleDelete(d._id || d.id)}
-              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("delete")}
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-        )
+        render: (d) => {
+          const discountId = extractId(d);
+          return (
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => handleEdit(d)}
+                className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("edit")}
+              >
+                <Edit2 size={16} />
+              </button>
+              <button
+                onClick={() => handleDelete(discountId)}
+                className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("delete")}
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          );
+        }
       }
     ],
-    [t, handleEdit, handleDelete]
+    [t, handleEdit, handleDelete, extractId]
   );
 
   return (
@@ -376,15 +427,15 @@ export const Discounts: React.FC = () => {
       </div>
 
       {/* Table */}
-        <Table
-          data={filteredDiscounts}
-          columns={columns}
-          keyExtractor={(item) => item._id || item.id}
-          isLoading={isLoading}
-          selectable
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-        />
+      <Table
+        data={filteredDiscounts}
+        columns={columns}
+        keyExtractor={(item) => extractId(item)}
+        isLoading={isLoading}
+        selectable
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+      />
 
       {/* Modal */}
       <DiscountModal
@@ -418,6 +469,3 @@ export const Discounts: React.FC = () => {
     </div>
   );
 };
-
-// Add missing imports
-import { CheckCircle } from "lucide-react";

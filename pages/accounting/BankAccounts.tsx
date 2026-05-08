@@ -122,8 +122,7 @@ export const BankAccounts: React.FC = () => {
       const matchesSearch = 
         a.bankName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         a.accountNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        a.accountName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        a.company?.toLowerCase().includes(searchTerm.toLowerCase());
+        a.accountName?.toLowerCase().includes(searchTerm.toLowerCase());
       
       const matchesCurrency = !currencyFilter || a.currency === currencyFilter;
       const matchesStatus = !statusFilter || 
@@ -136,7 +135,7 @@ export const BankAccounts: React.FC = () => {
 
   // Statistics
   const totalAccounts = filteredAccounts.length;
-  const totalBalance = filteredAccounts.reduce((sum, a) => sum + (a.currentBalance || 0), 0);
+  const totalBalance = filteredAccounts.reduce((sum, a) => sum + (a.balance || 0), 0);
   const activeAccounts = filteredAccounts.filter(a => a.isActive).length;
   const inactiveAccounts = filteredAccounts.filter(a => !a.isActive).length;
 
@@ -162,7 +161,6 @@ export const BankAccounts: React.FC = () => {
             </div>
             <div className="flex flex-col">
               <span className="font-medium text-gray-900">{a.accountName}</span>
-              <span className="text-xs text-gray-500">{a.company}</span>
             </div>
           </div>
         )
@@ -188,7 +186,7 @@ export const BankAccounts: React.FC = () => {
           <div className="flex items-center gap-1.5">
             <DollarSign size={14} className="text-green-600" />
             <span className="text-sm font-semibold text-green-600">
-              {a.currentBalance?.toLocaleString()} {a.currency}
+              {a.balance?.toLocaleString()} {a.currency}
             </span>
           </div>
         )
@@ -197,12 +195,6 @@ export const BankAccounts: React.FC = () => {
         header: t("iban"),
         render: (a) => (
           <span className="text-sm font-mono text-gray-500">{a.iban || "-"}</span>
-        )
-      },
-      {
-        header: t("branch"),
-        render: (a) => (
-          <span className="text-sm text-gray-600">{a.branch || "-"}</span>
         )
       },
       {
@@ -357,7 +349,6 @@ export const BankAccounts: React.FC = () => {
       </div>
 
       {/* Table */}
-      <Card className="bg-white">
         <Table
           data={filteredAccounts}
           columns={columns}
@@ -367,7 +358,6 @@ export const BankAccounts: React.FC = () => {
           selectedIds={selectedIds}
           onSelectionChange={setSelectedIds}
         />
-      </Card>
 
       {/* Modal */}
       <BankAccountModal

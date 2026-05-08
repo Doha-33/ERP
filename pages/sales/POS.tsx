@@ -1,249 +1,656 @@
-
-import React, { useState, useMemo } from 'react';
+// POS.tsx - Redesigned with better proportions
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, ShoppingCart, Plus, Minus, Trash2, User, CreditCard } from 'lucide-react';
-import { Card, Button, Input, Select, Badge } from '../../components/ui/Common';
-import { POSProduct } from '../../types';
+import { 
+  Search, ShoppingCart, Plus, Minus, Trash2, User, CreditCard, 
+  Tag, Percent, Truck, Pause, XCircle, RotateCcw, LayoutGrid, List,
+  Package, Info, Receipt as ReceiptIcon, X
+} from 'lucide-react';
+import { Card, Button, Input, Badge, Dialog } from '../../components/ui/Common';
+import { POSProduct, Customer, POSOrder } from '../../types';
 import { useData } from '../../context/DataContext';
 import { toast } from 'sonner';
-
-interface CartItem extends POSProduct {
-  cartQuantity: number;
-}
+import { POSReceipt } from '../../components/sales/POSReceipt';
+import { POSValueModal } from '../../components/sales/POSValueModal';
+import { POSPaymentModal } from '../../components/sales/POSPaymentModal';
+import { POSOrdersModal } from '../../components/sales/POSOrdersModal';
+import { useAuth } from '../../context/AuthContext';
 
 export const POS: React.FC = () => {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const { 
     posProducts, 
     customers, 
+    warehouses,
+    posOrders,
+    fetchPosOrders,
     createPOSOrder, 
     addItemToPOSOrder, 
-    payOrder 
+    payOrder,
+    updateItemQty,
+    removeItemFromPOSOrder,
+    setPOSDiscount,
+    setPOSTax,
+    setPOSShipping,
+    holdPOSOrder,
+    cancelPOSOrder,
+    getPOSOrderById
   } = useData();
+
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [currentOrder, setCurrentOrder] = useState<POSOrder | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [activeModal, setActiveModal] = useState<'discount' | 'tax' | 'shipping' | 'payment' | 'receipt' | null>(null);
+  const [isOrdersModalOpen, setIsOrdersModalOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
-  const categories = ['All', 'Electronics', 'Laptops', 'Accessories'];
+  useEffect(() => {
+    fetchPosOrders();
+  }, [fetchPosOrders]);
+
+  const categories = useMemo(() => {
+    const cats = new Set(posProducts.map(p => p.category));
+    return ['All', ...Array.from(cats)];
+  }, [posProducts]);
 
   const filteredProducts = useMemo(() => {
     return posProducts.filter(p => {
-      const matchesSearch = (p.name || '').toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = (p.productName || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+                           (p.sku || '').toLowerCase().includes(searchTerm.toLowerCase());
       const matchesCategory = selectedCategory === 'All' || p.category === selectedCategory;
       return matchesSearch && matchesCategory;
     });
   }, [posProducts, searchTerm, selectedCategory]);
 
-  const addToCart = (product: POSProduct) => {
-    setCart(prev => {
-      const existing = prev.find(item => item.id === product.id);
-      if (existing) {
-        return prev.map(item => 
-          item.id === product.id ? { ...item, cartQuantity: item.cartQuantity + 1 } : item
-        );
-      }
-      return [...prev, { ...product, cartQuantity: 1 }];
-    });
-  };
-
-  const updateQuantity = (id: string, delta: number) => {
-    setCart(prev => prev.map(item => {
-      if (item.id === id) {
-        const newQty = Math.max(1, item.cartQuantity + delta);
-        return { ...item, cartQuantity: newQty };
-      }
-      return item;
-    }));
-  };
-
-  const removeFromCart = (id: string) => {
-    setCart(prev => prev.filter(item => item.id !== id));
-  };
-
-  const subtotal = cart.reduce((sum, item) => sum + (item.price * item.cartQuantity), 0);
-  const tax = subtotal * 0.15;
-  const total = subtotal + tax;
-
-  const handleCheckout = async () => {
-    if (cart.length === 0) return;
-    
+  const refreshOrder = useCallback(async (orderId: string) => {
     try {
-      setIsProcessing(true);
-      // 1. Create Order
-      const order = await createPOSOrder();
-      const orderId = order.id || order._id;
+      const order = await getPOSOrderById(orderId);
+      setCurrentOrder(order);
+    } catch (error:any) {
+      console.error('Error refreshing order:', error);
+      toast(error.message || "Error refreshing order")
+    }
+  }, [getPOSOrderById]);
 
-      // 2. Add Items
-      for (const item of cart) {
-        await addItemToPOSOrder(orderId, {
-          productId: item.id || item._id,
-          qty: item.cartQuantity,
-          price: item.price
-        });
+  const startNewOrder = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Fix: Get default warehouseId to avoid validation error
+      const defaultWarehouseId = warehouses[0]?._id || warehouses[0]?.id;
+      if (!defaultWarehouseId) {
+        toast.error('No warehouse found. Please create a warehouse in Inventory first.');
+        return;
       }
 
-      // 3. Pay Order
-      await payOrder(orderId, {
-        paymentMethod: 'CASH',
-        amount: total,
+      const order = await createPOSOrder({
+        warehouseId: defaultWarehouseId,
         customerId: selectedCustomerId || undefined
       });
-
-      toast.success(t('order_completed_successfully'));
-      setCart([]);
+      
+      setCurrentOrder(order);
       setSelectedCustomerId('');
-    } catch (error) {
-      console.error('Checkout error:', error);
-      toast.error(t('failed_to_complete_order'));
+      fetchPosOrders(); // Refresh orders list
+      return order;
+    } catch (error:any) {
+      toast.error(error.message || 'Failed to create new order');
     } finally {
-      setIsProcessing(false);
+      setIsLoading(false);
     }
   };
 
+  const handleResumeOrder = async (orderId: string) => {
+    try {
+      setIsLoading(true);
+      const order = await getPOSOrderById(orderId);
+      setCurrentOrder(order);
+      setSelectedCustomerId((order.customerId?._id || order.customerId) as string || '');
+      setIsOrdersModalOpen(false);
+      toast.success(`Order ${order.orderNumber} resumed`);
+    } catch (error) {
+      toast.error('Failed to resume order');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAddToCart = async (product: POSProduct) => {
+    try {
+      let orderId = currentOrder?._id || currentOrder?.id;
+      if (!orderId) {
+        const newOrder = await startNewOrder();
+        if (!newOrder) return;
+        orderId = newOrder._id || newOrder.id;
+      }
+
+      await addItemToPOSOrder(orderId!, {
+        productId: product._id || product.id,
+        qty: 1
+      });
+      
+      await refreshOrder(orderId!);
+      toast.success(`${product.productName} added`);
+    } catch (error) {
+      console.error('Error adding to order:', error);
+      toast.error('Failed to add item');
+    }
+  };
+
+  const handleUpdateQty = async (itemId: string, qty: number) => {
+    const orderId = currentOrder?._id || currentOrder?.id;
+    if (!orderId) return;
+    try {
+      if (qty < 1) {
+        await removeItemFromPOSOrder(orderId, itemId);
+      } else {
+        await updateItemQty(orderId, itemId, qty);
+      }
+      await refreshOrder(orderId);
+    } catch (error) {
+      toast.error('Failed to update quantity');
+    }
+  };
+
+  const handleRemoveItem = async (itemId: string) => {
+    const orderId = currentOrder?._id || currentOrder?.id;
+    if (!orderId) return;
+    try {
+      await removeItemFromPOSOrder(orderId, itemId);
+      await refreshOrder(orderId);
+      toast.success('Item removed');
+    } catch (error) {
+      toast.error('Failed to remove item');
+    }
+  };
+
+  const handleApplyDiscount = async (data: { value: number; type: 'AMOUNT' | 'PERCENT' }) => {
+    const orderId = currentOrder?._id || currentOrder?.id;
+    if (!orderId) return;
+    try {
+      await setPOSDiscount(orderId, { discount: data });
+      await refreshOrder(orderId);
+      setActiveModal(null);
+      toast.success('Discount applied');
+    } catch (error) {
+      toast.error('Failed to apply discount');
+    }
+  };
+
+  const handleApplyTax = async (data: { value: number; type: 'AMOUNT' | 'PERCENT' }) => {
+    const orderId = currentOrder?._id || currentOrder?.id;
+    if (!orderId) return;
+    try {
+      await setPOSTax(orderId, { tax: data });
+      await refreshOrder(orderId);
+      setActiveModal(null);
+      toast.success('Tax applied');
+    } catch (error) {
+      toast.error('Failed to apply tax');
+    }
+  };
+
+  const handleApplyShipping = async (data: { value: number }) => {
+    const orderId = currentOrder?._id || currentOrder?.id;
+    if (!orderId) return;
+    try {
+      await setPOSShipping(orderId, { shippingAmount: data.value });
+      await refreshOrder(orderId);
+      setActiveModal(null);
+      toast.success('Shipping updated');
+    } catch (error) {
+      toast.error('Failed to apply shipping');
+    }
+  };
+
+  const handleHoldOrder = async () => {
+    const orderId = currentOrder?._id || currentOrder?.id;
+    if (!orderId || currentOrder.items.length === 0) return;
+    try {
+      await holdPOSOrder(orderId);
+      toast.info('Order put on hold');
+      setCurrentOrder(null);
+    } catch (error) {
+      toast.error('Failed to hold order');
+    }
+  };
+
+  const handleCancelOrder = async () => {
+    const orderId = currentOrder?._id || currentOrder?.id;
+    if (!orderId) return;
+    try {
+      await cancelPOSOrder(orderId);
+      toast.warning('Order cancelled');
+      setCurrentOrder(null);
+    } catch (error) {
+      toast.error('Failed to cancel order');
+    }
+  };
+
+  const handlePay = async (paymentData: any) => {
+    const orderId = currentOrder?._id || currentOrder?.id;
+    if (!orderId) return;
+    try {
+      await payOrder(orderId, paymentData);
+      const updated = await getPOSOrderById(orderId);
+      setCurrentOrder(updated);
+      setActiveModal('receipt');
+      toast.success('Order paid successfully');
+    } catch (error) {
+      toast.error('Payment failed');
+    }
+  };
+
+  const currentCustomer = useMemo(() => {
+    return customers.find(c => (c._id || c.id) === selectedCustomerId);
+  }, [customers, selectedCustomerId]);
+
   return (
-    <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-120px)]">
-      {/* Left Side: Products */}
-      <div className="flex-1 flex flex-col gap-6 overflow-hidden">
-        <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="flex gap-2 overflow-x-auto pb-2 w-full md:w-auto">
+    <div className="h-[calc(100vh-80px)] flex gap-5 p-5 bg-gray-50">
+      {/* Left Side: Products Catalog */}
+      <div className="flex-1 flex flex-col gap-5 min-w-0 bg-white rounded-2xl shadow-sm overflow-hidden">
+        {/* Header */}
+        <div className="px-6 pt-6 pb-4 border-b border-gray-100">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">Point of Sale</h1>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                onClick={() => setIsOrdersModalOpen(true)} 
+                size="sm"
+                className="gap-2"
+              >
+                <LayoutGrid size={16} /> {t('orders')}
+              </Button>
+              <Button 
+                onClick={startNewOrder} 
+                size="sm"
+                className="gap-2"
+              >
+                <Plus size={16} /> New Order
+              </Button>
+            </div>
+          </div>
+
+          {/* Search and Categories */}
+          <div className="flex gap-3">
+            <div className="flex-1 relative">
+              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Input 
+                type="text" 
+                placeholder="Search products by name, SKU..." 
+                value={searchTerm} 
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 h-10 text-sm bg-gray-50 border-gray-200 rounded-xl" 
+              />
+            </div>
+            <div className="flex gap-1 p-1 bg-gray-100 rounded-xl">
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-white shadow-sm text-primary' : 'text-gray-400'}`}
+              >
+                <LayoutGrid size={18} />
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`p-2 rounded-lg transition-all ${viewMode === 'list' ? 'bg-white shadow-sm text-primary' : 'text-gray-400'}`}
+              >
+                <List size={18} />
+              </button>
+            </div>
+          </div>
+
+          {/* Category Filter */}
+          <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar mt-3">
             {categories.map(cat => (
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
+                className={`px-4 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-all ${
                   selectedCategory === cat 
-                    ? 'bg-primary text-white shadow-lg shadow-primary/30' 
-                    : 'bg-white dark:bg-dark-surface text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800'
+                    ? 'bg-primary text-white shadow-sm' 
+                    : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
                 }`}
               >
                 {cat}
               </button>
             ))}
           </div>
-          <div className="w-full md:w-64 relative">
-            <input 
-              type="text" 
-              placeholder="Search products..." 
-              value={searchTerm} 
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-white dark:bg-dark-surface border border-gray-100 dark:border-gray-800 rounded-lg text-sm focus:ring-1 focus:ring-primary outline-none" 
-            />
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto pr-2 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredProducts.map(product => (
-            <Card key={product.id} className="group hover:border-primary transition-all cursor-pointer p-0 overflow-hidden flex flex-col" onClick={() => addToCart(product)}>
-              <div className="aspect-square bg-gray-50 dark:bg-gray-800 relative overflow-hidden">
-                <img 
-                  src={product.image || `https://picsum.photos/seed/${product.id}/300/300`} 
-                  alt={product.name} 
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
-                />
-                <div className="absolute top-2 right-2">
-                  <Badge status={product.stock > 0 ? 'Active' : 'Inactive'}>
-                    {product.stock > 0 ? `In Stock: ${product.stock}` : 'Out of Stock'}
-                  </Badge>
+        {/* Products Grid/List */}
+        <div className="flex-1 overflow-y-auto px-6 pb-6">
+          {viewMode === 'grid' ? (
+            <div className="grid grid-cols-1 sm:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+              {filteredProducts.map(product => (
+                <div
+                  key={product.id || product._id}
+                  onClick={() => handleAddToCart(product)}
+                  className="group cursor-pointer bg-white border border-gray-100 rounded-xl hover:shadow-md hover:border-primary/20 transition-all overflow-hidden"
+                >
+                  {/* <div className="aspect-square bg-gray-50 relative overflow-hidden">
+                    <img 
+                      src={product.image || `https://placehold.co/400x400?text=${product.productName?.[0]}`} 
+                      alt={product.productName} 
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                    {product.stock <= 5 && product.stock > 0 && (
+                      <span className="absolute top-2 right-2 text-[10px] font-medium bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full">
+                        Low Stock
+                      </span>
+                    )}
+                    {product.stock === 0 && (
+                      <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                        <span className="text-xs font-bold text-white bg-red-500 px-2 py-1 rounded-full">Out of Stock</span>
+                      </div>
+                    )}
+                  </div> */}
+                  <div className="p-3">
+                    <div className="text-[10px] font-medium text-gray-400 uppercase mb-1">{product.category}</div>
+                    <h3 className="text-sm font-semibold text-gray-900 line-clamp-1 mb-2">{product.productName}</h3>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-lg font-bold text-primary">{product.salesPrice?.toFixed(2)}</span>
+                        <span className="text-[10px] text-gray-400 ml-0.5">SAR</span>
+                      </div>
+                      <div className="w-7 h-7 bg-primary/10 rounded-lg flex items-center justify-center group-hover:bg-primary group-hover:text-white transition-colors">
+                        <Plus size={14} />
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div className="p-4 flex-1 flex flex-col justify-between">
-                <div>
-                  <h3 className="font-bold text-gray-900 dark:text-white mb-1 line-clamp-1">{product.name}</h3>
-                  <p className="text-xs text-gray-500 mb-3">{product.category}</p>
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {filteredProducts.map(product => (
+                <div
+                  key={product.id || product._id}
+                  onClick={() => handleAddToCart(product)}
+                  className="flex items-center gap-4 p-3 bg-white border border-gray-100 rounded-xl hover:shadow-sm hover:border-primary/20 transition-all cursor-pointer"
+                >
+                  {/* <div className="w-12 h-12 rounded-lg bg-gray-50 overflow-hidden flex-shrink-0">
+                    <img 
+                      src={product.image || `https://placehold.co/100x100?text=${product.productName?.[0]}`} 
+                      alt={product.productName} 
+                      className="w-full h-full object-cover"
+                    />
+                  </div> */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-[10px] font-medium text-gray-400 uppercase">{product.category}</span>
+                      {product.stock <= 5 && product.stock > 0 && (
+                        <span className="text-[10px] font-medium text-orange-600">Low Stock</span>
+                      )}
+                    </div>
+                    <h3 className="text-sm font-semibold text-gray-900 truncate">{product.productName}</h3>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-sm font-bold text-primary">{product.salesPrice?.toFixed(2)} SAR</span>
+                      {product.stock > 0 && (
+                        <span className="text-[10px] text-gray-400">{product.stock} in stock</span>
+                      )}
+                    </div>
+                  </div>
+                  <Button size="sm" className="w-8 h-8 rounded-lg p-0 flex-shrink-0">
+                    <Plus size={14} />
+                  </Button>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-lg font-bold text-primary">{product.price} SAR</span>
-                  <button className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-primary flex items-center justify-center hover:bg-primary hover:text-white transition-colors">
-                    <Plus size={18} />
-                  </button>
-                </div>
-              </div>
-            </Card>
-          ))}
+              ))}
+            </div>
+          )}
+
+          {filteredProducts.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <Package size={48} className="text-gray-200 mb-3" />
+              <h3 className="text-base font-semibold text-gray-600">No products found</h3>
+              <p className="text-xs text-gray-400 mt-1">Try adjusting your search</p>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Right Side: Order Summary */}
-      <Card className="w-full lg:w-[400px] flex flex-col p-0 overflow-hidden shadow-xl border-none">
-        <div className="p-6 border-b border-gray-100 dark:border-gray-800">
-          <div className="flex items-center gap-2 mb-6">
-            <ShoppingCart className="text-primary" size={24} />
-            <h2 className="text-xl font-bold dark:text-white">Order Summary</h2>
+      {/* Right Side: Order Cart */}
+      <div className="w-[380px] flex flex-col bg-white rounded-2xl shadow-sm overflow-hidden">
+        {/* Cart Header */}
+        <div className="p-5 border-b border-gray-100">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <ShoppingCart size={18} className="text-primary" />
+              <h2 className="font-semibold text-gray-900">Current Order</h2>
+            </div>
+            {currentOrder?.orderNumber && (
+              <Badge status="Active" variant="outline" className="text-xs">
+                #{currentOrder.orderNumber}
+              </Badge>
+            )}
           </div>
-          
+
+          {/* Customer Select */}
           <div className="relative">
+            <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <select 
               value={selectedCustomerId} 
               onChange={(e) => setSelectedCustomerId(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-800 border-none rounded-xl text-sm focus:ring-1 focus:ring-primary outline-none appearance-none"
+              className="w-full pl-9 pr-8 py-2 text-sm bg-gray-50 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 outline-none appearance-none cursor-pointer"
+              disabled={isLoading}
             >
-              <option value="">Select Customer</option>
-              {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              <option value="">Walk-in Customer</option>
+              {customers.map(c => (
+                <option key={c._id || c.id} value={c._id || c.id}>
+                  {c.customerName || c.name}
+                </option>
+              ))}
             </select>
-            <User size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            {selectedCustomerId && (
+              <button 
+                onClick={() => setSelectedCustomerId('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 hover:bg-gray-200 rounded"
+              >
+                <X size={12} className="text-gray-400" />
+              </button>
+            )}
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          {cart.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center p-8">
-              <div className="w-16 h-16 bg-gray-50 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
-                <ShoppingCart size={32} className="text-gray-300" />
+        {/* Cart Items */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-3">
+          {!currentOrder || currentOrder.items.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-3">
+                <ShoppingCart size={24} className="text-gray-300" />
               </div>
-              <p className="text-gray-500 font-medium">Your cart is empty</p>
-              <p className="text-xs text-gray-400 mt-1">Add some products to start an order</p>
+              <p className="text-sm text-gray-500">Cart is empty</p>
+              <p className="text-xs text-gray-400 mt-1">Add items to get started</p>
             </div>
           ) : (
-            cart.map(item => (
-              <div key={item.id} className="flex gap-3 animate-in slide-in-from-right-4 duration-200">
-                <img src={item.image} alt={item.name} className="w-16 h-16 rounded-lg object-cover bg-gray-50" />
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-bold text-gray-900 dark:text-white truncate">{item.name}</h4>
-                  <p className="text-xs text-primary font-bold mb-2">{item.price} SAR</p>
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
-                      <button onClick={() => updateQuantity(item.id, -1)} className="p-1 hover:text-primary transition-colors"><Minus size={14} /></button>
-                      <span className="w-8 text-center text-xs font-bold">{item.cartQuantity}</span>
-                      <button onClick={() => updateQuantity(item.id, 1)} className="p-1 hover:text-primary transition-colors"><Plus size={14} /></button>
-                    </div>
-                    <button onClick={() => removeFromCart(item.id)} className="p-2 text-gray-400 hover:text-red-500 transition-colors"><Trash2 size={14} /></button>
-                  </div>
+            currentOrder.items.map(item => (
+              <div key={item._id} className="flex gap-3 p-3 bg-gray-50 rounded-xl">
+                <div className="w-10 h-10 rounded-lg bg-white flex items-center justify-center flex-shrink-0">
+                  <Package size={18} className="text-gray-400" />
                 </div>
-                <div className="text-right">
-                  <p className="text-sm font-bold text-gray-900 dark:text-white">{(item.price * item.cartQuantity).toFixed(2)}</p>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-sm font-semibold text-gray-900 truncate">{item.productName}</h4>
+                  <p className="text-xs text-primary font-medium mt-0.5">{item.unitPrice?.toFixed(2)} SAR</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center bg-white rounded-lg border border-gray-200">
+                    <button 
+                      onClick={() => handleUpdateQty(item._id!, item.qty - 1)} 
+                      className="w-6 h-6 flex items-center justify-center rounded-l-lg hover:bg-gray-50 transition-colors"
+                    >
+                      <Minus size={12} />
+                    </button>
+                    <span className="w-7 text-center text-xs font-medium">{item.qty}</span>
+                    <button 
+                      onClick={() => handleUpdateQty(item._id!, item.qty + 1)} 
+                      className="w-6 h-6 flex items-center justify-center rounded-r-lg hover:bg-gray-50 transition-colors"
+                    >
+                      <Plus size={12} />
+                    </button>
+                  </div>
+                  <button 
+                    onClick={() => handleRemoveItem(item._id!)} 
+                    className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </div>
               </div>
             ))
           )}
         </div>
 
-        <div className="p-6 bg-gray-50 dark:bg-gray-800/50 space-y-3">
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-500">Subtotal</span>
-            <span className="font-bold text-gray-900 dark:text-white">{subtotal.toFixed(2)} SAR</span>
+        {/* Cart Summary */}
+        <div className="p-5 border-t border-gray-100 space-y-4">
+          <div className="space-y-2">
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-500">Subtotal</span>
+              <span className="font-medium text-gray-900">{(currentOrder?.subtotal || 0).toFixed(2)} SAR</span>
+            </div>
+            {(currentOrder?.taxAmount || 0) > 0 && (
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-500">Tax ({currentOrder?.tax?.value || 0}{currentOrder?.tax?.type === 'PERCENT' ? '%' : ' SAR'})</span>
+                <span className="font-medium text-gray-900">{(currentOrder?.taxAmount || 0).toFixed(2)} SAR</span>
+              </div>
+            )}
+            {(currentOrder?.discountAmount || 0) > 0 && (
+              <div className="flex justify-between text-xs text-green-600">
+                <span>Discount</span>
+                <span>-{(currentOrder?.discountAmount || 0).toFixed(2)} SAR</span>
+              </div>
+            )}
+            {(currentOrder?.shippingAmount || 0) > 0 && (
+              <div className="flex justify-between text-xs">
+                <span className="text-gray-500">Shipping</span>
+                <span className="font-medium text-gray-900">{(currentOrder?.shippingAmount || 0).toFixed(2)} SAR</span>
+              </div>
+            )}
+            <div className="flex justify-between pt-2 border-t border-gray-100">
+              <span className="text-sm font-semibold text-gray-900">Total</span>
+              <span className="text-lg font-bold text-primary">{(currentOrder?.totalAmount || 0).toFixed(2)} SAR</span>
+            </div>
           </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-500">Tax (15%)</span>
-            <span className="font-bold text-gray-900 dark:text-white">{tax.toFixed(2)} SAR</span>
+
+          {/* Action Buttons */}
+          <div className="grid grid-cols-4 gap-2">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setActiveModal('discount')}
+              className="flex-col gap-1 h-auto py-2 text-xs"
+            >
+              <Tag size={14} /> Discount
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setActiveModal('tax')}
+              className="flex-col gap-1 h-auto py-2 text-xs"
+            >
+              <Percent size={14} /> Tax
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setActiveModal('shipping')}
+              className="flex-col gap-1 h-auto py-2 text-xs"
+            >
+              <Truck size={14} /> Shipping
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={handleHoldOrder}
+              className="flex-col gap-1 h-auto py-2 text-xs"
+            >
+              <Pause size={14} /> Hold
+            </Button>
           </div>
-          <div className="flex justify-between text-lg pt-3 border-t border-gray-200 dark:border-gray-700">
-            <span className="font-bold text-gray-900 dark:text-white">Total</span>
-            <span className="font-bold text-primary text-2xl">{total.toFixed(2)} SAR</span>
+
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={handleCancelOrder}
+              className="px-3 text-red-500 hover:text-red-600 hover:bg-red-50"
+            >
+              <XCircle size={16} />
+            </Button>
+            <Button 
+              fullWidth 
+              disabled={!currentOrder || currentOrder.items.length === 0}
+              onClick={() => setActiveModal('payment')}
+              className="gap-2"
+            >
+              <CreditCard size={16} /> Checkout
+            </Button>
           </div>
-          <Button 
-            fullWidth 
-            size="lg" 
-            className="mt-4 h-14 text-lg font-bold" 
-            disabled={cart.length === 0 || isProcessing}
-            onClick={handleCheckout}
-          >
-            <CreditCard size={20} /> {isProcessing ? t('processing') : t('pay_now')}
-          </Button>
         </div>
-      </Card>
+      </div>
+
+      {/* Modals */}
+      <Dialog isOpen={activeModal === 'discount'} onClose={() => setActiveModal(null)}>
+        <POSValueModal 
+          title="Apply Discount" 
+          label="Discount Value" 
+          initialValue={currentOrder?.discount?.value || 0}
+          initialType={currentOrder?.discount?.type as any || 'PERCENT'}
+          onClose={() => setActiveModal(null)}
+          onApply={handleApplyDiscount}
+        />
+      </Dialog>
+
+      <Dialog isOpen={activeModal === 'tax'} onClose={() => setActiveModal(null)}>
+        <POSValueModal 
+          title="Apply Tax" 
+          label="Tax Rate" 
+          initialValue={currentOrder?.tax?.value || 0}
+          initialType={currentOrder?.tax?.type as any || 'PERCENT'}
+          onClose={() => setActiveModal(null)}
+          onApply={handleApplyTax}
+        />
+      </Dialog>
+
+      <Dialog isOpen={activeModal === 'shipping'} onClose={() => setActiveModal(null)}>
+        <POSValueModal 
+          title="Shipping Cost" 
+          label="Shipping Amount" 
+          initialValue={currentOrder?.shippingAmount || 0}
+          onClose={() => setActiveModal(null)}
+          onApply={(data) => handleApplyShipping({ value: data.value })}
+        />
+      </Dialog>
+
+      <Dialog isOpen={activeModal === 'payment'} onClose={() => setActiveModal(null)} maxWidth="lg">
+        <POSPaymentModal 
+          totalAmount={currentOrder?.totalAmount || 0}
+          onClose={() => setActiveModal(null)}
+          onPay={handlePay}
+        />
+      </Dialog>
+
+      {currentOrder && (
+        <Dialog isOpen={activeModal === 'receipt'} onClose={() => { setActiveModal(null); setCurrentOrder(null); }} maxWidth="sm">
+          <POSReceipt 
+            order={currentOrder} 
+            onClose={() => { setActiveModal(null); setCurrentOrder(null); }} 
+          />
+        </Dialog>
+      )}
+
+      <POSOrdersModal 
+        isOpen={isOrdersModalOpen}
+        onClose={() => setIsOrdersModalOpen(false)}
+        orders={posOrders}
+        onSelectOrder={handleResumeOrder}
+        isLoading={isLoading}
+      />
     </div>
   );
 };

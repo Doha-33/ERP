@@ -78,11 +78,12 @@ export const PromotionModal: React.FC<PromotionModalProps> = ({
     { value: "FREE_SHIPPING", label: t("free_shipping"), icon: Truck },
   ];
 
+  // Updated condition types to match backend expectations
   const conditionTypeOptions = [
     { value: "ORDER_TOTAL", label: t("order_total"), icon: DollarSign },
+    { value: "PRODUCT_QTY", label: t("product_quantity"), icon: Package },
+    { value: "CUSTOMER", label: t("customer"), icon: Users },
     { value: "PROMO_CODE", label: t("promo_code"), icon: Hash },
-    { value: "PRODUCT", label: t("specific_product"), icon: Package },
-    { value: "CUSTOMER_TYPE", label: t("customer_type"), icon: Users },
   ];
 
   const statusOptions = [
@@ -101,7 +102,40 @@ export const PromotionModal: React.FC<PromotionModalProps> = ({
     setIsSubmitting(true);
     
     try {
-      await onSave(formData);
+      // Prepare data according to condition type
+      const dataToSend: any = {
+        promotionName: formData.promotionName,
+        type: formData.type,
+        conditionType: formData.conditionType,
+        benefitDescription: formData.benefitDescription,
+        startDate: formData.startDate || undefined,
+        endDate: formData.endDate || undefined,
+        status: formData.status,
+      };
+
+      // Handle different condition types
+      if (formData.conditionType === "PROMO_CODE") {
+        dataToSend.promoCode = formData.promoCode;
+        dataToSend.value = formData.value;
+      } else if (formData.conditionType === "ORDER_TOTAL") {
+        dataToSend.minOrderTotal = formData.value;
+        dataToSend.value = formData.value;
+      } else if (formData.conditionType === "PRODUCT_QTY") {
+        dataToSend.applicableProducts = formData.applicableProducts;
+        dataToSend.value = formData.value;
+      } else if (formData.conditionType === "CUSTOMER") {
+        dataToSend.value = formData.value;
+      }
+
+      // If promotion type is not percentage or fixed, adjust value handling
+      if (formData.type === "BUY_X_GET_Y") {
+        dataToSend.buyQuantity = formData.value;
+        dataToSend.getQuantity = 1; // You can make this configurable
+      } else if (formData.type === "FREE_SHIPPING") {
+        dataToSend.value = 0;
+      }
+
+      await onSave(dataToSend);
       onClose();
     } catch (error) {
       console.error("Error in form submission:", error);
@@ -125,6 +159,34 @@ export const PromotionModal: React.FC<PromotionModalProps> = ({
 
   const conditionType = formData.conditionType;
   const promotionType = formData.type;
+
+  // Determine if value field should be shown
+  const showValueField = () => {
+    if (promotionType === "FREE_SHIPPING") return false;
+    if (promotionType === "BUY_X_GET_Y") return true;
+    if (conditionType === "PRODUCT_QTY") return true;
+    return true;
+  };
+
+  // Determine value field label
+  const getValueLabel = () => {
+    if (promotionType === "PERCENTAGE") return t("discount_percentage");
+    if (promotionType === "FIXED") return t("discount_amount");
+    if (promotionType === "BUY_X_GET_Y") return t("buy_quantity");
+    if (conditionType === "ORDER_TOTAL") return t("minimum_order_total");
+    if (conditionType === "PRODUCT_QTY") return t("minimum_quantity");
+    return t("value");
+  };
+
+  // Determine value field placeholder
+  const getValuePlaceholder = () => {
+    if (promotionType === "PERCENTAGE") return "10";
+    if (promotionType === "FIXED") return "100";
+    if (promotionType === "BUY_X_GET_Y") return "2";
+    if (conditionType === "ORDER_TOTAL") return "500";
+    if (conditionType === "PRODUCT_QTY") return "3";
+    return "0";
+  };
 
   return (
     <Modal
@@ -182,30 +244,35 @@ export const PromotionModal: React.FC<PromotionModalProps> = ({
             />
           </div>
 
-          {/* Value */}
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-gray-700">
-              {t("value")} <span className="text-red-500">*</span>
-            </label>
-            <Input
-              type="number"
-              step={promotionType === "PERCENTAGE" ? "1" : "0.01"}
-              value={formData.value}
-              onChange={(e) => handleChange("value", Number(e.target.value))}
-              placeholder={promotionType === "PERCENTAGE" ? "10" : "100"}
-              required
-              fullWidth
-            />
-            {promotionType === "PERCENTAGE" && (
-              <p className="text-xs text-gray-500">{t("percentage_discount")}</p>
-            )}
-            {promotionType === "FIXED" && (
-              <p className="text-xs text-gray-500">{t("fixed_amount_egp")}</p>
-            )}
-            {promotionType === "BUY_X_GET_Y" && (
-              <p className="text-xs text-gray-500">{t("buy_x_get_y_description")}</p>
-            )}
-          </div>
+          {/* Value - conditional based on promotion type and condition type */}
+          {showValueField() && (
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-gray-700">
+                {getValueLabel()} <span className="text-red-500">*</span>
+              </label>
+              <Input
+                type="number"
+                step={promotionType === "PERCENTAGE" ? "1" : "0.01"}
+                value={formData.value}
+                onChange={(e) => handleChange("value", Number(e.target.value))}
+                placeholder={getValuePlaceholder()}
+                required={showValueField()}
+                fullWidth
+              />
+              {promotionType === "PERCENTAGE" && (
+                <p className="text-xs text-gray-500">{t("percentage_discount")}</p>
+              )}
+              {promotionType === "FIXED" && (
+                <p className="text-xs text-gray-500">{t("fixed_amount_egp")}</p>
+              )}
+              {promotionType === "BUY_X_GET_Y" && (
+                <p className="text-xs text-gray-500">{t("buy_x_get_y_description")}</p>
+              )}
+              {conditionType === "ORDER_TOTAL" && (
+                <p className="text-xs text-gray-500">{t("minimum_order_total_description")}</p>
+              )}
+            </div>
+          )}
 
           {/* Condition Type */}
           <div className="space-y-1">
@@ -214,14 +281,23 @@ export const PromotionModal: React.FC<PromotionModalProps> = ({
             </label>
             <Select
               value={formData.conditionType}
-              onChange={(e) => handleChange("conditionType", e.target.value)}
+              onChange={(e) => {
+                handleChange("conditionType", e.target.value);
+                // Reset relevant fields when changing condition type
+                if (e.target.value !== "PROMO_CODE") {
+                  handleChange("promoCode", "");
+                }
+                if (e.target.value !== "PRODUCT_QTY") {
+                  handleChange("applicableProducts", []);
+                }
+              }}
               options={conditionTypeOptions}
               required
               fullWidth
             />
           </div>
 
-          {/* Condition Value based on type */}
+          {/* Promo Code field */}
           {conditionType === "PROMO_CODE" && (
             <div className="space-y-1">
               <label className="text-sm font-medium text-gray-700">
@@ -229,26 +305,12 @@ export const PromotionModal: React.FC<PromotionModalProps> = ({
               </label>
               <Input
                 value={formData.promoCode}
-                onChange={(e) => handleChange("promoCode", e.target.value)}
+                onChange={(e) => handleChange("promoCode", e.target.value.toUpperCase())}
                 placeholder="SUMMER2024"
                 required
                 fullWidth
               />
-            </div>
-          )}
-
-          {conditionType === "ORDER_TOTAL" && (
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">
-                {t("minimum_order_total")} (EGP)
-              </label>
-              <Input
-                type="number"
-                value={formData.value}
-                onChange={(e) => handleChange("value", Number(e.target.value))}
-                placeholder="500"
-                fullWidth
-              />
+              <p className="text-xs text-gray-500">{t("customers_must_enter_this_code")}</p>
             </div>
           )}
         </div>
@@ -294,26 +356,37 @@ export const PromotionModal: React.FC<PromotionModalProps> = ({
           </div>
         </div>
 
-        {/* Applicable Products (for PRODUCT condition) */}
-        {conditionType === "PRODUCT" && (
+        {/* Applicable Products (for PRODUCT_QTY condition) */}
+        {conditionType === "PRODUCT_QTY" && (
           <div className="border-t border-gray-100 pt-4">
             <h3 className="text-md font-semibold text-gray-900 mb-4 flex items-center gap-2">
               <Package size={18} className="text-indigo-600" />
-              {t("applicable_products")}
+              {t("applicable_products")} <span className="text-red-500">*</span>
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-h-48 overflow-y-auto p-2 bg-gray-50 rounded-lg">
-              {productOptions.map(product => (
-                <label key={product.value} className="flex items-center gap-2 p-2 hover:bg-gray-100 rounded cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.applicableProducts.includes(product.value)}
-                    onChange={() => handleProductToggle(product.value)}
-                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                  />
-                  <span className="text-sm text-gray-700">{product.label}</span>
-                </label>
-              ))}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-h-48 overflow-y-auto p-3 bg-gray-50 rounded-lg">
+              {productOptions.length > 0 ? (
+                productOptions.map(product => (
+                  <label key={product.value} className="flex items-center gap-2 p-2 hover:bg-white rounded cursor-pointer transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={formData.applicableProducts.includes(product.value)}
+                      onChange={() => handleProductToggle(product.value)}
+                      className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span className="text-sm text-gray-700">{product.label}</span>
+                  </label>
+                ))
+              ) : (
+                <p className="text-sm text-gray-500 col-span-full text-center py-4">
+                  {t("no_products_available")}
+                </p>
+              )}
             </div>
+            {formData.applicableProducts.length === 0 && (
+              <p className="text-xs text-amber-600 mt-2">
+                {t("please_select_at_least_one_product")}
+              </p>
+            )}
           </div>
         )}
 

@@ -22,7 +22,7 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
   isLoading = false,
 }) => {
   const { t } = useTranslation();
-  const { currencies, companies } = useData();
+  const { currencies } = useData();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     bankName: "",
@@ -30,9 +30,7 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
     accountNumber: "",
     iban: "",
     currency: "EGP",
-    branch: "",
-    company: "",
-    currentBalance: 0,
+    balance: 0,
     isActive: true,
   });
 
@@ -44,9 +42,7 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
         accountNumber: accountToEdit.accountNumber || "",
         iban: accountToEdit.iban || "",
         currency: accountToEdit.currency || "EGP",
-        branch: accountToEdit.branch || "",
-        company: accountToEdit.company || "",
-        currentBalance: accountToEdit.currentBalance || 0,
+        balance: accountToEdit.balance || 0,
         isActive: accountToEdit.isActive !== undefined ? accountToEdit.isActive : true,
       });
     } else if (!accountToEdit && isOpen) {
@@ -56,9 +52,7 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
         accountNumber: "",
         iban: "",
         currency: "EGP",
-        branch: "",
-        company: "",
-        currentBalance: 0,
+        balance: 0,
         isActive: true,
       });
     }
@@ -69,10 +63,6 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
     label: `${c.name} (${c.code})`,
   }));
 
-  const companyOptions = companies.map(c => ({
-    value: c.name,
-    label: c.name,
-  }));
 
   const statusOptions = [
     { value: "true", label: t("active") },
@@ -111,20 +101,6 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
     >
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-          {/* Company */}
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-gray-700">
-              {t("company")} <span className="text-red-500">*</span>
-            </label>
-            <Select
-              value={formData.company}
-              onChange={(e) => handleChange("company", e.target.value)}
-              options={companyOptions}
-              placeholder={t("select_company")}
-              required
-              fullWidth
-            />
-          </div>
 
           {/* Account Name */}
           <div className="space-y-1">
@@ -181,19 +157,6 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
             />
           </div>
 
-          {/* Branch */}
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-gray-700">
-              {t("branch")}
-            </label>
-            <Input
-              value={formData.branch}
-              onChange={(e) => handleChange("branch", e.target.value)}
-              placeholder={t("enter_branch")}
-              fullWidth
-            />
-          </div>
-
           {/* Currency */}
           <div className="space-y-1">
             <label className="text-sm font-medium text-gray-700">
@@ -216,7 +179,7 @@ export const BankAccountModal: React.FC<BankAccountModalProps> = ({
             <Input
               type="number"
               step="0.01"
-              value={formData.currentBalance}
+              value={formData.balance}
               onChange={(e) => handleChange("currentBalance", Number(e.target.value))}
               placeholder="0.00"
               required

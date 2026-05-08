@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Search, Edit2, Trash2, Tag, Percent, DollarSign, Gift, Truck, Calendar, Filter, X } from "lucide-react";
+import { Plus, Search, Edit2, Trash2, Tag, Percent, DollarSign, Gift, Truck, Calendar, Filter, X, Clock } from "lucide-react";
 import { Card, Button, Input, Badge, ExportDropdown } from "../../components/ui/Common";
 import { Table, Column } from "../../components/ui/Table";
 import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
@@ -11,7 +11,7 @@ import { toast } from "sonner";
 
 export const Promotions: React.FC = () => {
   const { t } = useTranslation();
-  const { promotions, addPromotion, updatePromotion, deletePromotion } = useData();
+  const { promotions, addPromotion, updatePromotion, deletePromotion, fetchPromotions } = useData();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPromotion, setEditingPromotion] = useState<Promotion | null>(null);
@@ -23,30 +23,76 @@ export const Promotions: React.FC = () => {
   const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSave = async (promotion: Partial<Promotion>) => {
+  // Helper function to extract ID
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "object") {
+      return value._id || value.id || "";
+    }
+    return value;
+  }, []);
+
+  const handleSave = async (promotionData: Partial<Promotion>) => {
     try {
       setIsLoading(true);
+      
       if (editingPromotion) {
-        await updatePromotion({ ...promotion, _id: editingPromotion._id, id: editingPromotion.id } as Promotion);
+        // Get the ID from editingPromotion
+        const promotionId = extractId(editingPromotion);
+        
+        if (!promotionId) {
+          toast.error(t("promotion_id_missing"));
+          return;
+        }
+        
+        // Create update data with ID
+        const updateData = {
+          ...promotionData,
+          _id: promotionId,
+          id: promotionId
+        } as Promotion;
+        
+        console.log("Updating promotion with ID:", promotionId, updateData);
+        await updatePromotion(updateData);
         toast.success(t("promotion_updated_successfully"));
       } else {
-        await addPromotion(promotion as Promotion);
+        await addPromotion(promotionData as Promotion);
         toast.success(t("promotion_created_successfully"));
       }
+      
+      await fetchPromotions(); // Refresh list
       setIsModalOpen(false);
       setEditingPromotion(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving promotion:", error);
-      toast.error(t("failed_to_save_promotion"));
+      const message = error?.response?.data?.message || error?.message || t("failed_to_save_promotion");
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleEdit = useCallback((promotion: Promotion) => {
-    setEditingPromotion(promotion);
+    // Extract ID correctly from the promotion object
+    const promotionId = extractId(promotion);
+    
+    if (!promotionId) {
+      console.error("Promotion ID not found", promotion);
+      toast.error(t("promotion_id_not_found"));
+      return;
+    }
+    
+    // Create a clean promotion object with proper ID
+    const promotionToEdit: Promotion = {
+      ...promotion,
+      _id: promotionId,
+      id: promotionId,
+    };
+    
+    console.log("Editing promotion:", promotionToEdit);
+    setEditingPromotion(promotionToEdit);
     setIsModalOpen(true);
-  }, []);
+  }, [extractId, t]);
 
   const handleDelete = useCallback((id: string) => {
     setDeleteId(id);
@@ -59,11 +105,12 @@ export const Promotions: React.FC = () => {
         toast.success(t("promotion_deleted_successfully"));
         setDeleteId(null);
         setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+        await fetchPromotions();
       } catch (error) {
         toast.error(t("failed_to_delete_promotion"));
       }
     }
-  }, [deleteId, deletePromotion, t]);
+  }, [deleteId, deletePromotion, fetchPromotions, t]);
 
   const handleBulkDelete = async () => {
     try {
@@ -72,6 +119,7 @@ export const Promotions: React.FC = () => {
       toast.success(t("promotions_deleted_successfully", { count: selectedIds.length }));
       setSelectedIds([]);
       setIsBulkConfirmOpen(false);
+      await fetchPromotions();
     } catch (error) {
       console.error("Bulk delete failed", error);
       toast.error(t("failed_to_delete_promotions"));
@@ -212,27 +260,30 @@ export const Promotions: React.FC = () => {
       {
         header: t("actions"),
         className: "text-center",
-        render: (p) => (
-          <div className="flex items-center justify-center gap-2">
-            <button
-              onClick={() => handleEdit(p)}
-              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("edit")}
-            >
-              <Edit2 size={16} />
-            </button>
-            <button
-              onClick={() => handleDelete(p._id || p.id)}
-              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("delete")}
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-        )
+        render: (p) => {
+          const promotionId = extractId(p);
+          return (
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => handleEdit(p)}
+                className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("edit")}
+              >
+                <Edit2 size={16} />
+              </button>
+              <button
+                onClick={() => handleDelete(promotionId)}
+                className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("delete")}
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          );
+        }
       }
     ],
-    [t, handleEdit, handleDelete]
+    [t, handleEdit, handleDelete, extractId]
   );
 
   return (
@@ -357,15 +408,15 @@ export const Promotions: React.FC = () => {
       </div>
 
       {/* Table */}
-        <Table
-          data={filteredPromotions}
-          columns={columns}
-          keyExtractor={(item) => item._id || item.id}
-          isLoading={isLoading}
-          selectable
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-        />
+      <Table
+        data={filteredPromotions}
+        columns={columns}
+        keyExtractor={(item) => extractId(item)}
+        isLoading={isLoading}
+        selectable
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+      />
 
       {/* Modal */}
       <PromotionModal
@@ -399,6 +450,3 @@ export const Promotions: React.FC = () => {
     </div>
   );
 };
-
-// Add missing imports
-import { Clock } from "lucide-react";

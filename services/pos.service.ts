@@ -11,8 +11,8 @@ const posService = {
     return res.data.data;
   },
 
-  async createPosOrder() {
-    const res = await apiClient.post('/pos/orders');
+  async createPosOrder(data?: any) {
+    const res = await apiClient.post('/pos/orders', data);
     return res.data.data;
   },
 
@@ -46,8 +46,8 @@ const posService = {
     return res.data.data;
   },
 
-  async holdOrder(orderId: string) {
-    const res = await apiClient.post(`/pos/orders/${orderId}/hold`);
+  async holdOrder(orderId: string, data?: any) {
+    const res = await apiClient.post(`/pos/orders/${orderId}/hold`, data);
     return res.data.data;
   },
 
