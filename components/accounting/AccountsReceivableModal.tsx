@@ -16,6 +16,9 @@ const arSchema = z.object({
   paidAmount: z.number().min(0, 'Paid amount must be positive'),
   status: z.enum(['PENDING', 'PARTIAL', 'PAID']),
   notes: z.string().optional(),
+}).refine((data) => data.paidAmount <= data.amount, {
+  message: 'Paid amount cannot exceed total amount',
+  path: ['paidAmount'],
 });
 
 type ARFormData = z.infer<typeof arSchema>;
@@ -33,25 +36,46 @@ export const AccountsReceivableModal: React.FC<ARModalProps> = ({
   onSave,
   arToEdit,
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isRTL = i18n.language === 'ar';
+  
   const {
     register,
     handleSubmit,
     reset,
-    formState: { errors },
+    watch,
+    setValue,
+    formState: { errors, isSubmitting },
   } = useForm<ARFormData>({
     resolver: zodResolver(arSchema),
     defaultValues: {
       customerName: '',
       invoiceNumber: '',
       invoiceDate: new Date().toISOString().split('T')[0],
-      dueDate: new Date().toISOString().split('T')[0],
+      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       amount: 0,
       paidAmount: 0,
       status: 'PENDING',
       notes: '',
     },
   });
+
+  const amount = watch('amount');
+  const paidAmount = watch('paidAmount');
+  const status = watch('status');
+
+  // Auto-calculate status based on amounts
+  useEffect(() => {
+    if (amount > 0 && !arToEdit) {
+      if (paidAmount === 0) {
+        setValue('status', 'PENDING');
+      } else if (paidAmount >= amount) {
+        setValue('status', 'PAID');
+      } else if (paidAmount > 0 && paidAmount < amount) {
+        setValue('status', 'PARTIAL');
+      }
+    }
+  }, [amount, paidAmount, setValue, arToEdit]);
 
   useEffect(() => {
     if (arToEdit) {
@@ -68,7 +92,7 @@ export const AccountsReceivableModal: React.FC<ARModalProps> = ({
     } else {
       reset({
         customerName: '',
-        invoiceNumber: '',
+        invoiceNumber: `INV-${Date.now().toString().slice(-6)}`,
         invoiceDate: new Date().toISOString().split('T')[0],
         dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         amount: 0,
@@ -90,33 +114,40 @@ export const AccountsReceivableModal: React.FC<ARModalProps> = ({
     { value: 'PAID', label: t('paid') },
   ];
 
+  const remainingAmount = amount - paidAmount;
+
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
       title={arToEdit ? t('edit_accounts_receivable') : t('add_accounts_receivable')}
-      className="max-w-md"
+      className="w-full max-w-md mx-4 sm:mx-auto"
     >
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" dir={isRTL ? "rtl" : "ltr"}>
         <Input
           label={t('customer_name')}
           {...register('customerName')}
           error={errors.customerName?.message}
           required
+          fullWidth
         />
+        
         <Input
           label={t('invoice_number')}
           {...register('invoiceNumber')}
           error={errors.invoiceNumber?.message}
           required
+          fullWidth
         />
-        <div className="grid grid-cols-2 gap-4">
+        
+        <div className="flex flex-col sm:grid sm:grid-cols-2 gap-4">
           <Input
             label={t('invoice_date')}
             type="date"
             {...register('invoiceDate')}
             error={errors.invoiceDate?.message}
             required
+            fullWidth
           />
           <Input
             label={t('due_date')}
@@ -124,9 +155,11 @@ export const AccountsReceivableModal: React.FC<ARModalProps> = ({
             {...register('dueDate')}
             error={errors.dueDate?.message}
             required
+            fullWidth
           />
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        
+        <div className="flex flex-col sm:grid sm:grid-cols-2 gap-4">
           <Input
             label={t('amount')}
             type="number"
@@ -134,6 +167,7 @@ export const AccountsReceivableModal: React.FC<ARModalProps> = ({
             {...register('amount', { valueAsNumber: true })}
             error={errors.amount?.message}
             required
+            fullWidth
           />
           <Input
             label={t('paid_amount')}
@@ -141,27 +175,44 @@ export const AccountsReceivableModal: React.FC<ARModalProps> = ({
             step="0.01"
             {...register('paidAmount', { valueAsNumber: true })}
             error={errors.paidAmount?.message}
-            required
+            fullWidth
           />
         </div>
+
+        {/* Show remaining amount */}
+        {amount > 0 && (
+          <div className="p-3 bg-gray-50 rounded-lg">
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">{t('remaining_balance')}:</span>
+              <span className={`font-semibold ${remainingAmount > 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                {remainingAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              </span>
+            </div>
+          </div>
+        )}
+
         <Select
           label={t('status')}
           options={statusOptions}
           {...register('status')}
           error={errors.status?.message}
           required
+          fullWidth
         />
+        
         <TextArea
           label={t('notes')}
           {...register('notes')}
           error={errors.notes?.message}
+          fullWidth
+          rows={3}
         />
 
-        <div className="flex justify-end gap-3 mt-6">
-          <Button variant="outline" type="button" onClick={onClose}>
+        <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 mt-6">
+          <Button variant="outline" type="button" onClick={onClose} className="w-full sm:w-auto">
             {t('cancel')}
           </Button>
-          <Button type="submit">
+          <Button type="submit" isLoading={isSubmitting} className="w-full sm:w-auto justify-center">
             {t('save')}
           </Button>
         </div>

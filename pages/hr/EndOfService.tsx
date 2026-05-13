@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Search, Edit2, Trash2, Calendar, FileText, Filter, X, UserMinus, CheckCircle2, XCircle, History, DollarSign } from "lucide-react";
+import { Plus, Search, Edit2, Trash2, Calendar, FileText, Filter, X, UserMinus, CheckCircle2, XCircle, History, DollarSign, Clock } from "lucide-react";
 import { Card, Button, Input, Badge, ExportDropdown } from "../../components/ui/Common";
 import { Table, Column } from "../../components/ui/Table";
 import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
@@ -21,7 +21,8 @@ export const EndOfServicePage: React.FC = () => {
     approveEndOfService, 
     rejectEndOfService,
     actionHistory,
-    fetchActionHistory 
+    fetchActionHistory,
+    fetchEndOfServices
   } = useData();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -38,30 +39,74 @@ export const EndOfServicePage: React.FC = () => {
   const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSave = async (eos: Partial<EndOfService>) => {
+  // Helper function to extract ID
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+      if (value._id && typeof value._id === "string") return value._id;
+      if (value.id && typeof value.id === "string") return value.id;
+    }
+    return "";
+  }, []);
+
+  const handleSave = async (eosData: Partial<EndOfService>) => {
     try {
       setIsLoading(true);
+      
       if (editingEos) {
-        await updateEndOfService({ ...editingEos, ...eos, _id: editingEos._id } as EndOfService);
+        const eosId = extractId(editingEos);
+        
+        if (!eosId) {
+          toast.error(t("end_of_service_id_missing"));
+          return;
+        }
+        
+        const updateData = {
+          ...eosData,
+          _id: eosId,
+          id: eosId
+        } as EndOfService;
+        
+        console.log("Updating end of service with ID:", eosId, updateData);
+        await updateEndOfService(updateData);
         toast.success(t("end_of_service_updated_successfully"));
       } else {
-        await addEndOfService(eos as EndOfService);
+        await addEndOfService(eosData as EndOfService);
         toast.success(t("end_of_service_created_successfully"));
       }
+      
+      await fetchEndOfServices();
       setIsModalOpen(false);
       setEditingEos(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving end of service:", error);
-      toast.error(t("failed_to_save_end_of_service"));
+      const message = error?.response?.data?.message || error?.message || t("failed_to_save_end_of_service");
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleEdit = useCallback((eos: EndOfService) => {
-    setEditingEos(eos);
+    const eosId = extractId(eos);
+    
+    if (!eosId) {
+      console.error("End of service ID not found", eos);
+      toast.error(t("end_of_service_id_not_found"));
+      return;
+    }
+    
+    const eosToEdit: EndOfService = {
+      ...eos,
+      _id: eosId,
+      id: eosId,
+    };
+    
+    console.log("Editing end of service:", eosToEdit);
+    setEditingEos(eosToEdit);
     setIsModalOpen(true);
-  }, []);
+  }, [extractId, t]);
 
   const handleDelete = useCallback((id: string) => {
     setDeleteId(id);
@@ -74,20 +119,22 @@ export const EndOfServicePage: React.FC = () => {
         toast.success(t("end_of_service_deleted_successfully"));
         setDeleteId(null);
         setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+        await fetchEndOfServices();
       } catch (error) {
         toast.error(t("failed_to_delete_end_of_service"));
       }
     }
-  }, [deleteId, deleteEndOfService, t]);
+  }, [deleteId, deleteEndOfService, fetchEndOfServices, t]);
 
   const handleApprove = useCallback(async (id: string) => {
     try {
       await approveEndOfService(id);
       toast.success(t("end_of_service_approved_successfully"));
+      await fetchEndOfServices();
     } catch (error) {
       toast.error(t("failed_to_approve_end_of_service"));
     }
-  }, [approveEndOfService, t]);
+  }, [approveEndOfService, fetchEndOfServices, t]);
 
   const handleReject = useCallback((id: string) => {
     setRejectId(id);
@@ -99,15 +146,16 @@ export const EndOfServicePage: React.FC = () => {
         await rejectEndOfService(rejectId, reason);
         toast.success(t("end_of_service_rejected_successfully"));
         setRejectId(null);
+        await fetchEndOfServices();
       } catch (error) {
         toast.error(t("failed_to_reject_end_of_service"));
       }
     }
-  }, [rejectId, rejectEndOfService, t]);
+  }, [rejectId, rejectEndOfService, fetchEndOfServices, t]);
 
   const handleShowHistory = async (id: string) => {
     await fetchActionHistory();
-    const filteredHistory = actionHistory.filter(h => h.requestId === id);
+    const filteredHistory = actionHistory.filter(h => extractId(h.requestId) === id);
     setSelectedHistory(filteredHistory);
     setIsHistoryOpen(true);
   };
@@ -115,10 +163,16 @@ export const EndOfServicePage: React.FC = () => {
   const handleBulkDelete = async () => {
     try {
       setIsLoading(true);
-      await Promise.all(selectedIds.map(id => deleteEndOfService(id)));
-      toast.success(t("end_of_services_deleted_successfully", { count: selectedIds.length }));
+      const validIds = selectedIds.filter(id => id && typeof id === 'string');
+      if (validIds.length === 0) {
+        toast.error(t("no_valid_ids_selected"));
+        return;
+      }
+      await Promise.all(validIds.map(id => deleteEndOfService(id)));
+      toast.success(t("end_of_services_deleted_successfully", { count: validIds.length }));
       setSelectedIds([]);
       setIsBulkConfirmOpen(false);
+      await fetchEndOfServices();
     } catch (error) {
       console.error("Bulk delete failed", error);
       toast.error(t("failed_to_delete_end_of_services"));
@@ -132,12 +186,18 @@ export const EndOfServicePage: React.FC = () => {
     if (typeof eos.employeeId === "object" && eos.employeeId !== null) {
       return (eos.employeeId as any)?.fullName || "-";
     }
+    if (typeof eos.employeeInfo === "object" && eos.employeeInfo !== null) {
+      return (eos.employeeInfo as any)?.fullName || "-";
+    }
     return eos.employeeName || "-";
   };
 
   const getEmployeeCode = (eos: EndOfService): string => {
     if (typeof eos.employeeId === "object" && eos.employeeId !== null) {
       return (eos.employeeId as any)?.employeeCode || "-";
+    }
+    if (typeof eos.employeeInfo === "object" && eos.employeeInfo !== null) {
+      return (eos.employeeInfo as any)?.employeeCode || "-";
     }
     return eos.empCode || "-";
   };
@@ -177,7 +237,11 @@ export const EndOfServicePage: React.FC = () => {
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "-";
-    return new Date(dateStr).toLocaleDateString();
+    try {
+      return new Date(dateStr).toLocaleDateString();
+    } catch {
+      return "-";
+    }
   };
 
   const statusOptions = [
@@ -191,17 +255,22 @@ export const EndOfServicePage: React.FC = () => {
     () => [
       {
         header: t("employee"),
-        render: (e) => (
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
-              <UserMinus size={18} className="text-indigo-600" />
+        render: (e) => {
+          const employeeName = getEmployeeName(e);
+          const employeeCode = getEmployeeCode(e);
+          const initial = employeeName.charAt(0).toUpperCase();
+          return (
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
+                <UserMinus size={18} className="text-indigo-600" />
+              </div>
+              <div className="flex flex-col">
+                <span className="font-medium text-gray-900">{employeeName}</span>
+                <span className="text-xs text-gray-500">{employeeCode}</span>
+              </div>
             </div>
-            <div className="flex flex-col">
-              <span className="font-medium text-gray-900">{getEmployeeName(e)}</span>
-              <span className="text-xs text-gray-500">{getEmployeeCode(e)}</span>
-            </div>
-          </div>
-        )
+          );
+        }
       },
       {
         header: t("last_working_day"),
@@ -213,9 +282,15 @@ export const EndOfServicePage: React.FC = () => {
         )
       },
       {
+        header: t("eos_type"),
+        render: (e) => (
+          <span className="text-sm text-gray-600">{e.eosType || e.reasonForLeaving || "-"}</span>
+        )
+      },
+      {
         header: t("reason"),
         render: (e) => (
-          <span className="text-sm text-gray-600">{e.reasonForLeaving || "-"}</span>
+          <span className="text-sm text-gray-600">{e.reason || "-"}</span>
         )
       },
       {
@@ -234,53 +309,61 @@ export const EndOfServicePage: React.FC = () => {
       {
         header: t("actions"),
         className: "text-center",
-        render: (e) => (
-          <div className="flex items-center justify-center gap-2">
-            {e.status === "Pending" && (
-              <>
-                <button
-                  onClick={() => handleApprove(e._id)}
-                  className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg border border-green-200 transition-colors"
-                  title={t("approve")}
-                >
-                  <CheckCircle2 size={16} />
-                </button>
-                <button
-                  onClick={() => handleReject(e._id)}
-                  className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg border border-red-200 transition-colors"
-                  title={t("reject")}
-                >
-                  <XCircle size={16} />
-                </button>
-              </>
-            )}
-            <button
-              onClick={() => handleShowHistory(e._id)}
-              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("history")}
-            >
-              <History size={16} />
-            </button>
-            <button
-              onClick={() => handleEdit(e)}
-              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("edit")}
-            >
-              <Edit2 size={16} />
-            </button>
-            <button
-              onClick={() => handleDelete(e._id)}
-              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("delete")}
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-        )
+        render: (e) => {
+          const eosId = extractId(e);
+          return (
+            <div className="flex items-center justify-center gap-2">
+              {e.status === "Pending" && (
+                <>
+                  <button
+                    onClick={() => handleApprove(eosId)}
+                    className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg border border-green-200 transition-colors"
+                    title={t("approve")}
+                  >
+                    <CheckCircle2 size={16} />
+                  </button>
+                  <button
+                    onClick={() => handleReject(eosId)}
+                    className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg border border-red-200 transition-colors"
+                    title={t("reject")}
+                  >
+                    <XCircle size={16} />
+                  </button>
+                </>
+              )}
+              <button
+                onClick={() => handleShowHistory(eosId)}
+                className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("history")}
+              >
+                <History size={16} />
+              </button>
+              <button
+                onClick={() => handleEdit(e)}
+                className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("edit")}
+              >
+                <Edit2 size={16} />
+              </button>
+              <button
+                onClick={() => handleDelete(eosId)}
+                className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("delete")}
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          );
+        }
       }
     ],
-    [t, handleEdit, handleDelete, handleApprove, handleReject, handleShowHistory]
+    [t, handleEdit, handleDelete, handleApprove, handleReject, handleShowHistory, extractId]
   );
+
+  const getKeyExtractor = useCallback((item: EndOfService) => {
+    const id = extractId(item);
+    return id || Math.random().toString();
+  }, [extractId]);
 
   return (
     <div className="space-y-6">
@@ -400,15 +483,15 @@ export const EndOfServicePage: React.FC = () => {
       </div>
 
       {/* Table */}
-        <Table
-          data={filteredEos}
-          columns={columns}
-          keyExtractor={(item) => item._id}
-          isLoading={isLoading}
-          selectable
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-        />
+      <Table
+        data={filteredEos}
+        columns={columns}
+        keyExtractor={getKeyExtractor}
+        isLoading={isLoading}
+        selectable
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+      />
 
       {/* Modal */}
       <EndOfServiceModal
@@ -456,6 +539,3 @@ export const EndOfServicePage: React.FC = () => {
     </div>
   );
 };
-
-// Add missing import
-import { Clock } from "lucide-react";

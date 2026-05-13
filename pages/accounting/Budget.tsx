@@ -31,7 +31,8 @@ import { toast } from "sonner";
 
 export const Budget: React.FC = () => {
   const { t } = useTranslation();
-  const { budgets, accountingLoading, addBudget, updateBudget, deleteBudget } = useData();
+  const { budgets, accountingLoading, addBudget, updateBudget, deleteBudget, fetchBudgets } =
+    useData();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -44,30 +45,79 @@ export const Budget: React.FC = () => {
   const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSave = async (budget: Partial<BudgetType>) => {
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+      if (value._id && typeof value._id === "string") return value._id;
+      if (value.id && typeof value.id === "string") return value.id;
+    }
+    return "";
+  }, []);
+
+  const handleSave = async (budgetData: Partial<BudgetType>) => {
     try {
       setIsLoading(true);
+
       if (editingBudget) {
-        await updateBudget(editingBudget._id || editingBudget.id, budget);
+        const budgetId = extractId(editingBudget);
+
+        if (!budgetId) {
+          toast.error(t("budget_id_missing"));
+          return;
+        }
+
+        const updateData = {
+          ...budgetData,
+          _id: budgetId,
+          id: budgetId,
+        } as BudgetType;
+
+        console.log("Updating budget with ID:", budgetId, updateData);
+        await updateBudget(budgetId, budgetData);
         toast.success(t("budget_updated_successfully"));
       } else {
-        await addBudget(budget);
+        await addBudget(budgetData);
         toast.success(t("budget_created_successfully"));
       }
+
+      await fetchBudgets();
       setIsModalOpen(false);
       setEditingBudget(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving budget:", error);
-      toast.error(t("failed_to_save_budget"));
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        t("failed_to_save_budget");
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleEdit = useCallback((budget: BudgetType) => {
-    setEditingBudget(budget);
-    setIsModalOpen(true);
-  }, []);
+  const handleEdit = useCallback(
+    (budget: BudgetType) => {
+      const budgetId = extractId(budget);
+
+      if (!budgetId) {
+        console.error("Budget ID not found", budget);
+        toast.error(t("budget_id_not_found"));
+        return;
+      }
+
+      const budgetToEdit: BudgetType = {
+        ...budget,
+        _id: budgetId,
+        id: budgetId,
+      };
+
+      console.log("Editing budget:", budgetToEdit);
+      setEditingBudget(budgetToEdit);
+      setIsModalOpen(true);
+    },
+    [extractId, t],
+  );
 
   const handleDelete = useCallback((id: string) => {
     setBudgetIdToDelete(id);
@@ -81,7 +131,9 @@ export const Budget: React.FC = () => {
         toast.success(t("budget_deleted_successfully"));
         setBudgetIdToDelete(null);
         setIsDeleteModalOpen(false);
-        setSelectedIds(prev => prev.filter(sid => sid !== budgetIdToDelete));
+        setSelectedIds((prev) =>
+          prev.filter((sid) => sid !== budgetIdToDelete),
+        );
       } catch (error) {
         console.error("Error deleting budget:", error);
         toast.error(t("failed_to_delete_budget"));
@@ -92,8 +144,10 @@ export const Budget: React.FC = () => {
   const handleBulkDelete = async () => {
     try {
       setIsLoading(true);
-      await Promise.all(selectedIds.map(id => deleteBudget(id)));
-      toast.success(t("budgets_deleted_successfully", { count: selectedIds.length }));
+      await Promise.all(selectedIds.map((id) => deleteBudget(id)));
+      toast.success(
+        t("budgets_deleted_successfully", { count: selectedIds.length }),
+      );
       setSelectedIds([]);
       setIsBulkConfirmOpen(false);
     } catch (error) {
@@ -105,7 +159,10 @@ export const Budget: React.FC = () => {
   };
 
   const getStatusBadge = (status: string) => {
-    const statusMap: Record<string, { variant: "success" | "danger" | "warning" | "info"; label: string }> = {
+    const statusMap: Record<
+      string,
+      { variant: "success" | "danger" | "warning" | "info"; label: string }
+    > = {
       OPEN: { variant: "success", label: t("open") },
       CLOSED: { variant: "danger", label: t("closed") },
       FROZEN: { variant: "warning", label: t("frozen") },
@@ -122,24 +179,31 @@ export const Budget: React.FC = () => {
 
   // Apply filters
   const filteredBudgets = useMemo(() => {
-    return budgets.filter(b => {
-      const matchesSearch = 
+    return budgets.filter((b) => {
+      const matchesSearch =
         b.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         b.departmentName?.toLowerCase().includes(searchTerm.toLowerCase());
-      
+
       const matchesYear = !yearFilter || b.fiscalYear === parseInt(yearFilter);
       const matchesStatus = !statusFilter || b.status === statusFilter;
-      
+
       return matchesSearch && matchesYear && matchesStatus;
     });
   }, [budgets, searchTerm, yearFilter, statusFilter]);
 
   // Statistics
-  const totalAllocated = filteredBudgets.reduce((sum, b) => sum + (b.allocatedAmount || 0), 0);
-  const totalSpent = filteredBudgets.reduce((sum, b) => sum + (b.spentAmount || 0), 0);
+  const totalAllocated = filteredBudgets.reduce(
+    (sum, b) => sum + (b.allocatedAmount || 0),
+    0,
+  );
+  const totalSpent = filteredBudgets.reduce(
+    (sum, b) => sum + (b.spentAmount || 0),
+    0,
+  );
   const totalVariance = totalAllocated - totalSpent;
-  const openBudgets = filteredBudgets.filter(b => b.status === "OPEN").length;
-  const avgUtilization = totalAllocated > 0 ? (totalSpent / totalAllocated) * 100 : 0;
+  const openBudgets = filteredBudgets.filter((b) => b.status === "OPEN").length;
+  const avgUtilization =
+    totalAllocated > 0 ? (totalSpent / totalAllocated) * 100 : 0;
 
   const yearOptions = [
     { value: "", label: t("all_years") },
@@ -172,34 +236,40 @@ export const Budget: React.FC = () => {
               <span className="text-xs text-gray-500">{b.departmentName}</span>
             </div>
           </div>
-        )
+        ),
       },
       {
         header: t("fiscal_year"),
         render: (b) => (
           <div className="flex items-center gap-1.5">
             <Calendar size={14} className="text-gray-400" />
-            <span className="text-sm font-medium text-gray-700">{b.fiscalYear}</span>
+            <span className="text-sm font-medium text-gray-700">
+              {b.fiscalYear}
+            </span>
           </div>
-        )
+        ),
       },
       {
         header: t("allocated"),
         render: (b) => (
           <div className="flex items-center gap-1.5">
             <DollarSign size={14} className="text-blue-600" />
-            <span className="text-sm font-medium text-blue-600">{b.allocatedAmount?.toLocaleString()} EGP</span>
+            <span className="text-sm font-medium text-blue-600">
+              {b.allocatedAmount?.toLocaleString()} EGP
+            </span>
           </div>
-        )
+        ),
       },
       {
         header: t("spent"),
         render: (b) => (
           <div className="flex items-center gap-1.5">
             <CreditCard size={14} className="text-orange-600" />
-            <span className="text-sm text-orange-600">{b.spentAmount?.toLocaleString()} EGP</span>
+            <span className="text-sm text-orange-600">
+              {b.spentAmount?.toLocaleString()} EGP
+            </span>
           </div>
-        )
+        ),
       },
       {
         header: t("variance"),
@@ -208,37 +278,16 @@ export const Budget: React.FC = () => {
           return (
             <div className="flex items-center gap-1.5">
               <TrendingUp size={14} className="text-green-600" />
-              <span className="text-sm font-semibold text-green-600">{variance.toLocaleString()} EGP</span>
+              <span className="text-sm font-semibold text-green-600">
+                {variance.toLocaleString()} EGP
+              </span>
             </div>
           );
-        }
-      },
-      {
-        header: t("utilization"),
-        render: (b) => {
-          const utilization = b.allocatedAmount > 0 ? (b.spentAmount / b.allocatedAmount) * 100 : 0;
-          return (
-            <div className="flex flex-col gap-1 min-w-[120px]">
-              <div className="flex items-center justify-between">
-                <span className={`text-xs font-medium ${getUtilizationColor(utilization)}`}>
-                  {utilization.toFixed(1)}%
-                </span>
-              </div>
-              <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all ${
-                    utilization > 90 ? "bg-red-500" : utilization > 75 ? "bg-yellow-500" : "bg-green-500"
-                  }`}
-                  style={{ width: `${Math.min(utilization, 100)}%` }}
-                />
-              </div>
-            </div>
-          );
-        }
+        },
       },
       {
         header: t("status"),
-        render: (b) => getStatusBadge(b.status)
+        render: (b) => getStatusBadge(b.status),
       },
       {
         header: t("actions"),
@@ -260,10 +309,10 @@ export const Budget: React.FC = () => {
               <Trash2 size={16} />
             </button>
           </div>
-        )
-      }
+        ),
+      },
     ],
-    [t, handleEdit, handleDelete]
+    [t, handleEdit, handleDelete],
   );
 
   return (
@@ -271,12 +320,8 @@ export const Budget: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            {t("budget")}
-          </h1>
-          <p className="text-gray-500 mt-1">
-            {t("manage_your_budgets")}
-          </p>
+          <h1 className="text-2xl font-bold text-gray-900">{t("budget")}</h1>
+          <p className="text-gray-500 mt-1">{t("manage_your_budgets")}</p>
         </div>
         <div className="flex gap-3">
           {selectedIds.length > 0 && (
@@ -311,42 +356,55 @@ export const Budget: React.FC = () => {
             <DollarSign size={18} className="text-blue-600" />
             <p className="text-xs text-gray-500">{t("total_allocated")}</p>
           </div>
-          <p className="text-xl font-bold text-blue-600 mt-1">{totalAllocated.toLocaleString()} EGP</p>
+          <p className="text-xl font-bold text-blue-600 mt-1">
+            {totalAllocated.toLocaleString()} EGP
+          </p>
         </div>
         <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
           <div className="flex items-center gap-2">
             <CreditCard size={18} className="text-orange-600" />
             <p className="text-xs text-gray-500">{t("total_spent")}</p>
           </div>
-          <p className="text-xl font-bold text-orange-600 mt-1">{totalSpent.toLocaleString()} EGP</p>
+          <p className="text-xl font-bold text-orange-600 mt-1">
+            {totalSpent.toLocaleString()} EGP
+          </p>
         </div>
         <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
           <div className="flex items-center gap-2">
             <TrendingUp size={18} className="text-green-600" />
             <p className="text-xs text-gray-500">{t("total_variance")}</p>
           </div>
-          <p className="text-xl font-bold text-green-600 mt-1">{totalVariance.toLocaleString()} EGP</p>
+          <p className="text-xl font-bold text-green-600 mt-1">
+            {totalVariance.toLocaleString()} EGP
+          </p>
         </div>
         <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
           <div className="flex items-center gap-2">
             <Building2 size={18} className="text-purple-600" />
             <p className="text-xs text-gray-500">{t("open_budgets")}</p>
           </div>
-          <p className="text-xl font-bold text-purple-600 mt-1">{openBudgets}</p>
+          <p className="text-xl font-bold text-purple-600 mt-1">
+            {openBudgets}
+          </p>
         </div>
         <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
           <div className="flex items-center gap-2">
             <TrendingUp size={18} className="text-indigo-600" />
             <p className="text-xs text-gray-500">{t("avg_utilization")}</p>
           </div>
-          <p className="text-xl font-bold text-indigo-600 mt-1">{avgUtilization.toFixed(1)}%</p>
+          <p className="text-xl font-bold text-indigo-600 mt-1">
+            {avgUtilization.toFixed(1)}%
+          </p>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-4 items-center">
+      <div className="p-4 flex flex-wrap gap-4 items-center bg-white rounded-lg border border-gray-100">
         <div className="relative max-w-md">
-          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search
+            size={18}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+          />
           <input
             type="text"
             placeholder={t("search_budgets")}
@@ -395,15 +453,15 @@ export const Budget: React.FC = () => {
       </div>
 
       {/* Table */}
-        <Table
-          data={filteredBudgets}
-          columns={columns}
-          keyExtractor={(item) => item._id || item.id}
-          isLoading={accountingLoading || isLoading}
-          selectable
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-        />
+      <Table
+        data={filteredBudgets}
+        columns={columns}
+        keyExtractor={(item) => item._id || item.id}
+        isLoading={accountingLoading || isLoading}
+        selectable
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+      />
 
       {/* Modal */}
       <BudgetModal
@@ -432,7 +490,9 @@ export const Budget: React.FC = () => {
         onClose={() => setIsBulkConfirmOpen(false)}
         onConfirm={handleBulkDelete}
         title={t("delete_budgets")}
-        message={t("are_you_sure_delete_budgets", { count: selectedIds.length })}
+        message={t("are_you_sure_delete_budgets", {
+          count: selectedIds.length,
+        })}
       />
     </div>
   );

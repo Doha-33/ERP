@@ -1,8 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { 
-  Plus, Search, Edit2, Trash2, Building2, 
-  Clock, Zap, AlertCircle, Gauge, Target, MapPin
+import {
+  Plus,
+  Search,
+  Edit2,
+  Trash2,
+  Building2,
+  Clock,
+  Zap,
+  AlertCircle,
+  Gauge,
+  Target,
+  MapPin,
 } from "lucide-react";
 import {
   Button,
@@ -13,7 +22,7 @@ import {
 import { Table, Column } from "../../components/ui/Table";
 import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
 import { WorkCenterFormModal } from "../../components/manufacturing/WorkCenterFormModal";
-import {manufacturingService} from "../../services/manufacturing.service";
+import { manufacturingService } from "../../services/manufacturing.service";
 import { WorkCenter as WCType } from "../../types";
 import { toast } from "sonner";
 
@@ -23,8 +32,12 @@ export const WorkCenters: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [selectedWorkCenter, setSelectedWorkCenter] = useState<WCType | null>(null);
-  const [workCenterIdToDelete, setWorkCenterIdToDelete] = useState<string | null>(null);
+  const [selectedWorkCenter, setSelectedWorkCenter] = useState<WCType | null>(
+    null,
+  );
+  const [workCenterIdToDelete, setWorkCenterIdToDelete] = useState<
+    string | null
+  >(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
@@ -48,7 +61,10 @@ export const WorkCenters: React.FC = () => {
   const handleSave = async (data: Partial<WCType>) => {
     try {
       if (selectedWorkCenter) {
-        await manufacturingService.updateWorkCenter(selectedWorkCenter._id, data);
+        await manufacturingService.updateWorkCenter(
+          selectedWorkCenter._id,
+          data,
+        );
         toast.success(t("wc_updated_successfully"));
       } else {
         await manufacturingService.createWorkCenter(data);
@@ -78,12 +94,23 @@ export const WorkCenters: React.FC = () => {
   };
 
   const getStatusBadge = (status: string) => {
-    const statusMap: Record<string, { variant: "success" | "warning" | "danger" | "neutral"; label: string; icon: any }> = {
+    const statusMap: Record<
+      string,
+      {
+        variant: "success" | "warning" | "danger" | "neutral";
+        label: string;
+        icon: any;
+      }
+    > = {
       Active: { variant: "success", label: t("active"), icon: Zap },
       Maintenance: { variant: "warning", label: t("maintenance"), icon: Clock },
       Inactive: { variant: "danger", label: t("inactive"), icon: AlertCircle },
     };
-    const config = statusMap[status] || { variant: "neutral", label: status, icon: null };
+    const config = statusMap[status] || {
+      variant: "neutral",
+      label: status,
+      icon: null,
+    };
     const Icon = config.icon;
     return (
       <Badge variant={config.variant} className="flex items-center gap-1">
@@ -93,37 +120,74 @@ export const WorkCenters: React.FC = () => {
     );
   };
 
+  // Summary statistics
+  const totalWC = workCenters.length;
+  const activeWC = workCenters.filter((wc) => wc.state === "Active").length;
+  const avgCapacity =
+    workCenters.length > 0
+      ? (
+          workCenters.reduce((acc, curr) => acc + (curr.capacity || 0), 0) /
+          workCenters.length
+        ).toFixed(1)
+      : 0;
+  const avgEfficiency =
+    workCenters.length > 0
+      ? (
+          workCenters.reduce((acc, curr) => acc + (curr.efficiency || 0), 0) /
+          workCenters.length
+        ).toFixed(1)
+      : 0;
+
+  // Helper function to extract capacity
+  const getCapacity = (wc: any): number => {
+    return wc.capacity_per_hour || wc.capacity || 0;
+  };
+
+  // Helper function to get code (supports both 'code' and 'work_center_id')
+  const getCode = (wc: any): string => {
+    return wc.code || wc.work_center_id || "";
+  };
+
+  // Helper function to get name
+  const getName = (wc: any): string => {
+    return wc.name || "";
+  };
+
+  // Helper function to get location
+  const getLocation = (wc: any): string => {
+    return wc.location || "";
+  };
+
+  // Helper function to get state
+  const getState = (wc: any): string => {
+    return wc.state || wc.status || "Unknown";
+  };
+
+  // Update filteredWorkCenters
   const filteredWorkCenters = workCenters.filter((wc) => {
     const matchesSearch =
-      wc.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      wc.code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      wc.location?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === "all" || wc.state === statusFilter;
+      getName(wc).toLowerCase().includes(searchTerm.toLowerCase()) ||
+      getCode(wc).toLowerCase().includes(searchTerm.toLowerCase()) ||
+      getLocation(wc).toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus =
+      statusFilter === "all" || getState(wc) === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
-  // Summary statistics
-  const totalWC = workCenters.length;
-  const activeWC = workCenters.filter(wc => wc.state === 'Active').length;
-  const avgCapacity = workCenters.length > 0 
-    ? (workCenters.reduce((acc, curr) => acc + (curr.capacity || 0), 0) / workCenters.length).toFixed(1)
-    : 0;
-  const avgEfficiency = workCenters.length > 0 
-    ? (workCenters.reduce((acc, curr) => acc + (curr.efficiency || 0), 0) / workCenters.length).toFixed(1)
-    : 0;
-
+  // Update columns to use helper functions
   const columns: Column<WCType>[] = [
     {
       header: t("code"),
-      accessorKey: "code",
       render: (item) => (
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
             <Building2 size={14} className="text-indigo-600" />
           </div>
           <div className="flex flex-col">
-            <span className="font-medium text-sm text-gray-900">{item.code}</span>
-            <span className="text-xs text-gray-500">{item.name}</span>
+            <span className="font-medium text-sm text-gray-900">
+              {getCode(item)}
+            </span>
+            <span className="text-xs text-gray-500">{getName(item)}</span>
           </div>
         </div>
       ),
@@ -135,52 +199,36 @@ export const WorkCenters: React.FC = () => {
           <div className="flex items-center gap-1.5">
             <Gauge size={14} className="text-gray-400" />
             <span className="text-sm">
-              {t("capacity")}: {item.capacity?.toLocaleString()}
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Target size={14} className="text-gray-400" />
-            <span className="text-sm">
-              {t("efficiency")}: {item.efficiency}%
+              {t("capacity")}: {getCapacity(item).toLocaleString()}/hr
             </span>
           </div>
         </div>
       ),
     },
     {
-      header: t("oee"),
-      accessorKey: "oee",
+      header: t("machine_type"),
       render: (item) => {
-        const oeeValue = item.oee || 0;
-        const getColor = () => {
-          if (oeeValue >= 85) return "text-green-600";
-          if (oeeValue >= 60) return "text-yellow-600";
-          return "text-red-600";
+        const machineType = (item as any).machine_type || "MANUAL";
+        const typeMap: Record<string, { label: string }> = {
+          MANUAL: { label: t("manual") },
+          SEMI_AUTOMATIC: { label: t("semi_automatic") },
+          AUTOMATIC: { label: t("automatic") },
+          CNC: { label: t("cnc") },
+          ROBOTIC: { label: t("robotic") },
         };
         return (
-          <div className="flex flex-col items-start gap-1">
-            <span className={`text-lg font-bold ${getColor()}`}>
-              {oeeValue}%
-            </span>
-            <div className="w-20 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-              <div 
-                className={`h-full rounded-full transition-all ${
-                  oeeValue >= 85 ? "bg-green-500" : oeeValue >= 60 ? "bg-yellow-500" : "bg-red-500"
-                }`}
-                style={{ width: `${Math.min(oeeValue, 100)}%` }}
-              />
-            </div>
-          </div>
+          <Badge variant="info" className="bg-gray-100 text-gray-700">
+            {typeMap[machineType]?.label || machineType}
+          </Badge>
         );
       },
     },
     {
       header: t("location"),
-      accessorKey: "location",
       render: (item) => (
         <div className="flex items-center gap-1.5">
           <MapPin size={14} className="text-gray-400" />
-          <span className="text-sm">{item.location}</span>
+          <span className="text-sm">{getLocation(item) || "-"}</span>
         </div>
       ),
     },
@@ -231,9 +279,7 @@ export const WorkCenters: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-900">
             {t("work_centers")}
           </h1>
-          <p className="text-gray-500 mt-1">
-            {t("manage_your_wc")}
-          </p>
+          <p className="text-gray-500 mt-1">{t("manage_your_wc")}</p>
         </div>
         <div className="flex gap-3">
           <ExportDropdown data={workCenters} filename="work-centers" />
@@ -270,7 +316,9 @@ export const WorkCenters: React.FC = () => {
               <Zap size={18} className="text-green-600" />
             </div>
             <div>
-              <p className="text-xs text-gray-500">{t("active_work_centers")}</p>
+              <p className="text-xs text-gray-500">
+                {t("active_work_centers")}
+              </p>
               <p className="text-xl font-bold text-gray-900">{activeWC}</p>
             </div>
           </div>
@@ -293,7 +341,9 @@ export const WorkCenters: React.FC = () => {
             </div>
             <div>
               <p className="text-xs text-gray-500">{t("avg_efficiency")}</p>
-              <p className="text-xl font-bold text-gray-900">{avgEfficiency}%</p>
+              <p className="text-xl font-bold text-gray-900">
+                {avgEfficiency}%
+              </p>
             </div>
           </div>
         </div>
@@ -341,6 +391,7 @@ export const WorkCenters: React.FC = () => {
         selectedWorkCenter={selectedWorkCenter}
         onSave={handleSave}
         loading={loading}
+        existingWorkCenters={workCenters} // Add this line
       />
 
       {/* Delete Confirmation Modal */}

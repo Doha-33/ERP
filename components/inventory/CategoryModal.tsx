@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus, Edit2, Tag, FileText } from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
 import { Button, Input, Select, TextArea } from "../../components/ui/Common";
 import { Category } from "../../types";
+import { toast } from "sonner";
 
 interface CategoryModalProps {
   isOpen: boolean;
@@ -28,6 +29,15 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
     status: "ACTIVE",
   });
 
+  // Helper function to extract ID (for consistency)
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "object") {
+      return value._id || value.id || "";
+    }
+    return value;
+  }, []);
+
   useEffect(() => {
     if (categoryToEdit && isOpen) {
       setFormData({
@@ -51,13 +61,29 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    
+    // Validation
+    if (!formData.name.trim()) {
+      toast.error(t("category_name_required"));
+      return;
+    }
+    
     setIsSubmitting(true);
     
     try {
-      await onSave(formData);
+      const saveData: Partial<Category> = {
+        name: formData.name,
+        description: formData.description || undefined,
+        status: formData.status,
+      };
+      
+      // If editing, include the ID (handled in parent component)
+      console.log("Saving category:", saveData);
+      await onSave(saveData);
       onClose();
     } catch (error) {
       console.error("Error in form submission:", error);
+      toast.error(t("failed_to_save_category"));
     } finally {
       setIsSubmitting(false);
     }
@@ -86,13 +112,17 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("category_name")} <span className="text-red-500">*</span>
             </label>
-            <Input
-              value={formData.name}
-              onChange={(e) => handleChange("name", e.target.value)}
-              placeholder={t("enter_category_name")}
-              required
-              fullWidth
-            />
+            <div className="relative">
+              <Tag size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Input
+                value={formData.name}
+                onChange={(e) => handleChange("name", e.target.value)}
+                placeholder={t("enter_category_name")}
+                required
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
 
           {/* Description */}
@@ -100,13 +130,17 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("description")}
             </label>
-            <TextArea
-              value={formData.description}
-              onChange={(e) => handleChange("description", e.target.value)}
-              placeholder={t("enter_description")}
-              rows={3}
-              fullWidth
-            />
+            <div className="relative">
+              <FileText size={18} className="absolute left-3 top-3 text-gray-400" />
+              <TextArea
+                value={formData.description}
+                onChange={(e) => handleChange("description", e.target.value)}
+                placeholder={t("enter_description")}
+                rows={3}
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
 
           {/* Status */}
@@ -124,8 +158,13 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
           </div>
         </div>
 
-        <div className="flex justify-end gap-3 mt-8">
-          <Button variant="secondary" onClick={onClose} disabled={isSubmitting || isLoading}>
+        <div className="flex justify-end gap-3 mt-8 pt-4 border-t border-gray-100">
+          <Button 
+            variant="secondary" 
+            onClick={onClose} 
+            disabled={isSubmitting || isLoading}
+            type="button"
+          >
             {t("cancel")}
           </Button>
           <Button
@@ -135,7 +174,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
             isLoading={isSubmitting || isLoading}
             disabled={isSubmitting || isLoading}
           >
-            {categoryToEdit ? t("save") : t("add_category")}
+            {categoryToEdit ? t("update_category") : t("add_category")}
           </Button>
         </div>
       </form>

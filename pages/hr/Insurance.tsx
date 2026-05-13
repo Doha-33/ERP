@@ -11,7 +11,7 @@ import { toast } from "sonner";
 
 export const InsurancePage: React.FC = () => {
   const { t } = useTranslation();
-  const { insurancePolicies, addInsurance, updateInsurance, deleteInsurance, employees } = useData();
+  const { insurancePolicies, addInsurance, updateInsurance, deleteInsurance, employees, fetchInsurancePolicies } = useData();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingInsurance, setEditingInsurance] = useState<Insurance | null>(null);
@@ -22,30 +22,74 @@ export const InsurancePage: React.FC = () => {
   const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSave = async (insurance: Partial<Insurance>) => {
+  // Helper function to extract ID
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+      if (value._id && typeof value._id === "string") return value._id;
+      if (value.id && typeof value.id === "string") return value.id;
+    }
+    return "";
+  }, []);
+
+  const handleSave = async (insuranceData: Partial<Insurance>) => {
     try {
       setIsLoading(true);
+      
       if (editingInsurance) {
-        await updateInsurance({ ...insurance, _id: editingInsurance._id, id: editingInsurance.id } as Insurance);
+        const insuranceId = extractId(editingInsurance);
+        
+        if (!insuranceId) {
+          toast.error(t("insurance_id_missing"));
+          return;
+        }
+        
+        const updateData = {
+          ...insuranceData,
+          _id: insuranceId,
+          id: insuranceId
+        } as Insurance;
+        
+        console.log("Updating insurance with ID:", insuranceId, updateData);
+        await updateInsurance(updateData);
         toast.success(t("insurance_updated_successfully"));
       } else {
-        await addInsurance(insurance as Insurance);
+        await addInsurance(insuranceData as Insurance);
         toast.success(t("insurance_created_successfully"));
       }
+      
+      await fetchInsurancePolicies();
       setIsModalOpen(false);
       setEditingInsurance(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving insurance:", error);
-      toast.error(t("failed_to_save_insurance"));
+      const message = error?.response?.data?.message || error?.message || t("failed_to_save_insurance");
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleEdit = useCallback((insurance: Insurance) => {
-    setEditingInsurance(insurance);
+    const insuranceId = extractId(insurance);
+    
+    if (!insuranceId) {
+      console.error("Insurance ID not found", insurance);
+      toast.error(t("insurance_id_not_found"));
+      return;
+    }
+    
+    const insuranceToEdit: Insurance = {
+      ...insurance,
+      _id: insuranceId,
+      id: insuranceId,
+    };
+    
+    console.log("Editing insurance:", insuranceToEdit);
+    setEditingInsurance(insuranceToEdit);
     setIsModalOpen(true);
-  }, []);
+  }, [extractId, t]);
 
   const handleDelete = useCallback((id: string) => {
     setDeleteId(id);
@@ -58,19 +102,26 @@ export const InsurancePage: React.FC = () => {
         toast.success(t("insurance_deleted_successfully"));
         setDeleteId(null);
         setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+        await fetchInsurancePolicies();
       } catch (error) {
         toast.error(t("failed_to_delete_insurance"));
       }
     }
-  }, [deleteId, deleteInsurance, t]);
+  }, [deleteId, deleteInsurance, fetchInsurancePolicies, t]);
 
   const handleBulkDelete = async () => {
     try {
       setIsLoading(true);
-      await Promise.all(selectedIds.map(id => deleteInsurance(id)));
-      toast.success(t("insurances_deleted_successfully", { count: selectedIds.length }));
+      const validIds = selectedIds.filter(id => id && typeof id === 'string');
+      if (validIds.length === 0) {
+        toast.error(t("no_valid_ids_selected"));
+        return;
+      }
+      await Promise.all(validIds.map(id => deleteInsurance(id)));
+      toast.success(t("insurances_deleted_successfully", { count: validIds.length }));
       setSelectedIds([]);
       setIsBulkConfirmOpen(false);
+      await fetchInsurancePolicies();
     } catch (error) {
       console.error("Bulk delete failed", error);
       toast.error(t("failed_to_delete_insurances"));
@@ -84,7 +135,7 @@ export const InsurancePage: React.FC = () => {
     if (typeof insurance.employeeInfo === "object" && insurance.employeeInfo !== null) {
       return (insurance.employeeInfo as any)?.fullName || "-";
     }
-    const employee = employees.find(e => (e._id || e.id) === insurance.employeeInfo);
+    const employee = employees.find(e => extractId(e) === insurance.employeeInfo);
     return employee?.fullName || insurance.employeeName || "-";
   };
 
@@ -92,7 +143,7 @@ export const InsurancePage: React.FC = () => {
     if (typeof insurance.employeeInfo === "object" && insurance.employeeInfo !== null) {
       return (insurance.employeeInfo as any)?.employeeCode || "-";
     }
-    const employee = employees.find(e => (e._id || e.id) === insurance.employeeInfo);
+    const employee = employees.find(e => extractId(e) === insurance.employeeInfo);
     return employee?.employeeCode || "-";
   };
 
@@ -115,8 +166,7 @@ export const InsurancePage: React.FC = () => {
         i.policyNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         i.insuranceCompany?.toLowerCase().includes(searchTerm.toLowerCase());
       
-      const matchesEmployee = !employeeFilter || 
-        (typeof i.employeeInfo === "object" ? (i.employeeInfo as any)._id : i.employeeInfo) === employeeFilter;
+      const matchesEmployee = !employeeFilter || extractId(i.employeeInfo) === employeeFilter;
       
       return matchesSearch && matchesEmployee;
     });
@@ -130,7 +180,7 @@ export const InsurancePage: React.FC = () => {
   const employeeOptions = [
     { value: "", label: t("all_employees") },
     ...employees.map(e => ({ 
-      value: e._id || e.id, 
+      value: extractId(e), 
       label: e.fullName 
     }))
   ];
@@ -228,28 +278,36 @@ export const InsurancePage: React.FC = () => {
       {
         header: t("actions"),
         className: "text-center",
-        render: (i) => (
-          <div className="flex items-center justify-center gap-2">
-            <button
-              onClick={() => handleEdit(i)}
-              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("edit")}
-            >
-              <Edit2 size={16} />
-            </button>
-            <button
-              onClick={() => handleDelete(i._id || i.id)}
-              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("delete")}
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-        )
+        render: (i) => {
+          const insuranceId = extractId(i);
+          return (
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => handleEdit(i)}
+                className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("edit")}
+              >
+                <Edit2 size={16} />
+              </button>
+              <button
+                onClick={() => handleDelete(insuranceId)}
+                className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("delete")}
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          );
+        }
       }
     ],
-    [t, handleEdit, handleDelete]
+    [t, handleEdit, handleDelete, extractId]
   );
+
+  const getKeyExtractor = useCallback((item: Insurance) => {
+    const id = extractId(item);
+    return id || Math.random().toString();
+  }, [extractId]);
 
   return (
     <div className="space-y-6">
@@ -365,15 +423,15 @@ export const InsurancePage: React.FC = () => {
       </div>
 
       {/* Table */}
-        <Table
-          data={filteredPolicies}
-          columns={columns}
-          keyExtractor={(item) => item._id || item.id}
-          isLoading={isLoading}
-          selectable
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-        />
+      <Table
+        data={filteredPolicies}
+        columns={columns}
+        keyExtractor={getKeyExtractor}
+        isLoading={isLoading}
+        selectable
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+      />
 
       {/* Modal */}
       <InsuranceModal

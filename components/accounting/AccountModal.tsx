@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -33,12 +33,16 @@ export const AccountModal: React.FC<AccountModalProps> = ({
   accountToEdit,
   parentAccounts,
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isRTL = i18n.language === 'ar';
+  
   const {
     register,
     handleSubmit,
     reset,
-    formState: { errors },
+    setValue,
+    watch,
+    formState: { errors, isSubmitting },
   } = useForm<AccountFormData>({
     resolver: zodResolver(accountSchema),
     defaultValues: {
@@ -51,15 +55,27 @@ export const AccountModal: React.FC<AccountModalProps> = ({
     },
   });
 
+  const selectedAccountType = watch('accountType');
+
   useEffect(() => {
     if (accountToEdit) {
+      // Extract parentAccountId correctly (could be string or object)
+      let parentId = null;
+      if (accountToEdit.parentAccountId) {
+        if (typeof accountToEdit.parentAccountId === 'object') {
+          parentId = (accountToEdit.parentAccountId as any)._id || (accountToEdit.parentAccountId as any).id;
+        } else {
+          parentId = accountToEdit.parentAccountId;
+        }
+      }
+      
       reset({
         accountCode: accountToEdit.accountCode,
         accountName: accountToEdit.accountName,
         accountType: accountToEdit.accountType as any,
-        parentAccountId: typeof accountToEdit.parentAccountId === 'object' ? accountToEdit.parentAccountId?._id : accountToEdit.parentAccountId,
+        parentAccountId: parentId,
         isActive: accountToEdit.isActive,
-        notes: accountToEdit.notes,
+        notes: accountToEdit.notes || '',
       });
     } else {
       reset({
@@ -86,71 +102,154 @@ export const AccountModal: React.FC<AccountModalProps> = ({
     { value: 'EXPENSE', label: t('expense') },
   ];
 
-  const parentAccountOptions = [
-    { value: '', label: t('none') },
-    ...parentAccounts
-      .filter(a => a._id !== accountToEdit?._id && a.id !== accountToEdit?.id)
-      .map(a => ({
-        value: a._id || a.id,
-        label: `${a.accountCode} - ${a.accountName}`,
-      })),
-  ];
+  // Filter parent accounts options
+  const parentAccountOptions = useMemo(() => {
+    const currentAccountId = accountToEdit?._id || accountToEdit?.id;
+    
+    // Filter out the current account to prevent circular reference
+    const availableAccounts = parentAccounts.filter(
+      a => (a._id || a.id) !== currentAccountId
+    );
+    
+    // Group accounts by type for better organization
+    const groupedAccounts = availableAccounts.reduce((groups, account) => {
+      const type = account.accountType;
+      if (!groups[type]) {
+        groups[type] = [];
+      }
+      groups[type].push({
+        value: account._id || account.id,
+        label: `${account.accountCode} - ${account.accountName}`,
+        type: account.accountType,
+      });
+      return groups;
+    }, {} as Record<string, any[]>);
+    
+    // Create options array with optgroups
+    const options = [{ value: '', label: t('none') }];
+    
+    // Add accounts grouped by type
+    if (selectedAccountType && groupedAccounts[selectedAccountType]) {
+      // Show only same type accounts
+      options.push({
+        value: 'divider',
+        label: `── ${t(selectedAccountType.toLowerCase())} ──`,
+      });
+      groupedAccounts[selectedAccountType].forEach(acc => {
+        options.push(acc);
+      });
+    } else {
+      // Show all accounts grouped
+      Object.keys(groupedAccounts).forEach(type => {
+        options.push({
+          value: 'divider',
+          label: `── ${t(type.toLowerCase())} ──`,
+        });
+        groupedAccounts[type].forEach(acc => {
+          options.push(acc);
+        });
+      });
+    }
+    
+    return options;
+  }, [parentAccounts, accountToEdit, selectedAccountType, t]);
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
       title={accountToEdit ? t('edit_account') : t('add_account')}
-      className="max-w-md"
+      className="w-full max-w-md mx-4 sm:mx-auto"
     >
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        <Input
-          label={t('account_code')}
-          {...register('accountCode')}
-          error={errors.accountCode?.message}
-          required
-        />
-        <Input
-          label={t('account_name')}
-          {...register('accountName')}
-          error={errors.accountName?.message}
-          required
-        />
-        <Select
-          label={t('account_type')}
-          options={accountTypeOptions}
-          {...register('accountType')}
-          error={errors.accountType?.message}
-          required
-        />
-        <Select
-          label={t('parent_account')}
-          options={parentAccountOptions}
-          {...register('parentAccountId')}
-          error={errors.parentAccountId?.message}
-        />
-        <TextArea
-          label={t('notes')}
-          {...register('notes')}
-          error={errors.notes?.message}
-        />
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" dir={isRTL ? "rtl" : "ltr"}>
+        {/* Account Code */}
+        <div>
+          <Input
+            label={t('account_code')}
+            {...register('accountCode')}
+            error={errors.accountCode?.message}
+            required
+            fullWidth
+            placeholder="e.g., 1001"
+          />
+        </div>
+
+        {/* Account Name */}
+        <div>
+          <Input
+            label={t('account_name')}
+            {...register('accountName')}
+            error={errors.accountName?.message}
+            required
+            fullWidth
+            placeholder="e.g., Petty Cash"
+          />
+        </div>
+
+        {/* Account Type */}
+        <div>
+          <Select
+            label={t('account_type')}
+            options={accountTypeOptions}
+            {...register('accountType')}
+            error={errors.accountType?.message}
+            required
+            fullWidth
+          />
+        </div>
+
+        {/* Parent Account - Show only if not editing or if parent exists */}
+        <div>
+          <Select
+            label={t('parent_account')}
+            options={parentAccountOptions}
+            value={watch('parentAccountId') || ''}
+            onChange={(e) => setValue('parentAccountId', e.target.value || null)}
+            error={errors.parentAccountId?.message}
+            fullWidth
+          />
+        </div>
+
+        {/* Notes */}
+        <div>
+          <TextArea
+            label={t('notes')}
+            {...register('notes')}
+            error={errors.notes?.message}
+            fullWidth
+            rows={3}
+            placeholder={t('optional_notes')}
+          />
+        </div>
+
+        {/* Active Checkbox */}
         <div className="flex items-center gap-2">
           <input
             type="checkbox"
             id="isActive"
             {...register('isActive')}
-            className="rounded border-gray-300 text-primary focus:ring-primary h-4 w-4"
+            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
           />
           <label htmlFor="isActive" className="text-sm text-gray-700">
             {t('active')}
           </label>
         </div>
 
-        <div className="flex justify-end gap-3 mt-6">
-          <Button variant="outline" type="button" onClick={onClose}>
+        {/* Form Actions */}
+        <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 mt-6">
+          <Button 
+            variant="outline" 
+            type="button" 
+            onClick={onClose}
+            className="w-full sm:w-auto"
+          >
             {t('cancel')}
           </Button>
-          <Button type="submit">
+          <Button 
+            type="submit" 
+            isLoading={isSubmitting}
+            className="w-full sm:w-auto justify-center"
+          >
             {t('save')}
           </Button>
         </div>

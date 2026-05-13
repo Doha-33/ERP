@@ -1,7 +1,26 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Search, Edit2, Trash2, Calendar, FileText, X, History, CheckCircle2, Clock, Wallet, DollarSign, Filter } from "lucide-react";
-import { Card, Button, Badge, ExportDropdown } from "../../components/ui/Common";
+import {
+  Plus,
+  Search,
+  Edit2,
+  Trash2,
+  Calendar,
+  FileText,
+  X,
+  History,
+  CheckCircle2,
+  Clock,
+  Wallet,
+  DollarSign,
+  Filter,
+} from "lucide-react";
+import {
+  Card,
+  Button,
+  Badge,
+  ExportDropdown,
+} from "../../components/ui/Common";
 import { Table, Column } from "../../components/ui/Table";
 import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
 import { ResponsesHistoryModal } from "../../components/hr/ResponsesHistoryModal";
@@ -14,17 +33,18 @@ import { toast } from "sonner";
 export const LoansPage: React.FC = () => {
   const { t } = useTranslation();
   const { user } = useAuth();
-  const { 
-    loans, 
-    addLoan, 
-    updateLoan, 
-    deleteLoan, 
-    toggleLoanWorkflow, 
+  const {
+    loans,
+    addLoan,
+    updateLoan,
+    deleteLoan,
+    toggleLoanWorkflow,
     currentUserEmployee,
     actionHistory,
-    fetchActionHistory 
+    fetchLoans,
+    fetchActionHistory,
   } = useData();
-  
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLoan, setEditingLoan] = useState<Loan | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -38,30 +58,83 @@ export const LoansPage: React.FC = () => {
 
   const isAdmin = user?.role === "admin";
 
-  const handleSave = async (loan: Partial<Loan>) => {
+  // في LoansPage component، قم بتحديث handleSave و handleEdit
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+      if (value._id && typeof value._id === "string") return value._id;
+      if (value.id && typeof value.id === "string") return value.id;
+    }
+    return "";
+  }, []);
+
+  // في LoansPage component، تأكد من أن handleSave يمرر البيانات بشكل صحيح
+
+  const handleSave = async (loanData: Partial<Loan>) => {
     try {
       setIsLoading(true);
+
       if (editingLoan) {
-        await updateLoan({ ...loan, _id: editingLoan._id, id: editingLoan.id } as Loan);
+        const loanId = extractId(editingLoan);
+
+        if (!loanId) {
+          toast.error(t("loan_id_missing"));
+          return;
+        }
+
+        const updateData = {
+          ...loanData,
+          _id: loanId,
+          id: loanId,
+        } as Loan;
+
+        console.log("Updating loan with ID:", loanId, updateData);
+        await updateLoan(updateData);
         toast.success(t("loan_updated_successfully"));
       } else {
-        await addLoan(loan as Loan);
+        // For new loans, the API expects employeeInfo field
+        await addLoan(loanData as Loan);
         toast.success(t("loan_created_successfully"));
       }
+
+      await fetchLoans();
       setIsModalOpen(false);
       setEditingLoan(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving loan:", error);
-      toast.error(t("failed_to_save_loan"));
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        t("failed_to_save_loan");
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleEdit = useCallback((loan: Loan) => {
-    setEditingLoan(loan);
-    setIsModalOpen(true);
-  }, []);
+  const handleEdit = useCallback(
+    (loan: Loan) => {
+      const loanId = extractId(loan);
+
+      if (!loanId) {
+        console.error("Loan ID not found", loan);
+        toast.error(t("loan_id_not_found"));
+        return;
+      }
+
+      const loanToEdit: Loan = {
+        ...loan,
+        _id: loanId,
+        id: loanId,
+      };
+
+      console.log("Editing loan:", loanToEdit);
+      setEditingLoan(loanToEdit);
+      setIsModalOpen(true);
+    },
+    [extractId, t],
+  );
 
   const handleDelete = useCallback((id: string) => {
     setDeleteId(id);
@@ -73,7 +146,7 @@ export const LoansPage: React.FC = () => {
         await deleteLoan(deleteId);
         toast.success(t("loan_deleted_successfully"));
         setDeleteId(null);
-        setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+        setSelectedIds((prev) => prev.filter((sid) => sid !== deleteId));
       } catch (error) {
         toast.error(t("failed_to_delete_loan"));
       }
@@ -83,8 +156,10 @@ export const LoansPage: React.FC = () => {
   const handleBulkDelete = async () => {
     try {
       setIsLoading(true);
-      await Promise.all(selectedIds.map(id => deleteLoan(id)));
-      toast.success(t("loans_deleted_successfully", { count: selectedIds.length }));
+      await Promise.all(selectedIds.map((id) => deleteLoan(id)));
+      toast.success(
+        t("loans_deleted_successfully", { count: selectedIds.length }),
+      );
       setSelectedIds([]);
       setIsBulkConfirmOpen(false);
     } catch (error) {
@@ -95,33 +170,36 @@ export const LoansPage: React.FC = () => {
     }
   };
 
-  const handleApprove = useCallback(async (id: string) => {
-    try {
-      await toggleLoanWorkflow(id, "hr");
-      toast.success(t("loan_approved_successfully"));
-    } catch (error) {
-      toast.error(t("failed_to_approve_loan"));
-    }
-  }, [toggleLoanWorkflow, t]);
+  const handleApprove = useCallback(
+    async (id: string) => {
+      try {
+        await toggleLoanWorkflow(id, "hr");
+        toast.success(t("loan_approved_successfully"));
+      } catch (error) {
+        toast.error(t("failed_to_approve_loan"));
+      }
+    },
+    [toggleLoanWorkflow, t],
+  );
 
   const handleShowHistory = async (id: string) => {
     await fetchActionHistory();
-    const filteredHistory = actionHistory.filter(h => h.requestId === id);
+    const filteredHistory = actionHistory.filter((h) => h.requestId === id);
     setSelectedHistory(filteredHistory);
     setIsHistoryOpen(true);
   };
 
   // Helper functions
   const getEmployeeName = (loan: Loan): string => {
-    if (typeof loan.employeeId === "object" && loan.employeeId !== null) {
-      return (loan.employeeId as any)?.fullName || "-";
+    if (typeof loan.employeeInfo === "object" && loan.employeeInfo !== null) {
+      return (loan.employeeInfo as any)?.fullName || "-";
     }
     return loan.employeeName || "-";
   };
 
   const getEmployeeCode = (loan: Loan): string => {
-    if (typeof loan.employeeId === "object" && loan.employeeId !== null) {
-      return (loan.employeeId as any)?.employeeCode || "-";
+    if (typeof loan.employeeInfo === "object" && loan.employeeInfo !== null) {
+      return (loan.employeeInfo as any)?.employeeCode || "-";
     }
     return "-";
   };
@@ -130,14 +208,17 @@ export const LoansPage: React.FC = () => {
   const accessibleLoans = useMemo(() => {
     if (isAdmin) return loans;
     const currentId = currentUserEmployee?._id || currentUserEmployee?.id;
-    return loans.filter(l => {
-      const empId = typeof l.employeeId === "object" ? (l.employeeId as any)._id : l.employeeId;
+    return loans.filter((l) => {
+      const empId =
+        typeof l.employeeId === "object"
+          ? (l.employeeId as any)._id
+          : l.employeeId;
       return empId === currentId;
     });
   }, [isAdmin, loans, currentUserEmployee]);
 
   const filteredLoans = useMemo(() => {
-    return accessibleLoans.filter(l => {
+    return accessibleLoans.filter((l) => {
       const employeeName = getEmployeeName(l).toLowerCase();
       const matchesSearch = employeeName.includes(searchTerm.toLowerCase());
       const matchesStatus = !statusFilter || l.status === statusFilter;
@@ -147,13 +228,25 @@ export const LoansPage: React.FC = () => {
 
   // Statistics
   const totalLoans = filteredLoans.length;
-  const totalAmount = filteredLoans.reduce((sum, l) => sum + (l.loanAmount || 0), 0);
-  const pendingCount = filteredLoans.filter(l => l.status === "Pending").length;
-  const activeCount = filteredLoans.filter(l => l.status === "Active" || l.status === "Approved").length;
-  const completedCount = filteredLoans.filter(l => l.status === "Completed").length;
+  const totalAmount = filteredLoans.reduce(
+    (sum, l) => sum + (l.loanAmount || 0),
+    0,
+  );
+  const pendingCount = filteredLoans.filter(
+    (l) => l.status === "Pending",
+  ).length;
+  const activeCount = filteredLoans.filter(
+    (l) => l.status === "Active" || l.status === "Approved",
+  ).length;
+  const completedCount = filteredLoans.filter(
+    (l) => l.status === "Completed",
+  ).length;
 
   const getStatusBadge = (status: string) => {
-    const statusMap: Record<string, { variant: "warning" | "info" | "success" | "danger"; label: string }> = {
+    const statusMap: Record<
+      string,
+      { variant: "warning" | "info" | "success" | "danger"; label: string }
+    > = {
       Pending: { variant: "warning", label: t("pending") },
       Approved: { variant: "info", label: t("approved") },
       Active: { variant: "info", label: t("active") },
@@ -188,11 +281,15 @@ export const LoansPage: React.FC = () => {
               <User size={18} className="text-indigo-600" />
             </div>
             <div className="flex flex-col">
-              <span className="font-medium text-gray-900">{getEmployeeName(l)}</span>
-              <span className="text-xs text-gray-500">{getEmployeeCode(l)}</span>
+              <span className="font-medium text-gray-900">
+                {getEmployeeName(l)}
+              </span>
+              <span className="text-xs text-gray-500">
+                {getEmployeeCode(l)}
+              </span>
             </div>
           </div>
-        )
+        ),
       },
       {
         header: t("loan_info"),
@@ -200,27 +297,35 @@ export const LoansPage: React.FC = () => {
           <div className="flex flex-col gap-0.5">
             <div className="flex items-center gap-1.5">
               <DollarSign size={14} className="text-green-600" />
-              <span className="text-sm font-semibold text-green-600">{l.loanAmount?.toLocaleString()} EGP</span>
+              <span className="text-sm font-semibold text-green-600">
+                {l.loanAmount?.toLocaleString()} EGP
+              </span>
             </div>
             <div className="flex items-center gap-1.5">
               <Calendar size={12} className="text-gray-400" />
-              <span className="text-xs text-gray-500">{formatDate(l.date)}</span>
+              <span className="text-xs text-gray-500">
+                {formatDate(l.startMonth)}
+              </span>
             </div>
           </div>
-        )
+        ),
       },
       {
         header: t("installment"),
         render: (l) => (
           <div className="flex flex-col gap-0.5">
-            <span className="text-sm text-gray-600">{l.numberOfInstallments} {t("months")}</span>
-            <span className="text-xs text-gray-500">{l.installmentAmount?.toLocaleString()} EGP / {t("month")}</span>
+            <span className="text-sm text-gray-600">
+              {l.numberOfInstallments} {t("months")}
+            </span>
+            <span className="text-xs text-gray-500">
+              {l.installmentAmount?.toLocaleString()} EGP / {t("month")}
+            </span>
           </div>
-        )
+        ),
       },
       {
         header: t("status"),
-        render: (l) => getStatusBadge(l.status)
+        render: (l) => getStatusBadge(l.status),
       },
       {
         header: t("actions"),
@@ -258,10 +363,10 @@ export const LoansPage: React.FC = () => {
               <Trash2 size={16} />
             </button>
           </div>
-        )
-      }
+        ),
+      },
     ],
-    [t, handleEdit, handleDelete, handleApprove, handleShowHistory, isAdmin]
+    [t, handleEdit, handleDelete, handleApprove, handleShowHistory, isAdmin],
   );
 
   return (
@@ -269,9 +374,7 @@ export const LoansPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            {t("loans")}
-          </h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t("loans")}</h1>
           <p className="text-gray-500 mt-1">
             {isAdmin ? t("manage_loans") : t("your_loan_records")}
           </p>
@@ -316,28 +419,37 @@ export const LoansPage: React.FC = () => {
             <DollarSign size={18} className="text-green-600" />
             <p className="text-xs text-gray-500">{t("total_amount")}</p>
           </div>
-          <p className="text-xl font-bold text-green-600 mt-1">{totalAmount.toLocaleString()} EGP</p>
+          <p className="text-xl font-bold text-green-600 mt-1">
+            {totalAmount.toLocaleString()} EGP
+          </p>
         </div>
         <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
           <div className="flex items-center gap-2">
             <Clock size={18} className="text-orange-600" />
             <p className="text-xs text-gray-500">{t("pending")}</p>
           </div>
-          <p className="text-xl font-bold text-orange-600 mt-1">{pendingCount}</p>
+          <p className="text-xl font-bold text-orange-600 mt-1">
+            {pendingCount}
+          </p>
         </div>
         <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
           <div className="flex items-center gap-2">
             <CheckCircle2 size={18} className="text-green-500" />
             <p className="text-xs text-gray-500">{t("completed")}</p>
           </div>
-          <p className="text-xl font-bold text-green-600 mt-1">{completedCount}</p>
+          <p className="text-xl font-bold text-green-600 mt-1">
+            {completedCount}
+          </p>
         </div>
       </div>
 
       {/* Filters */}
       <div className="flex flex-wrap gap-4 items-center">
         <div className="relative max-w-md">
-          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search
+            size={18}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+          />
           <input
             type="text"
             placeholder={t("search_by_employee")}
@@ -375,15 +487,15 @@ export const LoansPage: React.FC = () => {
       </div>
 
       {/* Table */}
-        <Table
-          data={filteredLoans}
-          columns={columns}
-          keyExtractor={(item) => item._id || item.id}
-          isLoading={isLoading}
-          selectable={isAdmin}
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-        />
+      <Table
+        data={filteredLoans}
+        columns={columns}
+        keyExtractor={(item) => item._id || item.id}
+        isLoading={isLoading}
+        selectable={isAdmin}
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+      />
 
       {/* Modals */}
       <LoanModal

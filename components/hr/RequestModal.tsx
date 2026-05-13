@@ -1,8 +1,14 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus, Edit2, Upload, FileText, X, Calendar, Flag } from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
-import { Button, Input, Select, TextArea, FileUpload } from "../../components/ui/Common";
+import {
+  Button,
+  Input,
+  Select,
+  TextArea,
+  FileUpload,
+} from "../../components/ui/Common";
 import { RequestRecord } from "../../types";
 import { useData } from "../../context/DataContext";
 import { useAuth } from "../../context/AuthContext";
@@ -15,12 +21,16 @@ interface RequestModalProps {
   isLoading?: boolean;
 }
 
-const compressImage = (base64Str: string, maxWidth = 1200, maxHeight = 1200): Promise<string> => {
+const compressImage = (
+  base64Str: string,
+  maxWidth = 1200,
+  maxHeight = 1200,
+): Promise<string> => {
   return new Promise((resolve) => {
     const img = new Image();
     img.src = base64Str;
     img.onload = () => {
-      const canvas = document.createElement('canvas');
+      const canvas = document.createElement("canvas");
       let width = img.width;
       let height = img.height;
       if (width > maxWidth || height > maxHeight) {
@@ -34,9 +44,9 @@ const compressImage = (base64Str: string, maxWidth = 1200, maxHeight = 1200): Pr
       }
       canvas.width = width;
       canvas.height = height;
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext("2d");
       ctx?.drawImage(img, 0, 0, width, height);
-      resolve(canvas.toDataURL('image/jpeg', 0.5));
+      resolve(canvas.toDataURL("image/jpeg", 0.5));
     };
     img.onerror = () => resolve(base64Str);
   });
@@ -63,25 +73,35 @@ export const RequestModal: React.FC<RequestModalProps> = ({
     requestNumber: "",
   });
 
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = user?.role === "admin";
 
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+      if (value._id && typeof value._id === "string") return value._id;
+      if (value.id && typeof value.id === "string") return value.id;
+    }
+    return "";
+  }, []);
+
+  // تحديث الـ useEffect لاستخدام extractId
   useEffect(() => {
     if (recordToEdit && isOpen) {
-      const employeeId = typeof recordToEdit.employeeId === "object"
-        ? (recordToEdit.employeeId as any)._id
-        : recordToEdit.employeeId;
-      
+      const employeeId = extractId(recordToEdit.employeeId);
+
       setFormData({
         employeeId: employeeId || "",
         requestType: recordToEdit.requestType || "LEAVE",
         description: recordToEdit.description || "",
         priority: recordToEdit.priority || "MEDIUM",
-        requestNumber: recordToEdit.requestNumber || recordToEdit._id?.slice(-8) || "",
+        requestNumber:
+          recordToEdit.requestNumber || recordToEdit._id?.slice(-8) || "",
       });
       setAttachment(recordToEdit.attachment);
     } else if (!recordToEdit && isOpen) {
       setFormData({
-        employeeId: (currentUserEmployee?._id || currentUserEmployee?.id || ""),
+        employeeId: currentUserEmployee?._id || currentUserEmployee?.id || "",
         requestType: "LEAVE",
         description: "",
         priority: "MEDIUM",
@@ -90,7 +110,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({
       setAttachment(undefined);
       setAttachmentName("");
     }
-  }, [recordToEdit, isOpen, currentUserEmployee]);
+  }, [recordToEdit, isOpen, currentUserEmployee, extractId]);
 
   const requestTypeOptions = [
     { value: "LEAVE", label: t("leave_request") },
@@ -108,8 +128,8 @@ export const RequestModal: React.FC<RequestModalProps> = ({
     { value: "URGENT", label: t("urgent") },
   ];
 
-  const employeeOptions = employees.map(emp => ({
-    value: emp._id || emp.id,
+  const employeeOptions = employees.map((emp) => ({
+    value: extractId(emp),
     label: `${emp.fullName} (${emp.employeeCode})`,
   }));
 
@@ -119,7 +139,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({
       const reader = new FileReader();
       reader.onloadend = async () => {
         const result = reader.result as string;
-        if (file.type.startsWith('image/')) {
+        if (file.type.startsWith("image/")) {
           const compressed = await compressImage(result);
           setAttachment(compressed);
         } else {
@@ -136,7 +156,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
+
     try {
       await onSave({
         ...formData,
@@ -153,7 +173,7 @@ export const RequestModal: React.FC<RequestModalProps> = ({
   };
 
   const handleChange = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   return (
@@ -170,18 +190,18 @@ export const RequestModal: React.FC<RequestModalProps> = ({
     >
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-
           {/* Request Number */}
-            <div className="space-y-1">
-              <label className="text-sm font-medium text-gray-700">{t("request_number")}</label>
-              <Input
-                value={formData.requestNumber}
-                onChange={(e) => handleChange("requestNumber", e.target.value)}
-                fullWidth
-              />
-            </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("request_number")}
+            </label>
+            <Input
+              value={formData.requestNumber}
+              onChange={(e) => handleChange("requestNumber", e.target.value)}
+              fullWidth
+            />
+          </div>
 
-          
           {/* Employee */}
           <div className="space-y-1">
             <label className="text-sm font-medium text-gray-700">
@@ -257,7 +277,11 @@ export const RequestModal: React.FC<RequestModalProps> = ({
           <label className="text-sm font-medium text-gray-700">
             {t("attachment")}
           </label>
-          <FileUpload label={"Upload File"} onChange={handleFileChange} accept="image/*,application/pdf" />
+          <FileUpload
+            label={"Upload File"}
+            onChange={handleFileChange}
+            accept="image/*,application/pdf"
+          />
           {attachmentName && (
             <div className="flex items-center gap-2 text-sm text-gray-600 mt-2">
               <FileText size={14} />
@@ -277,7 +301,11 @@ export const RequestModal: React.FC<RequestModalProps> = ({
         </div>
 
         <div className="flex justify-end gap-3 mt-8">
-          <Button variant="secondary" onClick={onClose} disabled={isSubmitting || isLoading}>
+          <Button
+            variant="secondary"
+            onClick={onClose}
+            disabled={isSubmitting || isLoading}
+          >
             {t("cancel")}
           </Button>
           <Button

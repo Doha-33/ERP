@@ -26,12 +26,14 @@ export const useInventoryModule = () => {
   const fetchInventoryData = useCallback(async () => {
     setLoading(true);
     try {
-      const [prodRes, stockRes, whRes, catRes, invRepRes] = await Promise.all([
+      const [prodRes, stockRes, whRes, catRes, invRepRes, unitRes, movementRes] = await Promise.all([
         inventoryService.getStockItems(),
         inventoryService.getStock(),
         inventoryService.getWarehouses(),
         inventoryService.getCategories(),
         inventoryService.getInventoryReport(),
+        inventoryService.getUnits(),
+        inventoryService.getStockMovements(),
       ]);
       setInventoryProducts(
         Array.isArray(prodRes) ? prodRes : prodRes?.data || [],
@@ -42,6 +44,8 @@ export const useInventoryModule = () => {
       setInventoryReports(
         Array.isArray(invRepRes) ? invRepRes : invRepRes?.data || [],
       );
+      setUnits(Array.isArray(unitRes) ? unitRes : unitRes?.data || []);
+      setStockMovements(Array.isArray(movementRes) ? movementRes : movementRes?.data || []);
     } catch (error) {
       console.error("Error fetching inventory data:", error);
     } finally {
@@ -74,6 +78,15 @@ export const useInventoryModule = () => {
       console.error("Error updating product:", error);
       toast.error("Failed to update product");
       throw error;
+    }
+  }, []);
+
+  const fetchInventoryProducts = useCallback(async () => {
+    try {
+      const data = await inventoryService.getStockItems();
+      setInventoryProducts(Array.isArray(data) ? data : data?.data || []);
+    } catch (error) {
+      console.error("Error fetching Products:", error);
     }
   }, []);
 
@@ -114,6 +127,15 @@ export const useInventoryModule = () => {
       console.error("Error updating warehouse:", error);
       toast.error("Failed to update warehouse");
       throw error;
+    }
+  }, []);
+
+  const fetchWarehouses = useCallback(async () => {
+    try {
+      const data = await inventoryService.getWarehouses();
+      setWarehouses(Array.isArray(data) ? data : data?.data || []);
+    } catch (error) {
+      console.error("Error fetching Warehouses:", error);
     }
   }, []);
 
@@ -164,6 +186,15 @@ export const useInventoryModule = () => {
     },
     [fetchInventoryData],
   );
+
+  const fetchCategories = useCallback(async () => {
+    try {
+      const data = await inventoryService.getCategories();
+      setCategories(Array.isArray(data) ? data : data?.data || []);
+    } catch (error) {
+      console.error("Error fetching Categories:", error);
+    }
+  }, []);
 
   const deleteCategory = useCallback(
     async (id: string) => {
@@ -227,40 +258,61 @@ export const useInventoryModule = () => {
     [fetchInventoryData],
   );
 
-  const addUnit = useCallback(async (unit: Partial<Unit>) => {
+  const fetchUnits = useCallback(async () => {
     try {
-      const newUnit = await inventoryService.addUnit(unit);
-      toast.success("Unit added successfully");
-      return newUnit;
+      const data = await inventoryService.getUnits();
+      setUnits(Array.isArray(data) ? data : data?.data || []);
     } catch (error) {
-      console.error("Error adding unit:", error);
-      toast.error("Failed to add unit");
-      throw error;
+      console.error("Error fetching Units:", error);
     }
   }, []);
 
-  const updateUnit = useCallback(async (id: string, unit: Partial<Unit>) => {
-    try {
-      const updatedUnit = await inventoryService.updateUnit(id, unit);
-      toast.success("Unit updated successfully");
-      return updatedUnit;
-    } catch (error) {
-      console.error("Error updating unit:", error);
-      toast.error("Failed to update unit");
-      throw error;
-    }
-  }, []);
+  const addUnit = useCallback(
+    async (unit: Partial<Unit>) => {
+      try {
+        const newUnit = await inventoryService.addUnit(unit);
+        toast.success("Unit added successfully");
+        await fetchInventoryData();
+        return newUnit;
+      } catch (error) {
+        console.error("Error adding unit:", error);
+        toast.error("Failed to add unit");
+        throw error;
+      }
+    },
+    [fetchInventoryData],
+  );
 
-  const deleteUnit = useCallback(async (id: string) => {
-    try {
-      await inventoryService.deleteUnit(id);
-      toast.success("Unit deleted successfully");
-    } catch (error) {
-      console.error("Error deleting unit:", error);
-      toast.error("Failed to delete unit");
-      throw error;
-    }
-  }, []);
+  const updateUnit = useCallback(
+    async (id: string, unit: Partial<Unit>) => {
+      try {
+        const updatedUnit = await inventoryService.updateUnit(id, unit);
+        toast.success("Unit updated successfully");
+        await fetchInventoryData();
+        return updatedUnit;
+      } catch (error) {
+        console.error("Error updating unit:", error);
+        toast.error("Failed to update unit");
+        throw error;
+      }
+    },
+    [fetchInventoryData],
+  );
+
+  const deleteUnit = useCallback(
+    async (id: string) => {
+      try {
+        await inventoryService.deleteUnit(id);
+        toast.success("Unit deleted successfully");
+        await fetchInventoryData();
+      } catch (error) {
+        console.error("Error deleting unit:", error);
+        toast.error("Failed to delete unit");
+        throw error;
+      }
+    },
+    [fetchInventoryData],
+  );
 
   // Stock Management Actions
   const stockIn = useCallback(
@@ -363,6 +415,7 @@ export const useInventoryModule = () => {
       // Actions
       addProduct,
       updateProduct,
+      fetchInventoryProducts,
       deleteProduct,
       addStock,
       updateStock,
@@ -370,12 +423,15 @@ export const useInventoryModule = () => {
       addWarehouse,
       updateWarehouse,
       deleteWarehouse,
+      fetchWarehouses,
       addUnit,
       updateUnit,
       deleteUnit,
+      fetchUnits,
       addCategory,
       updateCategory,
       deleteCategory,
+      fetchCategories,
       stockIn,
       stockOut,
       reserveStock,
@@ -395,18 +451,22 @@ export const useInventoryModule = () => {
       addProduct,
       updateProduct,
       deleteProduct,
+      fetchInventoryProducts,
       addStock,
       updateStock,
       deleteStock,
       addWarehouse,
       updateWarehouse,
       deleteWarehouse,
+      fetchWarehouses,
       addUnit,
       updateUnit,
       deleteUnit,
+      fetchUnits,
       addCategory,
       updateCategory,
       deleteCategory,
+      fetchCategories,
       stockIn,
       stockOut,
       reserveStock,

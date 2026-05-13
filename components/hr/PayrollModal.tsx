@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { PlusCircle, Edit2, Users, Calculator, DollarSign } from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
 import { Button, Input, Select, TextArea } from "../../components/ui/Common";
 import { Payroll, Employee } from "../../types";
 import { useData } from "../../context/DataContext";
+import { toast } from "sonner";
 
 interface PayrollModalProps {
   isOpen: boolean;
@@ -62,13 +63,18 @@ export const PayrollModal: React.FC<PayrollModalProps> = ({
     status: "DRAFT",
     notes: "",
   });
-
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+      if (value._id && typeof value._id === "string") return value._id;
+      if (value.id && typeof value.id === "string") return value.id;
+    }
+    return "";
+  }, []);
   useEffect(() => {
     if (recordToEdit && isOpen) {
-      const employeeId = typeof recordToEdit.employeeId === "object"
-        ? (recordToEdit.employeeId as any)._id
-        : recordToEdit.employeeId;
-
+      const employeeId = extractId(recordToEdit.employeeId);
       setFormData({
         employeeId: employeeId || "",
         payrollMonth: recordToEdit.payrollMonth,
@@ -133,7 +139,7 @@ export const PayrollModal: React.FC<PayrollModalProps> = ({
 
   // Calculate totals whenever relevant fields change
   useEffect(() => {
-    const totalAllowances = 
+    const totalAllowances =
       formData.housingAllowance +
       formData.transportAllowance +
       formData.workNatureAllowance +
@@ -142,11 +148,14 @@ export const PayrollModal: React.FC<PayrollModalProps> = ({
       formData.bonus +
       formData.overtimeAmount;
 
-    const totalDeductions = Object.values(formData.deductions).reduce((sum, val) => sum + val, 0);
+    const totalDeductions = Object.values(formData.deductions).reduce(
+      (sum, val) => sum + val,
+      0,
+    );
     const grossSalary = formData.basicSalary + totalAllowances;
     const netSalary = grossSalary - totalDeductions;
 
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       totalAllowances,
       totalDeductions,
@@ -168,13 +177,13 @@ export const PayrollModal: React.FC<PayrollModalProps> = ({
   // Calculate overtime amount when hours or rate changes
   useEffect(() => {
     const overtimeAmount = formData.overtimeHours * formData.overtimeRate;
-    setFormData(prev => ({ ...prev, overtimeAmount }));
+    setFormData((prev) => ({ ...prev, overtimeAmount }));
   }, [formData.overtimeHours, formData.overtimeRate]);
 
   const employeeOptions = [
     { value: "", label: t("all_active_employees") },
-    ...employees.map(emp => ({
-      value: emp._id || emp.id,
+    ...employees.map((emp) => ({
+      value: extractId(emp),
       label: `${emp.fullName} (${emp.employeeCode})`,
     })),
   ];
@@ -194,32 +203,47 @@ export const PayrollModal: React.FC<PayrollModalProps> = ({
     { value: 12, label: t("december") },
   ];
 
-  const yearOptions = [2023, 2024, 2025, 2026, 2027].map(y => ({ value: y, label: String(y) }));
+  const yearOptions = [2023, 2024, 2025, 2026, 2027].map((y) => ({
+    value: y,
+    label: String(y),
+  }));
   const statusOptions = [
     { value: "DRAFT", label: t("draft") },
     { value: "PAID", label: t("paid") },
   ];
 
+  // في PayrollModal، تحديث handleSubmit
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
+
     try {
-      await onSave(formData);
+      // If editing, ensure we have the ID
+      if (recordToEdit) {
+        const recordId = extractId(recordToEdit);
+        if (!recordId) {
+          toast.error(t("payroll_id_missing"));
+          return;
+        }
+        await onSave({ ...formData, _id: recordId });
+      } else {
+        await onSave(formData);
+      }
       onClose();
     } catch (error) {
       console.error("Error in form submission:", error);
+      toast.error(t("failed_to_save_payroll"));
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleChange = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleDeductionChange = (field: keyof Deductions, value: number) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       deductions: { ...prev.deductions, [field]: value },
     }));
@@ -245,7 +269,9 @@ export const PayrollModal: React.FC<PayrollModalProps> = ({
                 <Users size={18} className="text-blue-600" />
               </div>
               <div>
-                <p className="text-sm font-medium text-blue-900">{t("batch_generation_mode")}</p>
+                <p className="text-sm font-medium text-blue-900">
+                  {t("batch_generation_mode")}
+                </p>
                 <p className="text-xs text-blue-700 mt-0.5">
                   {t("batch_generation_description")}
                 </p>
@@ -258,7 +284,8 @@ export const PayrollModal: React.FC<PayrollModalProps> = ({
           {/* Employee */}
           <div className="space-y-1">
             <label className="text-sm font-medium text-gray-700">
-              {t("employee")} {!recordToEdit && <span className="text-red-500">*</span>}
+              {t("employee")}{" "}
+              {!recordToEdit && <span className="text-red-500">*</span>}
             </label>
             <Select
               value={formData.employeeId}
@@ -279,7 +306,9 @@ export const PayrollModal: React.FC<PayrollModalProps> = ({
               </label>
               <Select
                 value={formData.payrollMonth}
-                onChange={(e) => handleChange("payrollMonth", Number(e.target.value))}
+                onChange={(e) =>
+                  handleChange("payrollMonth", Number(e.target.value))
+                }
                 options={monthOptions}
                 required
                 fullWidth
@@ -291,7 +320,9 @@ export const PayrollModal: React.FC<PayrollModalProps> = ({
               </label>
               <Select
                 value={formData.payrollYear}
-                onChange={(e) => handleChange("payrollYear", Number(e.target.value))}
+                onChange={(e) =>
+                  handleChange("payrollYear", Number(e.target.value))
+                }
                 options={yearOptions}
                 required
                 fullWidth
@@ -313,63 +344,81 @@ export const PayrollModal: React.FC<PayrollModalProps> = ({
                   label={t("basic_salary")}
                   type="number"
                   value={formData.basicSalary}
-                  onChange={(e) => handleChange("basicSalary", Number(e.target.value))}
+                  onChange={(e) =>
+                    handleChange("basicSalary", Number(e.target.value))
+                  }
                   fullWidth
                 />
                 <Input
                   label={t("housing_allowance")}
                   type="number"
                   value={formData.housingAllowance}
-                  onChange={(e) => handleChange("housingAllowance", Number(e.target.value))}
+                  onChange={(e) =>
+                    handleChange("housingAllowance", Number(e.target.value))
+                  }
                   fullWidth
                 />
                 <Input
                   label={t("transport_allowance")}
                   type="number"
                   value={formData.transportAllowance}
-                  onChange={(e) => handleChange("transportAllowance", Number(e.target.value))}
+                  onChange={(e) =>
+                    handleChange("transportAllowance", Number(e.target.value))
+                  }
                   fullWidth
                 />
                 <Input
                   label={t("work_nature_allowance")}
                   type="number"
                   value={formData.workNatureAllowance}
-                  onChange={(e) => handleChange("workNatureAllowance", Number(e.target.value))}
+                  onChange={(e) =>
+                    handleChange("workNatureAllowance", Number(e.target.value))
+                  }
                   fullWidth
                 />
                 <Input
                   label={t("medical_allowance")}
                   type="number"
                   value={formData.medicalAllowance}
-                  onChange={(e) => handleChange("medicalAllowance", Number(e.target.value))}
+                  onChange={(e) =>
+                    handleChange("medicalAllowance", Number(e.target.value))
+                  }
                   fullWidth
                 />
                 <Input
                   label={t("commissions")}
                   type="number"
                   value={formData.commissions}
-                  onChange={(e) => handleChange("commissions", Number(e.target.value))}
+                  onChange={(e) =>
+                    handleChange("commissions", Number(e.target.value))
+                  }
                   fullWidth
                 />
                 <Input
                   label={t("bonus")}
                   type="number"
                   value={formData.bonus}
-                  onChange={(e) => handleChange("bonus", Number(e.target.value))}
+                  onChange={(e) =>
+                    handleChange("bonus", Number(e.target.value))
+                  }
                   fullWidth
                 />
                 <Input
                   label={t("overtime_hours")}
                   type="number"
                   value={formData.overtimeHours}
-                  onChange={(e) => handleChange("overtimeHours", Number(e.target.value))}
+                  onChange={(e) =>
+                    handleChange("overtimeHours", Number(e.target.value))
+                  }
                   fullWidth
                 />
                 <Input
                   label={t("overtime_rate")}
                   type="number"
                   value={formData.overtimeRate}
-                  onChange={(e) => handleChange("overtimeRate", Number(e.target.value))}
+                  onChange={(e) =>
+                    handleChange("overtimeRate", Number(e.target.value))
+                  }
                   fullWidth
                 />
                 <Input
@@ -393,42 +442,54 @@ export const PayrollModal: React.FC<PayrollModalProps> = ({
                   label={t("absence_deduction")}
                   type="number"
                   value={formData.deductions.absence}
-                  onChange={(e) => handleDeductionChange("absence", Number(e.target.value))}
+                  onChange={(e) =>
+                    handleDeductionChange("absence", Number(e.target.value))
+                  }
                   fullWidth
                 />
                 <Input
                   label={t("late_arrival_deduction")}
                   type="number"
                   value={formData.deductions.lateArrival}
-                  onChange={(e) => handleDeductionChange("lateArrival", Number(e.target.value))}
+                  onChange={(e) =>
+                    handleDeductionChange("lateArrival", Number(e.target.value))
+                  }
                   fullWidth
                 />
                 <Input
                   label={t("early_leave_deduction")}
                   type="number"
                   value={formData.deductions.earlyLeave}
-                  onChange={(e) => handleDeductionChange("earlyLeave", Number(e.target.value))}
+                  onChange={(e) =>
+                    handleDeductionChange("earlyLeave", Number(e.target.value))
+                  }
                   fullWidth
                 />
                 <Input
                   label={t("loan_deduction")}
                   type="number"
                   value={formData.deductions.loan}
-                  onChange={(e) => handleDeductionChange("loan", Number(e.target.value))}
+                  onChange={(e) =>
+                    handleDeductionChange("loan", Number(e.target.value))
+                  }
                   fullWidth
                 />
                 <Input
                   label={t("penalties_deduction")}
                   type="number"
                   value={formData.deductions.penalties}
-                  onChange={(e) => handleDeductionChange("penalties", Number(e.target.value))}
+                  onChange={(e) =>
+                    handleDeductionChange("penalties", Number(e.target.value))
+                  }
                   fullWidth
                 />
                 <Input
                   label={t("other_deductions")}
                   type="number"
                   value={formData.deductions.other}
-                  onChange={(e) => handleDeductionChange("other", Number(e.target.value))}
+                  onChange={(e) =>
+                    handleDeductionChange("other", Number(e.target.value))
+                  }
                   fullWidth
                 />
               </div>
@@ -437,20 +498,36 @@ export const PayrollModal: React.FC<PayrollModalProps> = ({
             {/* Summary Section */}
             <div className="bg-gray-50 rounded-xl p-4 space-y-2">
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">{t("total_allowances")}</span>
-                <span className="text-sm font-semibold text-green-600">{formData.totalAllowances.toLocaleString()} EGP</span>
+                <span className="text-sm text-gray-600">
+                  {t("total_allowances")}
+                </span>
+                <span className="text-sm font-semibold text-green-600">
+                  {formData.totalAllowances.toLocaleString()} EGP
+                </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">{t("total_deductions")}</span>
-                <span className="text-sm font-semibold text-red-600">{formData.totalDeductions.toLocaleString()} EGP</span>
+                <span className="text-sm text-gray-600">
+                  {t("total_deductions")}
+                </span>
+                <span className="text-sm font-semibold text-red-600">
+                  {formData.totalDeductions.toLocaleString()} EGP
+                </span>
               </div>
               <div className="flex justify-between items-center pt-2 border-t border-gray-200">
-                <span className="text-base font-bold text-gray-900">{t("gross_salary")}</span>
-                <span className="text-base font-bold text-gray-900">{formData.grossSalary.toLocaleString()} EGP</span>
+                <span className="text-base font-bold text-gray-900">
+                  {t("gross_salary")}
+                </span>
+                <span className="text-base font-bold text-gray-900">
+                  {formData.grossSalary.toLocaleString()} EGP
+                </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-lg font-bold text-indigo-600">{t("net_salary")}</span>
-                <span className="text-lg font-bold text-indigo-600">{formData.netSalary.toLocaleString()} EGP</span>
+                <span className="text-lg font-bold text-indigo-600">
+                  {t("net_salary")}
+                </span>
+                <span className="text-lg font-bold text-indigo-600">
+                  {formData.netSalary.toLocaleString()} EGP
+                </span>
               </div>
             </div>
 
@@ -476,7 +553,11 @@ export const PayrollModal: React.FC<PayrollModalProps> = ({
         )}
 
         <div className="flex justify-end gap-3 mt-8">
-          <Button variant="secondary" onClick={onClose} disabled={isSubmitting || isLoading}>
+          <Button
+            variant="secondary"
+            onClick={onClose}
+            disabled={isSubmitting || isLoading}
+          >
             {t("cancel")}
           </Button>
           <Button

@@ -11,7 +11,7 @@ import { toast } from "sonner";
 
 export const Stocks: React.FC = () => {
   const { t } = useTranslation();
-  const { stocks, fetchStocks } = useData();
+  const { stocks, fetchInventoryData, stockIn, stockOut } = useData();
   const [searchTerm, setSearchTerm] = useState("");
   const [warehouseFilter, setWarehouseFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -19,17 +19,27 @@ export const Stocks: React.FC = () => {
   const [isStockOutModalOpen, setIsStockOutModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  const [selectedStock, setSelectedStock] = useState<Stock | null>(null);
+
+  const openStockInModal = (stock?: Stock) => {
+    setSelectedStock(stock || null);
+    setIsStockInModalOpen(true);
+  };
+
+  const openStockOutModal = (stock?: Stock) => {
+    setSelectedStock(stock || null);
+    setIsStockOutModalOpen(true);
+  };
+
   const handleStockIn = async (data: any) => {
     try {
       setIsLoading(true);
-      // Call API for stock in
-      console.log("Stock In:", data);
-      toast.success(t("stock_in_successful"));
-      await fetchStocks();
+      await stockIn(data);
+      await fetchInventoryData();
       setIsStockInModalOpen(false);
+      setSelectedStock(null);
     } catch (error) {
       console.error("Error processing stock in:", error);
-      toast.error(t("stock_in_failed"));
     } finally {
       setIsLoading(false);
     }
@@ -38,14 +48,12 @@ export const Stocks: React.FC = () => {
   const handleStockOut = async (data: any) => {
     try {
       setIsLoading(true);
-      // Call API for stock out
-      console.log("Stock Out:", data);
-      toast.success(t("stock_out_successful"));
-      await fetchStocks();
+      await stockOut(data);
+      await fetchInventoryData();
       setIsStockOutModalOpen(false);
+      setSelectedStock(null);
     } catch (error) {
       console.error("Error processing stock out:", error);
-      toast.error(t("stock_out_failed"));
     } finally {
       setIsLoading(false);
     }
@@ -153,12 +161,14 @@ export const Stocks: React.FC = () => {
         render: (s) => (
           <div className="flex items-center justify-center gap-2">
             <button
+              onClick={() => openStockInModal(s)}
               className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg border border-green-200 transition-colors"
               title={t("stock_in")}
             >
               <ArrowDown size={16} />
             </button>
             <button
+              onClick={() => openStockOutModal(s)}
               className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg border border-red-200 transition-colors"
               title={t("stock_out")}
             >
@@ -171,6 +181,10 @@ export const Stocks: React.FC = () => {
               <ArrowRightLeft size={16} />
             </button>
             <button
+              onClick={() => {
+                const search = s.productName || (s as any).product?.name || (typeof s.productId === 'object' ? (s.productId as any)?.productName : "");
+                window.location.hash = `#/inventory/movements?search=${encodeURIComponent(search)}`;
+              }}
               className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
               title={t("view_movements")}
             >
@@ -198,7 +212,7 @@ export const Stocks: React.FC = () => {
         <div className="flex gap-3">
           <Button
             variant="secondary"
-            onClick={() => fetchStocks()}
+            onClick={() => fetchInventoryData()}
             className="border-gray-200"
           >
             <RefreshCw size={18} />
@@ -207,7 +221,7 @@ export const Stocks: React.FC = () => {
           <ExportDropdown data={filteredStocks} filename="stock-inventory" />
           <Button
             variant="primary"
-            onClick={() => setIsStockInModalOpen(true)}
+            onClick={() => openStockInModal()}
             className="bg-green-600 hover:bg-green-700"
           >
             <ArrowDown size={18} />
@@ -215,7 +229,7 @@ export const Stocks: React.FC = () => {
           </Button>
           <Button
             variant="primary"
-            onClick={() => setIsStockOutModalOpen(true)}
+            onClick={() => openStockOutModal()}
             className="bg-red-600 hover:bg-red-700"
           >
             <ArrowUp size={18} />
@@ -287,7 +301,11 @@ export const Stocks: React.FC = () => {
         <Table
           data={filteredStocks}
           columns={columns}
-          keyExtractor={(item) => `${item.productId}-${item.warehouseId}`}
+          keyExtractor={(item) => {
+            const pId = typeof item.productId === 'object' ? (item.productId as any)?._id : item.productId;
+            const wId = typeof item.warehouseId === 'object' ? (item.warehouseId as any)?._id : item.warehouseId;
+            return `${pId}-${wId}`;
+          }}
           isLoading={isLoading}
           selectable
         />
@@ -295,18 +313,26 @@ export const Stocks: React.FC = () => {
       {/* Modals */}
       <StockModal
         isOpen={isStockInModalOpen}
-        onClose={() => setIsStockInModalOpen(false)}
+        onClose={() => {
+          setIsStockInModalOpen(false);
+          setSelectedStock(null);
+        }}
         mode="in"
         onSave={handleStockIn}
         isLoading={isLoading}
+        stock={selectedStock}
       />
 
       <StockModal
         isOpen={isStockOutModalOpen}
-        onClose={() => setIsStockOutModalOpen(false)}
+        onClose={() => {
+          setIsStockOutModalOpen(false);
+          setSelectedStock(null);
+        }}
         mode="out"
         onSave={handleStockOut}
         isLoading={isLoading}
+        stock={selectedStock}
       />
     </div>
   );

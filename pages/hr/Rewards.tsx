@@ -12,7 +12,7 @@ import { toast } from "sonner";
 
 export const Rewards: React.FC = () => {
   const { t } = useTranslation();
-  const { rewards, addReward, updateReward, deleteReward, actionHistory, fetchActionHistory, employees } = useData();
+  const { rewards, addReward, updateReward, deleteReward, actionHistory, fetchActionHistory, employees, fetchRewards } = useData();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingReward, setEditingReward] = useState<Reward | null>(null);
@@ -27,30 +27,74 @@ export const Rewards: React.FC = () => {
   const [selectedHistory, setSelectedHistory] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSave = async (reward: Partial<Reward>) => {
+  // Helper function to extract ID
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+      if (value._id && typeof value._id === "string") return value._id;
+      if (value.id && typeof value.id === "string") return value.id;
+    }
+    return "";
+  }, []);
+
+  const handleSave = async (rewardData: Partial<Reward>) => {
     try {
       setIsLoading(true);
+      
       if (editingReward) {
-        await updateReward({ ...reward, _id: editingReward._id, id: editingReward.id } as Reward);
+        const rewardId = extractId(editingReward);
+        
+        if (!rewardId) {
+          toast.error(t("reward_id_missing"));
+          return;
+        }
+        
+        const updateData = {
+          ...rewardData,
+          _id: rewardId,
+          id: rewardId
+        } as Reward;
+        
+        console.log("Updating reward with ID:", rewardId, updateData);
+        await updateReward(updateData);
         toast.success(t("reward_updated_successfully"));
       } else {
-        await addReward(reward as Reward);
+        await addReward(rewardData as Reward);
         toast.success(t("reward_created_successfully"));
       }
+      
+      await fetchRewards();
       setIsModalOpen(false);
       setEditingReward(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving reward:", error);
-      toast.error(t("failed_to_save_reward"));
+      const message = error?.response?.data?.message || error?.message || t("failed_to_save_reward");
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleEdit = useCallback((reward: Reward) => {
-    setEditingReward(reward);
+    const rewardId = extractId(reward);
+    
+    if (!rewardId) {
+      console.error("Reward ID not found", reward);
+      toast.error(t("reward_id_not_found"));
+      return;
+    }
+    
+    const rewardToEdit: Reward = {
+      ...reward,
+      _id: rewardId,
+      id: rewardId,
+    };
+    
+    console.log("Editing reward:", rewardToEdit);
+    setEditingReward(rewardToEdit);
     setIsModalOpen(true);
-  }, []);
+  }, [extractId, t]);
 
   const handleDelete = useCallback((id: string) => {
     setDeleteId(id);
@@ -63,19 +107,26 @@ export const Rewards: React.FC = () => {
         toast.success(t("reward_deleted_successfully"));
         setDeleteId(null);
         setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+        await fetchRewards();
       } catch (error) {
         toast.error(t("failed_to_delete_reward"));
       }
     }
-  }, [deleteId, deleteReward, t]);
+  }, [deleteId, deleteReward, fetchRewards, t]);
 
   const handleBulkDelete = async () => {
     try {
       setIsLoading(true);
-      await Promise.all(selectedIds.map(id => deleteReward(id)));
-      toast.success(t("rewards_deleted_successfully", { count: selectedIds.length }));
+      const validIds = selectedIds.filter(id => id && typeof id === 'string');
+      if (validIds.length === 0) {
+        toast.error(t("no_valid_ids_selected"));
+        return;
+      }
+      await Promise.all(validIds.map(id => deleteReward(id)));
+      toast.success(t("rewards_deleted_successfully", { count: validIds.length }));
       setSelectedIds([]);
       setIsBulkConfirmOpen(false);
+      await fetchRewards();
     } catch (error) {
       console.error("Bulk delete failed", error);
       toast.error(t("failed_to_delete_rewards"));
@@ -86,7 +137,7 @@ export const Rewards: React.FC = () => {
 
   const handleShowHistory = async (id: string) => {
     await fetchActionHistory();
-    const filteredHistory = actionHistory.filter(h => h.requestId === id);
+    const filteredHistory = actionHistory.filter(h => extractId(h.requestId) === id);
     setSelectedHistory(filteredHistory);
     setIsHistoryOpen(true);
   };
@@ -96,7 +147,7 @@ export const Rewards: React.FC = () => {
     if (typeof reward.employeeInfo === "object" && reward.employeeInfo !== null) {
       return (reward.employeeInfo as any)?.fullName || "-";
     }
-    const employee = employees.find(e => (e._id || e.id) === reward.employeeInfo);
+    const employee = employees.find(e => extractId(e) === reward.employeeInfo);
     return employee?.fullName || reward.employeeName || "-";
   };
 
@@ -104,13 +155,17 @@ export const Rewards: React.FC = () => {
     if (typeof reward.employeeInfo === "object" && reward.employeeInfo !== null) {
       return (reward.employeeInfo as any)?.employeeCode || "-";
     }
-    const employee = employees.find(e => (e._id || e.id) === reward.employeeInfo);
+    const employee = employees.find(e => extractId(e) === reward.employeeInfo);
     return employee?.employeeCode || "-";
   };
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "-";
-    return new Date(dateStr).toLocaleDateString();
+    try {
+      return new Date(dateStr).toLocaleDateString();
+    } catch {
+      return "-";
+    }
   };
 
   // Apply filters
@@ -137,30 +192,36 @@ export const Rewards: React.FC = () => {
   const performanceBonuses = filteredRewards.filter(r => r.rewardsType === "Performance Bonus").length;
   const spotRewards = filteredRewards.filter(r => r.rewardsType === "Spot Reward").length;
 
+  // API expects: Performance Bonus, Spot Reward, Incentive Scheme, Annual Bonus, Other
   const typeOptions = [
     { value: "", label: t("all_types") },
     { value: "Performance Bonus", label: t("performance_bonus") },
     { value: "Spot Reward", label: t("spot_reward") },
-    { value: "Incentive", label: t("incentive") },
+    { value: "Incentive Scheme", label: t("incentive_scheme") },
     { value: "Annual Bonus", label: t("annual_bonus") },
-    { value: "Team Award", label: t("team_award") },
+    { value: "Other", label: t("other") },
   ];
 
   const columns: Column<Reward>[] = useMemo(
     () => [
       {
         header: t("employee"),
-        render: (r) => (
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
-              <Award size={18} className="text-green-600" />
+        render: (r) => {
+          const employeeName = getEmployeeName(r);
+          const employeeCode = getEmployeeCode(r);
+          const initial = employeeName.charAt(0).toUpperCase();
+          return (
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                <Award size={18} className="text-green-600" />
+              </div>
+              <div className="flex flex-col">
+                <span className="font-medium text-gray-900">{employeeName}</span>
+                <span className="text-xs text-gray-500">{employeeCode}</span>
+              </div>
             </div>
-            <div className="flex flex-col">
-              <span className="font-medium text-gray-900">{getEmployeeName(r)}</span>
-              <span className="text-xs text-gray-500">{getEmployeeCode(r)}</span>
-            </div>
-          </div>
-        )
+          );
+        }
       },
       {
         header: t("reward_info"),
@@ -215,35 +276,43 @@ export const Rewards: React.FC = () => {
       {
         header: t("actions"),
         className: "text-center",
-        render: (r) => (
-          <div className="flex items-center justify-center gap-2">
-            <button
-              onClick={() => handleShowHistory(r._id || r.id)}
-              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("history")}
-            >
-              <History size={16} />
-            </button>
-            <button
-              onClick={() => handleEdit(r)}
-              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("edit")}
-            >
-              <Edit2 size={16} />
-            </button>
-            <button
-              onClick={() => handleDelete(r._id || r.id)}
-              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("delete")}
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-        )
+        render: (r) => {
+          const rewardId = extractId(r);
+          return (
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => handleShowHistory(rewardId)}
+                className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("history")}
+              >
+                <History size={16} />
+              </button>
+              <button
+                onClick={() => handleEdit(r)}
+                className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("edit")}
+              >
+                <Edit2 size={16} />
+              </button>
+              <button
+                onClick={() => handleDelete(rewardId)}
+                className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("delete")}
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          );
+        }
       }
     ],
-    [t, handleEdit, handleDelete, handleShowHistory]
+    [t, handleEdit, handleDelete, handleShowHistory, extractId]
   );
+
+  const getKeyExtractor = useCallback((item: Reward) => {
+    const id = extractId(item);
+    return id || Math.random().toString();
+  }, [extractId]);
 
   return (
     <div className="space-y-6">
@@ -343,7 +412,6 @@ export const Rewards: React.FC = () => {
           ))}
         </select>
 
-
         {(typeFilter || searchTerm) && (
           <button
             onClick={() => {
@@ -360,15 +428,15 @@ export const Rewards: React.FC = () => {
       </div>
 
       {/* Table */}
-        <Table
-          data={filteredRewards}
-          columns={columns}
-          keyExtractor={(item) => item._id || item.id}
-          isLoading={isLoading}
-          selectable
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-        />
+      <Table
+        data={filteredRewards}
+        columns={columns}
+        keyExtractor={getKeyExtractor}
+        isLoading={isLoading}
+        selectable
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+      />
 
       {/* Modals */}
       <RewardModal

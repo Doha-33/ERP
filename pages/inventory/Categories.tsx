@@ -11,7 +11,7 @@ import { toast } from "sonner";
 
 export const Categories: React.FC = () => {
   const { t } = useTranslation();
-  const { categories, addCategory, updateCategory, deleteCategory } = useData();
+  const { categories, addCategory, updateCategory, deleteCategory, fetchCategories } = useData();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
@@ -22,31 +22,76 @@ export const Categories: React.FC = () => {
   const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSave = async (category: Partial<Category>) => {
+  // Helper function to extract ID
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "object") {
+      return value._id || value.id || "";
+    }
+    return value;
+  }, []);
+
+  const handleSave = async (categoryData: Partial<Category>) => {
     try {
       setIsLoading(true);
+      
       if (editingCategory) {
-        const categoryId = editingCategory._id || editingCategory.id;
-        await updateCategory(category as Category);
+        // Get the ID from editingCategory
+        const categoryId = extractId(editingCategory);
+        
+        if (!categoryId) {
+          toast.error(t("category_id_missing"));
+          return;
+        }
+        
+        // Create update data with ID
+        const updateData = {
+          ...categoryData,
+          _id: categoryId,
+          id: categoryId
+        } as Category;
+        
+        console.log("Updating category with ID:", categoryId, updateData);
+        await updateCategory(updateData);
         toast.success(t("category_updated_successfully"));
       } else {
-        await addCategory(category);
+        await addCategory(categoryData as Category);
         toast.success(t("category_created_successfully"));
       }
+      
+      await fetchCategories(); // Refresh list
       setIsModalOpen(false);
       setEditingCategory(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving category:", error);
-      toast.error(t("failed_to_save_category"));
+      const message = error?.response?.data?.message || error?.message || t("failed_to_save_category");
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleEdit = useCallback((category: Category) => {
-    setEditingCategory(category);
+    // Extract ID correctly from the category object
+    const categoryId = extractId(category);
+    
+    if (!categoryId) {
+      console.error("Category ID not found", category);
+      toast.error(t("category_id_not_found"));
+      return;
+    }
+    
+    // Create a clean category object with proper ID
+    const categoryToEdit: Category = {
+      ...category,
+      _id: categoryId,
+      id: categoryId,
+    };
+    
+    console.log("Editing category:", categoryToEdit);
+    setEditingCategory(categoryToEdit);
     setIsModalOpen(true);
-  }, []);
+  }, [extractId, t]);
 
   const handleDelete = useCallback((id: string) => {
     setDeleteId(id);
@@ -59,11 +104,12 @@ export const Categories: React.FC = () => {
         toast.success(t("category_deleted_successfully"));
         setDeleteId(null);
         setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+        await fetchCategories();
       } catch (error) {
         toast.error(t("failed_to_delete_category"));
       }
     }
-  }, [deleteId, deleteCategory, t]);
+  }, [deleteId, deleteCategory, fetchCategories, t]);
 
   const handleBulkDelete = async () => {
     try {
@@ -72,6 +118,7 @@ export const Categories: React.FC = () => {
       toast.success(t("categories_deleted_successfully", { count: selectedIds.length }));
       setSelectedIds([]);
       setIsBulkConfirmOpen(false);
+      await fetchCategories();
     } catch (error) {
       console.error("Bulk delete failed", error);
       toast.error(t("failed_to_delete_categories"));
@@ -81,9 +128,10 @@ export const Categories: React.FC = () => {
   };
 
   const getStatusBadge = (status: string) => {
+    const s = (status || '').toUpperCase();
     return (
-      <Badge variant={status === "ACTIVE" ? "success" : "danger"}>
-        {status === "ACTIVE" ? t("active") : t("inactive")}
+      <Badge variant={s === "ACTIVE" ? "success" : "danger"}>
+        {s === "ACTIVE" ? t("active") : t("inactive")}
       </Badge>
     );
   };
@@ -100,7 +148,7 @@ export const Categories: React.FC = () => {
         c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         c.description?.toLowerCase().includes(searchTerm.toLowerCase());
       
-      const matchesStatus = !statusFilter || c.status === statusFilter;
+      const matchesStatus = !statusFilter || (c.status || c.state || '').toUpperCase() === statusFilter.toUpperCase();
       
       return matchesSearch && matchesStatus;
     });
@@ -108,8 +156,8 @@ export const Categories: React.FC = () => {
 
   // Statistics
   const totalCategories = filteredCategories.length;
-  const activeCategories = filteredCategories.filter(c => c.status === "ACTIVE").length;
-  const inactiveCategories = filteredCategories.filter(c => c.status === "INACTIVE").length;
+  const activeCategories = filteredCategories.filter(c => (c.status || c.state || '').toUpperCase() === "ACTIVE").length;
+  const inactiveCategories = filteredCategories.filter(c => (c.status || c.state || '').toUpperCase() === "INACTIVE").length;
 
   const statusOptions = [
     { value: "", label: t("all_statuses") },
@@ -121,17 +169,20 @@ export const Categories: React.FC = () => {
     () => [
       {
         header: t("category_info"),
-        render: (c) => (
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center">
-              <Tag size={18} className="text-indigo-600" />
+        render: (c) => {
+          const categoryId = extractId(c);
+          return (
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center">
+                <Tag size={18} className="text-indigo-600" />
+              </div>
+              <div className="flex flex-col">
+                <span className="font-medium text-gray-900">{c.name}</span>
+                <span className="text-xs text-gray-500 line-clamp-1">{c.description || "-"}</span>
+              </div>
             </div>
-            <div className="flex flex-col">
-              <span className="font-medium text-gray-900">{c.name}</span>
-              <span className="text-xs text-gray-500 line-clamp-1">{c.description || "-"}</span>
-            </div>
-          </div>
-        )
+          );
+        }
       },
       {
         header: t("description"),
@@ -152,27 +203,30 @@ export const Categories: React.FC = () => {
       {
         header: t("actions"),
         className: "text-center",
-        render: (c) => (
-          <div className="flex items-center justify-center gap-2">
-            <button
-              onClick={() => handleEdit(c)}
-              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("edit")}
-            >
-              <Edit2 size={16} />
-            </button>
-            <button
-              onClick={() => handleDelete(c._id || c.id)}
-              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("delete")}
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-        )
+        render: (c) => {
+          const categoryId = extractId(c);
+          return (
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => handleEdit(c)}
+                className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("edit")}
+              >
+                <Edit2 size={16} />
+              </button>
+              <button
+                onClick={() => handleDelete(categoryId)}
+                className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("delete")}
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          );
+        }
       }
     ],
-    [t, handleEdit, handleDelete]
+    [t, handleEdit, handleDelete, extractId]
   );
 
   return (
@@ -289,15 +343,15 @@ export const Categories: React.FC = () => {
       </div>
 
       {/* Table */}
-        <Table
-          data={filteredCategories}
-          columns={columns}
-          keyExtractor={(item) => item._id || item.id}
-          isLoading={isLoading}
-          selectable
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-        />
+      <Table
+        data={filteredCategories}
+        columns={columns}
+        keyExtractor={(item) => extractId(item)}
+        isLoading={isLoading}
+        selectable
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+      />
 
       {/* Modal */}
       <CategoryModal

@@ -11,7 +11,7 @@ import { toast } from "sonner";
 
 export const GoodsReceipts: React.FC = () => {
   const { t } = useTranslation();
-  const { goodsReceipts, addGoodsReceipt, updateGoodsReceipt, deleteGoodsReceipt } = useData();
+  const { goodsReceipts, addGoodsReceipt, updateGoodsReceipt, deleteGoodsReceipt, fetchGoodsReceipts } = useData();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingReceipt, setEditingReceipt] = useState<GoodsReceipt | null>(null);
@@ -21,30 +21,76 @@ export const GoodsReceipts: React.FC = () => {
   const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSave = async (receipt: Partial<GoodsReceipt>) => {
+  // Helper function to extract ID
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "object") {
+      return value._id || value.id || "";
+    }
+    return value;
+  }, []);
+
+  const handleSave = async (receiptData: Partial<GoodsReceipt>) => {
     try {
       setIsLoading(true);
+      
       if (editingReceipt) {
-        await updateGoodsReceipt({ ...receipt, _id: editingReceipt._id, id: editingReceipt.id } as GoodsReceipt);
+        // Get the ID from editingReceipt
+        const receiptId = extractId(editingReceipt);
+        
+        if (!receiptId) {
+          toast.error(t("goods_receipt_id_missing"));
+          return;
+        }
+        
+        // Create update data with ID
+        const updateData = {
+          ...receiptData,
+          _id: receiptId,
+          id: receiptId
+        } as GoodsReceipt;
+        
+        console.log("Updating goods receipt with ID:", receiptId, updateData);
+        await updateGoodsReceipt(updateData);
         toast.success(t("goods_receipt_updated_successfully"));
       } else {
-        await addGoodsReceipt(receipt as GoodsReceipt);
+        await addGoodsReceipt(receiptData as GoodsReceipt);
         toast.success(t("goods_receipt_created_successfully"));
       }
+      
+      await fetchGoodsReceipts(); // Refresh list
       setIsModalOpen(false);
       setEditingReceipt(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving goods receipt:", error);
-      toast.error(t("failed_to_save_goods_receipt"));
+      const message = error?.response?.data?.message || error?.message || t("failed_to_save_goods_receipt");
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleEdit = useCallback((receipt: GoodsReceipt) => {
-    setEditingReceipt(receipt);
+    // Extract ID correctly from the receipt object
+    const receiptId = extractId(receipt);
+    
+    if (!receiptId) {
+      console.error("Goods receipt ID not found", receipt);
+      toast.error(t("goods_receipt_id_not_found"));
+      return;
+    }
+    
+    // Create a clean receipt object with proper ID
+    const receiptToEdit: GoodsReceipt = {
+      ...receipt,
+      _id: receiptId,
+      id: receiptId,
+    };
+    
+    console.log("Editing goods receipt:", receiptToEdit);
+    setEditingReceipt(receiptToEdit);
     setIsModalOpen(true);
-  }, []);
+  }, [extractId, t]);
 
   const handleDelete = useCallback((id: string) => {
     setDeleteId(id);
@@ -57,11 +103,12 @@ export const GoodsReceipts: React.FC = () => {
         toast.success(t("goods_receipt_deleted_successfully"));
         setDeleteId(null);
         setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+        await fetchGoodsReceipts();
       } catch (error) {
         toast.error(t("failed_to_delete_goods_receipt"));
       }
     }
-  }, [deleteId, deleteGoodsReceipt, t]);
+  }, [deleteId, deleteGoodsReceipt, fetchGoodsReceipts, t]);
 
   const handleBulkDelete = async () => {
     try {
@@ -70,6 +117,7 @@ export const GoodsReceipts: React.FC = () => {
       toast.success(t("goods_receipts_deleted_successfully", { count: selectedIds.length }));
       setSelectedIds([]);
       setIsBulkConfirmOpen(false);
+      await fetchGoodsReceipts();
     } catch (error) {
       console.error("Bulk delete failed", error);
       toast.error(t("failed_to_delete_goods_receipts"));
@@ -191,27 +239,30 @@ export const GoodsReceipts: React.FC = () => {
       {
         header: t("actions"),
         className: "text-center",
-        render: (r) => (
-          <div className="flex items-center justify-center gap-2">
-            <button
-              onClick={() => handleEdit(r)}
-              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("edit")}
-            >
-              <Edit2 size={16} />
-            </button>
-            <button
-              onClick={() => handleDelete(r._id || r.id)}
-              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("delete")}
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-        )
+        render: (r) => {
+          const receiptId = extractId(r);
+          return (
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => handleEdit(r)}
+                className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("edit")}
+              >
+                <Edit2 size={16} />
+              </button>
+              <button
+                onClick={() => handleDelete(receiptId)}
+                className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("delete")}
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          );
+        }
       }
     ],
-    [t, handleEdit, handleDelete]
+    [t, handleEdit, handleDelete, extractId]
   );
 
   return (
@@ -304,15 +355,15 @@ export const GoodsReceipts: React.FC = () => {
       </div>
 
       {/* Table */}
-        <Table
-          data={filteredReceipts}
-          columns={columns}
-          keyExtractor={(item) => item._id || item.id}
-          isLoading={isLoading}
-          selectable
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-        />
+      <Table
+        data={filteredReceipts}
+        columns={columns}
+        keyExtractor={(item) => extractId(item)}
+        isLoading={isLoading}
+        selectable
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+      />
 
       {/* Modal */}
       <GoodsReceiptModal

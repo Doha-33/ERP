@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Edit2, Briefcase, Building2, FileText } from "lucide-react";
+import { Plus, Edit2, Briefcase, Building2, FileText, Hash } from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
 import { Button, Input, Select, TextArea } from "../../components/ui/Common";
 import { Job } from "../../types";
 import { useData } from "../../context/DataContext";
+import { toast } from "sonner";
 
 interface JobModalProps {
   isOpen: boolean;
@@ -31,11 +32,26 @@ export const JobModal: React.FC<JobModalProps> = ({
     state: "ACTIVE",
   });
 
+  // Helper function to extract ID
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+      if (value._id && typeof value._id === "string") return value._id;
+      if (value.id && typeof value.id === "string") return value.id;
+    }
+    return "";
+  }, []);
+
+  // Generate job code
+  const generateJobCode = useCallback(() => {
+    const timestamp = Date.now().toString().slice(-6);
+    return `JOB-${timestamp}`;
+  }, []);
+
   useEffect(() => {
     if (jobToEdit && isOpen) {
-      const departmentId = typeof jobToEdit.departmentId === "object"
-        ? (jobToEdit.departmentId as any)?._id
-        : jobToEdit.departmentId;
+      const departmentId = extractId(jobToEdit.departmentId);
 
       setFormData({
         departmentId: departmentId || "",
@@ -44,7 +60,7 @@ export const JobModal: React.FC<JobModalProps> = ({
         state: jobToEdit.state || "ACTIVE",
       });
     } else if (!jobToEdit && isOpen) {
-      const defaultDepartmentId = departments.length > 0 ? (departments[0]._id || departments[0].id) : "";
+      const defaultDepartmentId = departments.length > 0 ? extractId(departments[0]) : "";
       setFormData({
         departmentId: defaultDepartmentId,
         jobName: "",
@@ -52,10 +68,10 @@ export const JobModal: React.FC<JobModalProps> = ({
         state: "ACTIVE",
       });
     }
-  }, [jobToEdit, isOpen, departments]);
+  }, [jobToEdit, isOpen, departments, extractId]);
 
   const departmentOptions = departments.map(d => ({
-    value: d._id || d.id,
+    value: extractId(d),
     label: d.departmentName,
   }));
 
@@ -66,13 +82,42 @@ export const JobModal: React.FC<JobModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    
+    // Validation
+    if (!formData.departmentId) {
+      toast.error(t("department_required"));
+      return;
+    }
+    if (!formData.jobName.trim()) {
+      toast.error(t("job_name_required"));
+      return;
+    }
+    if (!formData.description.trim()) {
+      toast.error(t("description_required"));
+      return;
+    }
+    
     setIsSubmitting(true);
     
     try {
-      await onSave(formData);
+      const saveData: any = {
+        departmentId: formData.departmentId,
+        jobName: formData.jobName,
+        description: formData.description,
+        state: formData.state,
+      };
+      
+      // Add code for new job
+      if (!jobToEdit) {
+        saveData.code = generateJobCode();
+      }
+      
+      console.log("Saving job:", saveData);
+      await onSave(saveData);
       onClose();
     } catch (error) {
       console.error("Error in form submission:", error);
+      toast.error(t("failed_to_save_job"));
     } finally {
       setIsSubmitting(false);
     }
@@ -101,14 +146,19 @@ export const JobModal: React.FC<JobModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("department")} <span className="text-red-500">*</span>
             </label>
-            <Select
-              value={formData.departmentId}
-              onChange={(e) => handleChange("departmentId", e.target.value)}
-              options={departmentOptions}
-              placeholder={t("select_department")}
-              required
-              fullWidth
-            />
+            <div className="relative">
+              <Building2 size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Select
+                value={formData.departmentId}
+                onChange={(e) => handleChange("departmentId", e.target.value)}
+                options={departmentOptions}
+                placeholder={t("select_department")}
+                required
+                fullWidth
+                className="pl-10"
+                disabled={!!jobToEdit}
+              />
+            </div>
           </div>
 
           {/* Job Name */}
@@ -116,13 +166,17 @@ export const JobModal: React.FC<JobModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("job_name")} <span className="text-red-500">*</span>
             </label>
-            <Input
-              value={formData.jobName}
-              onChange={(e) => handleChange("jobName", e.target.value)}
-              placeholder={t("enter_job_name")}
-              required
-              fullWidth
-            />
+            <div className="relative">
+              <Briefcase size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Input
+                value={formData.jobName}
+                onChange={(e) => handleChange("jobName", e.target.value)}
+                placeholder={t("enter_job_name")}
+                required
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
 
           {/* Status (only for edit) */}
@@ -146,19 +200,28 @@ export const JobModal: React.FC<JobModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("description")} <span className="text-red-500">*</span>
             </label>
-            <TextArea
-              value={formData.description}
-              onChange={(e) => handleChange("description", e.target.value)}
-              placeholder={t("enter_job_description")}
-              rows={4}
-              required
-              fullWidth
-            />
+            <div className="relative">
+              <FileText size={18} className="absolute left-3 top-3 text-gray-400" />
+              <TextArea
+                value={formData.description}
+                onChange={(e) => handleChange("description", e.target.value)}
+                placeholder={t("enter_job_description")}
+                rows={4}
+                required
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
         </div>
 
-        <div className="flex justify-end gap-3 mt-8">
-          <Button variant="secondary" onClick={onClose} disabled={isSubmitting || isLoading}>
+        <div className="flex justify-end gap-3 mt-8 pt-4 border-t border-gray-100">
+          <Button 
+            variant="secondary" 
+            onClick={onClose} 
+            disabled={isSubmitting || isLoading}
+            type="button"
+          >
             {t("cancel")}
           </Button>
           <Button
@@ -168,7 +231,7 @@ export const JobModal: React.FC<JobModalProps> = ({
             isLoading={isSubmitting || isLoading}
             disabled={isSubmitting || isLoading}
           >
-            {jobToEdit ? t("save") : t("add_job")}
+            {jobToEdit ? t("update_job") : t("add_job")}
           </Button>
         </div>
       </form>

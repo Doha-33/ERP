@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Search, Edit2, Trash2, Eye, Package, DollarSign, Warehouse, Filter, X, Tag } from "lucide-react";
+import { Plus, Search, Edit2, Trash2, Eye, Package, DollarSign, Warehouse, Filter, X, Tag, AlertCircle, XCircle } from "lucide-react";
 import { Card, Button, Input, Badge, ExportDropdown } from "../../components/ui/Common";
 import { Table, Column } from "../../components/ui/Table";
 import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
@@ -11,7 +11,7 @@ import { toast } from "sonner";
 
 export const InventoryProducts: React.FC = () => {
   const { t } = useTranslation();
-  const { inventoryProducts, addProduct, updateProduct, deleteProduct, warehouses } = useData();
+  const { inventoryProducts, addProduct, updateProduct, deleteProduct, fetchInventoryProducts, warehouses } = useData();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -22,30 +22,72 @@ export const InventoryProducts: React.FC = () => {
   const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSave = async (product: Partial<Product>) => {
+  // Helper function to extract ID
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "object") {
+      return value._id || value.id || "";
+    }
+    return value;
+  }, []);
+
+  const handleSave = async (productData: Partial<Product>) => {
     try {
       setIsLoading(true);
+      
       if (editingProduct) {
-        await updateProduct({ id: editingProduct._id || editingProduct.id }, product);
+        const productId = extractId(editingProduct);
+        
+        if (!productId) {
+          toast.error(t("product_id_missing"));
+          return;
+        }
+        
+        const updateData = {
+          ...productData,
+          _id: productId,
+          id: productId
+        } as Product;
+        
+        console.log("Updating product with ID:", productId, updateData);
+        await updateProduct(updateData);
         toast.success(t("product_updated_successfully"));
       } else {
-        await addProduct(product);
+        await addProduct(productData as Product);
         toast.success(t("product_created_successfully"));
       }
+      
+      await fetchInventoryProducts();
       setIsModalOpen(false);
       setEditingProduct(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving product:", error);
-      toast.error(t("failed_to_save_product"));
+      const message = error?.response?.data?.message || error?.message || t("failed_to_save_product");
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleEdit = useCallback((product: Product) => {
-    setEditingProduct(product);
+    const productId = extractId(product);
+    
+    if (!productId) {
+      console.error("Product ID not found", product);
+      toast.error(t("product_id_not_found"));
+      return;
+    }
+    
+    const productToEdit: Product = {
+      ...product,
+      _id: productId,
+      id: productId,
+    };
+    
+    console.log("Editing product:", productToEdit);
+    setEditingProduct(productToEdit);
     setIsModalOpen(true);
-  }, []);
+  }, [extractId, t]);
 
   const handleDelete = useCallback((id: string) => {
     setDeleteId(id);
@@ -58,11 +100,12 @@ export const InventoryProducts: React.FC = () => {
         toast.success(t("product_deleted_successfully"));
         setDeleteId(null);
         setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+        await fetchInventoryProducts();
       } catch (error) {
         toast.error(t("failed_to_delete_product"));
       }
     }
-  }, [deleteId, deleteProduct, t]);
+  }, [deleteId, deleteProduct, fetchInventoryProducts, t]);
 
   const handleBulkDelete = async () => {
     try {
@@ -71,6 +114,7 @@ export const InventoryProducts: React.FC = () => {
       toast.success(t("products_deleted_successfully", { count: selectedIds.length }));
       setSelectedIds([]);
       setIsBulkConfirmOpen(false);
+      await fetchInventoryProducts();
     } catch (error) {
       console.error("Bulk delete failed", error);
       toast.error(t("failed_to_delete_products"));
@@ -83,7 +127,7 @@ export const InventoryProducts: React.FC = () => {
     if (typeof product.warehouseId === "object" && product.warehouseId !== null) {
       return (product.warehouseId as any)?.warehouseName || "-";
     }
-    const warehouse = warehouses.find(w => (w._id || w.id) === product.warehouseId);
+    const warehouse = warehouses.find(w => extractId(w) === product.warehouseId);
     return warehouse?.warehouseName || "-";
   };
 
@@ -119,9 +163,9 @@ export const InventoryProducts: React.FC = () => {
 
   // Statistics
   const totalProducts = filteredProducts.length;
-  const totalValue = filteredProducts.reduce((sum, p) => sum + (p.currentStockQty * p.sellingPrice), 0);
-  const lowStockProducts = filteredProducts.filter(p => p.currentStockQty <= p.reorderLevel).length;
-  const outOfStockProducts = filteredProducts.filter(p => p.currentStockQty <= 0).length;
+  const totalValue = filteredProducts.reduce((sum, p) => sum + ((p.currentStockQty || p.openingStock || 0) * (p.sellingPrice || 0)), 0);
+  const lowStockProducts = filteredProducts.filter(p => (p.currentStockQty || p.openingStock || 0) <= (p.reorderLevel || 0)).length;
+  const outOfStockProducts = filteredProducts.filter(p => (p.currentStockQty || p.openingStock || 0) <= 0).length;
 
   const categoryOptions = [
     { value: "", label: t("all_categories") },
@@ -166,15 +210,16 @@ export const InventoryProducts: React.FC = () => {
       {
         header: t("stock"),
         render: (p) => {
-          const status = getStockStatus(p.currentStockQty, p.reorderLevel);
+          const currentStock = p.currentStockQty || p.openingStock || 0;
+          const status = getStockStatus(currentStock, p.reorderLevel || 0);
           return (
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">{p.currentStockQty} {p.defaultUnit}</span>
+                <span className="text-sm font-medium">{currentStock} {p.defaultUnit}</span>
                 <Badge variant={status.variant}>{status.label}</Badge>
               </div>
               <span className="text-xs text-gray-500">
-                {t("reorder_level")}: {p.reorderLevel}
+                {t("reorder_level")}: {p.reorderLevel || 0}
               </span>
             </div>
           );
@@ -207,27 +252,30 @@ export const InventoryProducts: React.FC = () => {
       {
         header: t("actions"),
         className: "text-center",
-        render: (p) => (
-          <div className="flex items-center justify-center gap-2">
-            <button
-              onClick={() => handleEdit(p)}
-              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("edit")}
-            >
-              <Edit2 size={16} />
-            </button>
-            <button
-              onClick={() => handleDelete(p._id || p.id)}
-              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("delete")}
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-        )
+        render: (p) => {
+          const productId = extractId(p);
+          return (
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => handleEdit(p)}
+                className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("edit")}
+              >
+                <Edit2 size={16} />
+              </button>
+              <button
+                onClick={() => handleDelete(productId)}
+                className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("delete")}
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          );
+        }
       }
     ],
-    [t, handleEdit, handleDelete]
+    [t, handleEdit, handleDelete, extractId]
   );
 
   return (
@@ -339,15 +387,15 @@ export const InventoryProducts: React.FC = () => {
       </div>
 
       {/* Table */}
-        <Table
-          data={filteredProducts}
-          columns={columns}
-          keyExtractor={(item) => item._id || item.id}
-          isLoading={isLoading}
-          selectable
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-        />
+      <Table
+        data={filteredProducts}
+        columns={columns}
+        keyExtractor={(item) => extractId(item)}
+        isLoading={isLoading}
+        selectable
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+      />
 
       {/* Modal */}
       <InventoryProductModal
@@ -381,6 +429,3 @@ export const InventoryProducts: React.FC = () => {
     </div>
   );
 };
-
-// Add missing import
-import { AlertCircle, XCircle } from "lucide-react";

@@ -257,6 +257,15 @@ export const useAccountingModule = (fetchAllData?: () => Promise<void>) => {
   }, [fetchAccountingData]);
 
   // --- Budgets ---
+  const fetchBudgets = useCallback(async () => {
+    try {
+      const data = await financeService.getBudgets();
+      setBudgets(Array.isArray(data) ? data : data?.data || []);
+    } catch (error) {
+      console.error("Error fetching Budgets:", error);
+    }
+  }, []);
+
   const addBudget = useCallback(async (data: any) => {
     try {
       await financeService.createBudget(data);
@@ -393,6 +402,7 @@ export const useAccountingModule = (fetchAllData?: () => Promise<void>) => {
     addBudget,
     updateBudget,
     deleteBudget,
+    fetchBudgets,
     addCurrency,
     updateCurrency,
     deleteCurrency,
@@ -411,7 +421,7 @@ export const useAccountingModule = (fetchAllData?: () => Promise<void>) => {
     addTax, updateTax, deleteTax,
     addIncome, updateIncome, deleteIncome,
     addExpense, updateExpense, deleteExpense,
-    addBudget, updateBudget, deleteBudget,
+    addBudget, updateBudget, deleteBudget, fetchBudgets,
     addCurrency, updateCurrency, deleteCurrency,
     addExchangeRate, closeMonth, reopenMonth
   ]);

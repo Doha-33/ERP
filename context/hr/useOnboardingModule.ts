@@ -10,6 +10,15 @@ export const useOnboardingModule = (fetchAllData?: () => Promise<void>) => {
   const [penalties, setPenalties] = useState<Penalty[]>([]);
   const [rewards, setRewards] = useState<Reward[]>([]);
 
+  const fetchInsurancePolicies = useCallback(async () => {
+    try {
+      const data = await hrService.getInsurances();
+      setInsurancePolicies(Array.isArray(data) ? data : data?.data || []);
+    } catch (error) {
+      console.error("Error fetching Insurance Policies:", error);
+    }
+  }, []);
+
   const addInsurance = useCallback(async (insurance: Insurance) => {
     try {
       await hrService.addInsurance(insurance);
@@ -36,6 +45,15 @@ export const useOnboardingModule = (fetchAllData?: () => Promise<void>) => {
       console.error('Failed to delete insurance:', error);
     }
   }, [fetchAllData]);
+
+  const fetchAssignLaptops = useCallback(async () => {
+    try {
+      const data = await hrService.getAssignLaptops();
+      setAssignLaptops(Array.isArray(data) ? data : data?.data || []);
+    } catch (error) {
+      console.error("Error fetching Assign Laptops:", error);
+    }
+  }, []);
 
   const addAssignLaptop = useCallback(async (laptop: AssignLaptop) => {
     try {
@@ -64,6 +82,16 @@ export const useOnboardingModule = (fetchAllData?: () => Promise<void>) => {
     }
   }, [fetchAllData]);
 
+
+  const fetchAccessCards = useCallback(async () => {
+    try {
+      const data = await hrService.getAccessCards();
+      setAccessCards(Array.isArray(data) ? data : data?.data || []);
+    } catch (error) {
+      console.error("Error fetching Access Cards:", error);
+    }
+  }, []);
+
   const addAccessCard = useCallback(async (card: AccessCard) => {
     try {
       await hrService.addAccessCard(card);
@@ -90,6 +118,16 @@ export const useOnboardingModule = (fetchAllData?: () => Promise<void>) => {
       console.error('Failed to delete access card:', error);
     }
   }, [fetchAllData]);
+
+
+  const fetchInitialTrainings = useCallback(async () => {
+    try {
+      const data = await hrService.getInitialTrainings();
+      setInitialTrainings(Array.isArray(data) ? data : data?.data || []);
+    } catch (error) {
+      console.error("Error fetching Initial Trainings:", error);
+    }
+  }, []);
 
   const addInitialTraining = useCallback(async (training: InitialTraining) => {
     try {
@@ -118,6 +156,16 @@ export const useOnboardingModule = (fetchAllData?: () => Promise<void>) => {
     }
   }, [fetchAllData]);
 
+
+  const fetchPenalties = useCallback(async () => {
+    try {
+      const data = await hrService.getPenalties();
+      setPenalties(Array.isArray(data) ? data : data?.data || []);
+    } catch (error) {
+      console.error("Error fetching Penalties:", error);
+    }
+  }, []);
+
   const addPenalty = useCallback(async (penalty: Penalty) => {
     try {
       await hrService.addPenalty(penalty);
@@ -144,6 +192,15 @@ export const useOnboardingModule = (fetchAllData?: () => Promise<void>) => {
       console.error('Failed to delete penalty:', error);
     }
   }, [fetchAllData]);
+
+  const fetchRewards = useCallback(async () => {
+    try {
+      const data = await hrService.getRewards();
+      setRewards(Array.isArray(data) ? data : data?.data || []);
+    } catch (error) {
+      console.error("Error fetching Rewards:", error);
+    }
+  }, []);
 
   const addReward = useCallback(async (reward: Reward) => {
     try {
@@ -201,20 +258,20 @@ export const useOnboardingModule = (fetchAllData?: () => Promise<void>) => {
     penalties, setPenalties,
     rewards, setRewards,
     fetchOnboardingData,
-    addInsurance, updateInsurance, deleteInsurance,
-    addAssignLaptop, updateAssignLaptop, deleteAssignLaptop,
-    addAccessCard, updateAccessCard, deleteAccessCard,
-    addInitialTraining, updateInitialTraining, deleteInitialTraining,
-    addPenalty, updatePenalty, deletePenalty,
-    addReward, updateReward, deleteReward
+    addInsurance, updateInsurance, deleteInsurance, fetchInsurancePolicies,
+    addAssignLaptop, updateAssignLaptop, deleteAssignLaptop, fetchAssignLaptops,
+    addAccessCard, updateAccessCard, deleteAccessCard, fetchAccessCards,
+    addInitialTraining, updateInitialTraining, deleteInitialTraining, fetchInitialTrainings,
+    addPenalty, updatePenalty, deletePenalty, fetchPenalties,
+    addReward, updateReward, deleteReward, fetchRewards,
   }), [
     insurancePolicies, assignLaptops, accessCards, initialTrainings, penalties, rewards,
     fetchOnboardingData,
-    addInsurance, updateInsurance, deleteInsurance,
-    addAssignLaptop, updateAssignLaptop, deleteAssignLaptop,
-    addAccessCard, updateAccessCard, deleteAccessCard,
-    addInitialTraining, updateInitialTraining, deleteInitialTraining,
-    addPenalty, updatePenalty, deletePenalty,
-    addReward, updateReward, deleteReward
+    addInsurance, updateInsurance, deleteInsurance, fetchInsurancePolicies,
+    addAssignLaptop, updateAssignLaptop, deleteAssignLaptop, fetchAssignLaptops,
+    addAccessCard, updateAccessCard, deleteAccessCard, fetchAccessCards,
+    addInitialTraining, updateInitialTraining, deleteInitialTraining, fetchInitialTrainings,
+    addPenalty, updatePenalty, deletePenalty, fetchPenalties,
+    addReward, updateReward, deleteReward, fetchRewards,
   ]);
 };

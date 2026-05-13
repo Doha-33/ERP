@@ -1,8 +1,23 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Edit2, User, Calendar, DollarSign, AlertCircle, FileText, Upload } from "lucide-react";
+import {
+  Plus,
+  Edit2,
+  User,
+  Calendar,
+  DollarSign,
+  AlertCircle,
+  FileText,
+  Upload,
+} from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
-import { Button, Input, Select, TextArea, FileUpload } from "../../components/ui/Common";
+import {
+  Button,
+  Input,
+  Select,
+  TextArea,
+  FileUpload,
+} from "../../components/ui/Common";
 import { Penalty } from "../../types";
 import { useData } from "../../context/DataContext";
 
@@ -14,12 +29,16 @@ interface PenaltyModalProps {
   isLoading?: boolean;
 }
 
-const compressImage = (base64Str: string, maxWidth = 1200, maxHeight = 1200): Promise<string> => {
+const compressImage = (
+  base64Str: string,
+  maxWidth = 1200,
+  maxHeight = 1200,
+): Promise<string> => {
   return new Promise((resolve) => {
     const img = new Image();
     img.src = base64Str;
     img.onload = () => {
-      const canvas = document.createElement('canvas');
+      const canvas = document.createElement("canvas");
       let width = img.width;
       let height = img.height;
       if (width > maxWidth || height > maxHeight) {
@@ -33,9 +52,9 @@ const compressImage = (base64Str: string, maxWidth = 1200, maxHeight = 1200): Pr
       }
       canvas.width = width;
       canvas.height = height;
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext("2d");
       ctx?.drawImage(img, 0, 0, width, height);
-      resolve(canvas.toDataURL('image/jpeg', 0.5));
+      resolve(canvas.toDataURL("image/jpeg", 0.5));
     };
     img.onerror = () => resolve(base64Str);
   });
@@ -63,11 +82,20 @@ export const PenaltyModal: React.FC<PenaltyModalProps> = ({
     reason: "",
   });
 
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+      if (value._id && typeof value._id === "string") return value._id;
+      if (value.id && typeof value.id === "string") return value.id;
+    }
+    return "";
+  }, []);
+
   useEffect(() => {
     if (penaltyToEdit && isOpen) {
-      const employeeId = typeof penaltyToEdit.employeeInfo === "object"
-        ? (penaltyToEdit.employeeInfo as any)?._id
-        : penaltyToEdit.employeeInfo || penaltyToEdit.employeeId;
+      const employeeId = extractId(penaltyToEdit.employeeInfo);
+      const decisionMakerId = extractId(penaltyToEdit.decisionMaker);
 
       setFormData({
         employeeInfo: employeeId || "",
@@ -76,7 +104,7 @@ export const PenaltyModal: React.FC<PenaltyModalProps> = ({
         date: penaltyToEdit.date
           ? new Date(penaltyToEdit.date).toISOString().split("T")[0]
           : new Date().toISOString().split("T")[0],
-        decisionMaker: penaltyToEdit.decisionMaker || "",
+        decisionMaker: decisionMakerId || "",
         status: penaltyToEdit.status || "Pending",
         reason: penaltyToEdit.reason || "",
       });
@@ -94,7 +122,7 @@ export const PenaltyModal: React.FC<PenaltyModalProps> = ({
       setAttachment(undefined);
       setAttachmentName("");
     }
-  }, [penaltyToEdit, isOpen]);
+  }, [penaltyToEdit, isOpen, extractId]);
 
   const penaltyTypeOptions = [
     { value: "Late Arrival", label: t("late_arrival") },
@@ -103,22 +131,21 @@ export const PenaltyModal: React.FC<PenaltyModalProps> = ({
     { value: "Violation", label: t("violation") },
     { value: "Other", label: t("other") },
   ];
-
   const statusOptions = [
     { value: "Pending", label: t("pending") },
     { value: "Approved", label: t("approved") },
     { value: "Rejected", label: t("rejected") },
   ];
 
-  const employeeOptions = employees.map(emp => ({
-    value: emp._id || emp.id,
+  const employeeOptions = employees.map((emp) => ({
+    value: extractId(emp),
     label: `${emp.fullName} (${emp.employeeCode})`,
   }));
 
   const decisionMakerOptions = [
     { value: "", label: t("none") },
-    ...employees.map(emp => ({
-      value: emp._id || emp.id,
+    ...employees.map((emp) => ({
+      value: extractId(emp),
       label: `${emp.fullName} (${emp.employeeCode})`,
     })),
   ];
@@ -129,7 +156,7 @@ export const PenaltyModal: React.FC<PenaltyModalProps> = ({
       const reader = new FileReader();
       reader.onloadend = async () => {
         const result = reader.result as string;
-        if (file.type.startsWith('image/')) {
+        if (file.type.startsWith("image/")) {
           const compressed = await compressImage(result);
           setAttachment(compressed);
         } else {
@@ -146,7 +173,7 @@ export const PenaltyModal: React.FC<PenaltyModalProps> = ({
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
+
     try {
       await onSave({
         ...formData,
@@ -161,7 +188,7 @@ export const PenaltyModal: React.FC<PenaltyModalProps> = ({
   };
 
   const handleChange = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   return (
@@ -224,13 +251,16 @@ export const PenaltyModal: React.FC<PenaltyModalProps> = ({
           {/* Penalty Amount */}
           <div className="space-y-1">
             <label className="text-sm font-medium text-gray-700">
-              {t("penalty_amount")} (EGP) <span className="text-red-500">*</span>
+              {t("penalty_amount")} (EGP){" "}
+              <span className="text-red-500">*</span>
             </label>
             <Input
               type="number"
               step="0.01"
               value={formData.penaltyAmount}
-              onChange={(e) => handleChange("penaltyAmount", Number(e.target.value))}
+              onChange={(e) =>
+                handleChange("penaltyAmount", Number(e.target.value))
+              }
               placeholder="0.00"
               required
               fullWidth
@@ -285,7 +315,11 @@ export const PenaltyModal: React.FC<PenaltyModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("attachment")}
             </label>
-            <FileUpload label={t("upload_attachment")} onChange={handleFileChange} accept="image/*,application/pdf" />
+            <FileUpload
+              label={t("upload_attachment")}
+              onChange={handleFileChange}
+              accept="image/*,application/pdf"
+            />
             {attachmentName && (
               <div className="flex items-center gap-2 text-sm text-gray-600 mt-2">
                 <FileText size={14} />
@@ -306,7 +340,11 @@ export const PenaltyModal: React.FC<PenaltyModalProps> = ({
         </div>
 
         <div className="flex justify-end gap-3 mt-8">
-          <Button variant="secondary" onClick={onClose} disabled={isSubmitting || isLoading}>
+          <Button
+            variant="secondary"
+            onClick={onClose}
+            disabled={isSubmitting || isLoading}
+          >
             {t("cancel")}
           </Button>
           <Button

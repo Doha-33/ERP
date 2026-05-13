@@ -177,28 +177,6 @@ export const Performance: React.FC = () => {
       )
     },
     {
-      header: t('attendance'),
-      render: (e) => (
-        <div className="flex items-center gap-2">
-          <div className="w-12 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-            <div className="h-full bg-blue-500 rounded-full" style={{ width: `${e.attendance || 0}%` }} />
-          </div>
-          <span className="text-xs text-gray-600">{e.attendance || 0}%</span>
-        </div>
-      )
-    },
-    {
-      header: t('productivity'),
-      render: (e) => (
-        <div className="flex items-center gap-2">
-          <div className="w-12 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-            <div className="h-full bg-blue-500 rounded-full" style={{ width: `${e.productivity || 0}%` }} />
-          </div>
-          <span className="text-xs text-gray-600">{e.productivity || 0}%</span>
-        </div>
-      )
-    },
-    {
       header: t('overall_score'),
       render: (e) => {
         const score = e.evaluationScore || 0;

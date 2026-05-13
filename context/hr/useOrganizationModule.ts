@@ -10,6 +10,15 @@ export const useOrganizationModule = (fetchAllData?: () => Promise<void>) => {
   const [jobs, setJobs] = useState<Job[]>([]);
 
   // Companies
+  const fetchCompanies = useCallback(async () => {
+    try {
+      const data = await hrService.getCompanies();
+      setCompanies(Array.isArray(data) ? data : data?.data || []);
+    } catch (error) {
+      console.error("Error fetching companies:", error);
+    }
+  }, []);
+
   const addCompany = useCallback(async (company: Company) => {
     await hrService.addCompany(company);
     if (fetchAllData) await fetchAllData();
@@ -26,6 +35,15 @@ export const useOrganizationModule = (fetchAllData?: () => Promise<void>) => {
   }, [fetchAllData]);
 
   // Branches
+  const fetchBranches = useCallback(async () => {
+    try {
+      const data = await hrService.getBranches();
+      setBranches(Array.isArray(data) ? data : data?.data || []);
+    } catch (error) {
+      console.error("Error fetching companies:", error);
+    }
+  }, []);
+
   const addBranch = useCallback(async (branch: Branch) => {
     await hrService.addBranch(branch);
     if (fetchAllData) await fetchAllData();
@@ -42,6 +60,14 @@ export const useOrganizationModule = (fetchAllData?: () => Promise<void>) => {
   }, [fetchAllData]);
 
   // Departments
+  const fetchDepartments = useCallback(async () => {
+    try {
+      const data = await hrService.getDepartments();
+      setDepartments(Array.isArray(data) ? data : data?.data || []);
+    } catch (error) {
+      console.error("Error fetching Departments:", error);
+    }
+  }, []);
   const addDepartment = useCallback(async (department: Department) => {
     await hrService.addDepartment(department);
     if (fetchAllData) await fetchAllData();
@@ -58,6 +84,16 @@ export const useOrganizationModule = (fetchAllData?: () => Promise<void>) => {
   }, [fetchAllData]);
 
   // Jobs
+  const fetchJobs = useCallback(async () => {
+    try {
+      const data = await hrService.getJobs();
+      setJobs(Array.isArray(data) ? data : data?.data || []);
+    } catch (error) {
+      console.error("Error fetching Jobs:", error);
+    }
+  }, []);
+
+
   const addJob = useCallback(async (job: Job) => {
     await hrService.addJob(job);
     if (fetchAllData) await fetchAllData();
@@ -95,17 +131,17 @@ export const useOrganizationModule = (fetchAllData?: () => Promise<void>) => {
     branches, setBranches,
     departments, setDepartments,
     jobs, setJobs,
-    fetchOrganizationData,
+    fetchOrganizationData, fetchCompanies, fetchBranches,
     addCompany, updateCompany, deleteCompany,
     addBranch, updateBranch, deleteBranch,
-    addDepartment, updateDepartment, deleteDepartment,
-    addJob, updateJob, deleteJob,
+    addDepartment, updateDepartment, deleteDepartment, fetchDepartments,
+    addJob, updateJob, deleteJob,fetchJobs,
   }), [
     companies, branches, departments, jobs, fetchOrganizationData,
-    addCompany, updateCompany, deleteCompany,
-    addBranch, updateBranch, deleteBranch,
-    addDepartment, updateDepartment, deleteDepartment,
-    addJob, updateJob, deleteJob,
+    addCompany, updateCompany, deleteCompany,fetchCompanies,
+    addBranch, updateBranch, deleteBranch, fetchBranches,
+    addDepartment, updateDepartment, deleteDepartment, fetchDepartments,
+    addJob, updateJob, deleteJob,fetchJobs,
   ]);
 };
     

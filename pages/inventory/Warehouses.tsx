@@ -11,7 +11,7 @@ import { toast } from "sonner";
 
 export const Warehouses: React.FC = () => {
   const { t } = useTranslation();
-  const { warehouses, addWarehouse, updateWarehouse, deleteWarehouse } = useData();
+  const { warehouses, addWarehouse, updateWarehouse, deleteWarehouse, fetchWarehouses } = useData();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingWarehouse, setEditingWarehouse] = useState<Warehouse | null>(null);
@@ -23,30 +23,72 @@ export const Warehouses: React.FC = () => {
   const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSave = async (warehouse: Partial<Warehouse>) => {
+  // Helper function to extract ID
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "object") {
+      return value._id || value.id || "";
+    }
+    return value;
+  }, []);
+
+  const handleSave = async (warehouseData: Partial<Warehouse>) => {
     try {
       setIsLoading(true);
+      
       if (editingWarehouse) {
-        await updateWarehouse({ ...warehouse, _id: editingWarehouse._id, id: editingWarehouse.id } as Warehouse);
+        const warehouseId = extractId(editingWarehouse);
+        
+        if (!warehouseId) {
+          toast.error(t("warehouse_id_missing"));
+          return;
+        }
+        
+        const updateData = {
+          ...warehouseData,
+          _id: warehouseId,
+          id: warehouseId
+        } as Warehouse;
+        
+        console.log("Updating warehouse with ID:", warehouseId, updateData);
+        await updateWarehouse(updateData);
         toast.success(t("warehouse_updated_successfully"));
       } else {
-        await addWarehouse(warehouse as Warehouse);
+        await addWarehouse(warehouseData as Warehouse);
         toast.success(t("warehouse_created_successfully"));
       }
+      
+      await fetchWarehouses();
       setIsModalOpen(false);
       setEditingWarehouse(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving warehouse:", error);
-      toast.error(t("failed_to_save_warehouse"));
+      const message = error?.response?.data?.message || error?.message || t("failed_to_save_warehouse");
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleEdit = useCallback((warehouse: Warehouse) => {
-    setEditingWarehouse(warehouse);
+    const warehouseId = extractId(warehouse);
+    
+    if (!warehouseId) {
+      console.error("Warehouse ID not found", warehouse);
+      toast.error(t("warehouse_id_not_found"));
+      return;
+    }
+    
+    const warehouseToEdit: Warehouse = {
+      ...warehouse,
+      _id: warehouseId,
+      id: warehouseId,
+    };
+    
+    console.log("Editing warehouse:", warehouseToEdit);
+    setEditingWarehouse(warehouseToEdit);
     setIsModalOpen(true);
-  }, []);
+  }, [extractId, t]);
 
   const handleDelete = useCallback((id: string) => {
     setDeleteId(id);
@@ -59,11 +101,12 @@ export const Warehouses: React.FC = () => {
         toast.success(t("warehouse_deleted_successfully"));
         setDeleteId(null);
         setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+        await fetchWarehouses();
       } catch (error) {
         toast.error(t("failed_to_delete_warehouse"));
       }
     }
-  }, [deleteId, deleteWarehouse, t]);
+  }, [deleteId, deleteWarehouse, fetchWarehouses, t]);
 
   const handleBulkDelete = async () => {
     try {
@@ -72,6 +115,7 @@ export const Warehouses: React.FC = () => {
       toast.success(t("warehouses_deleted_successfully", { count: selectedIds.length }));
       setSelectedIds([]);
       setIsBulkConfirmOpen(false);
+      await fetchWarehouses();
     } catch (error) {
       console.error("Bulk delete failed", error);
       toast.error(t("failed_to_delete_warehouses"));
@@ -217,27 +261,30 @@ export const Warehouses: React.FC = () => {
       {
         header: t("actions"),
         className: "text-center",
-        render: (w) => (
-          <div className="flex items-center justify-center gap-2">
-            <button
-              onClick={() => handleEdit(w)}
-              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("edit")}
-            >
-              <Edit2 size={16} />
-            </button>
-            <button
-              onClick={() => handleDelete(w._id || w.id)}
-              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("delete")}
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-        )
+        render: (w) => {
+          const warehouseId = extractId(w);
+          return (
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => handleEdit(w)}
+                className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("edit")}
+              >
+                <Edit2 size={16} />
+              </button>
+              <button
+                onClick={() => handleDelete(warehouseId)}
+                className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("delete")}
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          );
+        }
       }
     ],
-    [t, handleEdit, handleDelete]
+    [t, handleEdit, handleDelete, extractId]
   );
 
   return (
@@ -362,15 +409,15 @@ export const Warehouses: React.FC = () => {
       </div>
 
       {/* Table */}
-        <Table
-          data={filteredWarehouses}
-          columns={columns}
-          keyExtractor={(item) => item._id || item.id}
-          isLoading={isLoading}
-          selectable
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-        />
+      <Table
+        data={filteredWarehouses}
+        columns={columns}
+        keyExtractor={(item) => extractId(item)}
+        isLoading={isLoading}
+        selectable
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+      />
 
       {/* Modal */}
       <WarehouseModal

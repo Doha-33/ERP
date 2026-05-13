@@ -105,20 +105,6 @@ export const SignIn: React.FC = () => {
     <div className="min-h-screen flex transition-colors duration-300">
       {/* Top Bar Controls */}
       <div className="fixed top-6 right-6 z-50 flex items-center gap-3">
-        {/* Theme Toggle */}
-        <button
-          onClick={toggleTheme}
-          className="group relative p-2.5 rounded-xl bg-white/80 backdrop-blur-md shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
-          title={theme === 'light' ? t('dark_mode') : t('light_mode')}
-        >
-          <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-primary/20 to-secondary/20 opacity-0 group-hover:opacity-100 transition-opacity" />
-          {theme === 'light' ? (
-            <Moon size={20} className="text-gray-700 dark:text-gray-300 relative z-10" />
-          ) : (
-            <Sun size={20} className="text-yellow-400 relative z-10" />
-          )}
-        </button>
-
         {/* Language Dropdown */}
         <div className="relative lang-menu">
           <button

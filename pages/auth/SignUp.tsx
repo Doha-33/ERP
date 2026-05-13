@@ -1,25 +1,41 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
-import { AlertCircle, Moon, Sun, Globe, Check, ArrowLeft, Eye, EyeOff } from 'lucide-react';
-import { Button, Input } from '../../components/ui/Common';
-import { useTheme } from '../../context/ThemeContext';
-import { useAuth } from '../../context/AuthContext';
-import authService from '../../services/auth.service';
+import React, { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import {
+  AlertCircle,
+  Moon,
+  Sun,
+  Globe,
+  Check,
+  ArrowLeft,
+  Eye,
+  EyeOff,
+} from "lucide-react";
+import { Button, Input } from "../../components/ui/Common";
+import { useTheme } from "../../context/ThemeContext";
+import { useAuth } from "../../context/AuthContext";
+import authService from "../../services/auth.service";
 
-const signUpSchema = z.object({
-  username: z.string().min(2, 'Username must be at least 2 characters').optional(),
-  email: z.string().min(1, 'Email is required').email('Invalid email format'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
-  confirmPassword: z.string().min(1, 'Please confirm your password'),
-  agreeTerms: z.boolean().refine(val => val === true, 'You must agree to the terms'),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"],
-});
+const signUpSchema = z
+  .object({
+    username: z
+      .string()
+      .min(2, "Username must be at least 2 characters")
+      .optional(),
+    email: z.string().min(1, "Email is required").email("Invalid email format"),
+    password: z.string().min(6, "Password must be at least 6 characters"),
+    confirmPassword: z.string().min(1, "Please confirm your password"),
+    agreeTerms: z
+      .boolean()
+      .refine((val) => val === true, "You must agree to the terms"),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords don't match",
+    path: ["confirmPassword"],
+  });
 
 type SignUpFormInputs = z.infer<typeof signUpSchema>;
 
@@ -28,7 +44,7 @@ export const SignUp: React.FC = () => {
   const navigate = useNavigate();
   const { lang, toggleLang, theme, toggleTheme } = useTheme();
   const { login } = useAuth();
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [showLangMenu, setShowLangMenu] = useState(false);
@@ -41,65 +57,51 @@ export const SignUp: React.FC = () => {
   } = useForm<SignUpFormInputs>({
     resolver: zodResolver(signUpSchema),
     defaultValues: {
-      username: '',
-      email: '',
-      password: '',
-      confirmPassword: '',
+      username: "",
+      email: "",
+      password: "",
+      confirmPassword: "",
       agreeTerms: false,
-    }
+    },
   });
 
-  const password = watch('password');
+  const password = watch("password");
 
   const onSubmit = async (data: SignUpFormInputs) => {
-    setError('');
+    setError("");
     try {
       const { user, token } = await authService.register({
-        username: data.username || '',
+        username: data.username || "",
         email: data.email,
         password: data.password,
       });
 
       login(token, user);
-      navigate('/');
+      navigate("/");
     } catch (err: any) {
-      console.error('Registration error:', err);
-      setError(err.message || t('registration_error'));
+      console.error("Registration error:", err);
+      setError(err.message || t("registration_error"));
     }
   };
 
   const languages = [
-    { code: 'en', name: 'English', flag: '🇬🇧' },
-    { code: 'ar', name: 'العربية', flag: '🇸🇦' },
+    { code: "en", name: "English", flag: "🇬🇧" },
+    { code: "ar", name: "العربية", flag: "🇸🇦" },
   ];
 
   return (
     <div className="min-h-screen flex transition-colors duration-300">
       {/* Top Bar Controls */}
       <div className="fixed top-6 right-6 z-50 flex items-center gap-3">
-        {/* Theme Toggle */}
-        <button
-          onClick={toggleTheme}
-          className="group relative p-2.5 rounded-xl bg-white/80 dark:bg-gray-800/80 backdrop-blur-md shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
-          title={theme === 'light' ? t('dark_mode') : t('light_mode')}
-        >
-          <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-primary/20 to-secondary/20 opacity-0 group-hover:opacity-100 transition-opacity" />
-          {theme === 'light' ? (
-            <Moon size={20} className="text-gray-700 relative z-10" />
-          ) : (
-            <Sun size={20} className="text-yellow-400 relative z-10" />
-          )}
-        </button>
-
         {/* Language Dropdown */}
         <div className="relative lang-menu">
           <button
             onClick={() => setShowLangMenu(!showLangMenu)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/80 dark:bg-gray-800/80 backdrop-blur-md shadow-lg hover:shadow-xl transition-all duration-300"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/80 backdrop-blur-md shadow-lg hover:shadow-xl transition-all duration-300"
           >
             <Globe size={18} className="text-gray-600 dark:text-gray-400" />
             <span className="font-medium text-gray-700 dark:text-gray-300">
-              {lang === 'en' ? 'EN' : 'AR'}
+              {lang === "en" ? "EN" : "AR"}
             </span>
           </button>
 
@@ -134,12 +136,15 @@ export const SignUp: React.FC = () => {
       <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-8 lg:p-12">
         <div className="w-full max-w-md">
           {/* Back Button */}
-          <Link 
-            to="/signin" 
+          <Link
+            to="/signin"
             className="inline-flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-primary transition-colors mb-8 group"
           >
-            <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
-            <span className="font-medium">{t('back_to_signin')}</span>
+            <ArrowLeft
+              size={16}
+              className="group-hover:-translate-x-1 transition-transform"
+            />
+            <span className="font-medium">{t("back_to_signin")}</span>
           </Link>
 
           {/* Mobile Logo */}
@@ -152,10 +157,10 @@ export const SignUp: React.FC = () => {
           {/* Header */}
           <div className="text-center lg:text-left mb-8">
             <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent mb-3">
-              {t('create_account')}
+              {t("create_account")}
             </h1>
             <p className="text-gray-500 dark:text-gray-400">
-              {t('sign_up_subtitle')}
+              {t("sign_up_subtitle")}
             </p>
           </div>
 
@@ -164,12 +169,15 @@ export const SignUp: React.FC = () => {
             {/* Username Field */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                {t('username')} <span className="text-gray-400 text-xs font-normal">{t('optional')}</span>
+                {t("username")}{" "}
+                <span className="text-gray-400 text-xs font-normal">
+                  {t("optional")}
+                </span>
               </label>
               <input
                 type="text"
-                placeholder={t('username_placeholder')}
-                {...register('username')}
+                placeholder={t("username_placeholder")}
+                {...register("username")}
                 className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 dark:border-gray-700 focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/20 bg-white dark:bg-gray-800 transition-all duration-200 dark:text-white"
               />
               {errors.username && (
@@ -183,16 +191,17 @@ export const SignUp: React.FC = () => {
             {/* Email Field */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                {t('email')} <span className="text-red-500">*</span>
+                {t("email")} <span className="text-red-500">*</span>
               </label>
               <input
                 type="email"
                 placeholder="hello@example.com"
-                {...register('email')}
+                {...register("email")}
                 className={`w-full px-4 py-3 rounded-xl border-2 transition-all duration-200 bg-white dark:bg-gray-800
-                  ${errors.email 
-                    ? 'border-red-300 dark:border-red-700 focus:border-red-500' 
-                    : 'border-gray-200 dark:border-gray-700 focus:border-primary'
+                  ${
+                    errors.email
+                      ? "border-red-300 dark:border-red-700 focus:border-red-500"
+                      : "border-gray-200 dark:border-gray-700 focus:border-primary"
                   } focus:outline-none focus:ring-4 focus:ring-primary/20 dark:text-white`}
               />
               {errors.email && (
@@ -206,17 +215,18 @@ export const SignUp: React.FC = () => {
             {/* Password Field */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                {t('password')} <span className="text-red-500">*</span>
+                {t("password")} <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <input
                   type={showPassword ? "text" : "password"}
-                  placeholder={t('password_placeholder')}
-                  {...register('password')}
+                  placeholder={t("password_placeholder")}
+                  {...register("password")}
                   className={`w-full px-4 py-3 rounded-xl border-2 transition-all duration-200 bg-white dark:bg-gray-800
-                    ${errors.password 
-                      ? 'border-red-300 dark:border-red-700 focus:border-red-500' 
-                      : 'border-gray-200 dark:border-gray-700 focus:border-primary'
+                    ${
+                      errors.password
+                        ? "border-red-300 dark:border-red-700 focus:border-red-500"
+                        : "border-gray-200 dark:border-gray-700 focus:border-primary"
                     } focus:outline-none focus:ring-4 focus:ring-primary/20 dark:text-white pr-12`}
                 />
                 <button
@@ -238,17 +248,18 @@ export const SignUp: React.FC = () => {
             {/* Confirm Password Field */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
-                {t('confirm_password')} <span className="text-red-500">*</span>
+                {t("confirm_password")} <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <input
                   type={showConfirmPassword ? "text" : "password"}
-                  placeholder={t('confirm_password_placeholder')}
-                  {...register('confirmPassword')}
+                  placeholder={t("confirm_password_placeholder")}
+                  {...register("confirmPassword")}
                   className={`w-full px-4 py-3 rounded-xl border-2 transition-all duration-200 bg-white dark:bg-gray-800
-                    ${errors.confirmPassword 
-                      ? 'border-red-300 dark:border-red-700 focus:border-red-500' 
-                      : 'border-gray-200 dark:border-gray-700 focus:border-primary'
+                    ${
+                      errors.confirmPassword
+                        ? "border-red-300 dark:border-red-700 focus:border-red-500"
+                        : "border-gray-200 dark:border-gray-700 focus:border-primary"
                     } focus:outline-none focus:ring-4 focus:ring-primary/20 dark:text-white pr-12`}
                 />
                 <button
@@ -256,7 +267,11 @@ export const SignUp: React.FC = () => {
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
                 >
-                  {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  {showConfirmPassword ? (
+                    <EyeOff size={20} />
+                  ) : (
+                    <Eye size={20} />
+                  )}
                 </button>
               </div>
               {errors.confirmPassword && (
@@ -272,22 +287,26 @@ export const SignUp: React.FC = () => {
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                    <div 
+                    <div
                       className={`h-full transition-all duration-300 ${
-                        password.length >= 8 
-                          ? 'w-full bg-green-500' 
-                          : password.length >= 6 
-                          ? 'w-3/4 bg-yellow-500' 
-                          : 'w-1/2 bg-red-500'
+                        password.length >= 8
+                          ? "w-full bg-green-500"
+                          : password.length >= 6
+                            ? "w-3/4 bg-yellow-500"
+                            : "w-1/2 bg-red-500"
                       }`}
                     />
                   </div>
                   <span className="text-xs text-gray-500 dark:text-gray-400">
-                    {password.length >= 8 ? t('strong') : password.length >= 6 ? t('medium') : t('weak')}
+                    {password.length >= 8
+                      ? t("strong")
+                      : password.length >= 6
+                        ? t("medium")
+                        : t("weak")}
                   </span>
                 </div>
                 <p className="text-xs text-gray-400 dark:text-gray-500">
-                  {t('password_requirements')}
+                  {t("password_requirements")}
                 </p>
               </div>
             )}
@@ -296,17 +315,23 @@ export const SignUp: React.FC = () => {
             <div className="flex items-start gap-3">
               <input
                 type="checkbox"
-                {...register('agreeTerms')}
+                {...register("agreeTerms")}
                 className="mt-1 w-4 h-4 rounded border-2 border-gray-300 dark:border-gray-600 text-primary focus:ring-primary focus:ring-2 transition-all"
               />
               <label className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                {t('agree_terms')}{' '}
-                <a href="/terms" className="text-primary hover:underline font-medium">
-                  {t('terms_conditions')}
-                </a>{' '}
-                {t('and')}{' '}
-                <a href="/privacy" className="text-primary hover:underline font-medium">
-                  {t('privacy_policy')}
+                {t("agree_terms")}{" "}
+                <a
+                  href="/terms"
+                  className="text-primary hover:underline font-medium"
+                >
+                  {t("terms_conditions")}
+                </a>{" "}
+                {t("and")}{" "}
+                <a
+                  href="/privacy"
+                  className="text-primary hover:underline font-medium"
+                >
+                  {t("privacy_policy")}
                 </a>
               </label>
             </div>
@@ -321,7 +346,10 @@ export const SignUp: React.FC = () => {
             {error && (
               <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 animate-shake">
                 <div className="flex items-start gap-3">
-                  <AlertCircle size={18} className="text-red-500 shrink-0 mt-0.5" />
+                  <AlertCircle
+                    size={18}
+                    className="text-red-500 shrink-0 mt-0.5"
+                  />
                   <p className="text-sm text-red-600 dark:text-red-400 font-medium">
                     {error}
                   </p>
@@ -333,26 +361,26 @@ export const SignUp: React.FC = () => {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full py-3 px-4 bg-gradient-to-r from-primary to-secondary text-white font-bold rounded-xl shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+              className="w-full py-3 px-4 bg-primary text-white font-bold rounded-xl shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
               {isSubmitting ? (
                 <div className="flex items-center justify-center gap-2">
                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>{t('creating_account')}</span>
+                  <span>{t("creating_account")}</span>
                 </div>
               ) : (
-                t('sign_up')
+                t("sign_up")
               )}
             </button>
 
             {/* Sign In Link */}
             <p className="text-center text-sm text-gray-500 dark:text-gray-400">
-              {t('already_have_account')}{' '}
+              {t("already_have_account")}{" "}
               <Link
                 to="/signin"
                 className="font-bold text-primary hover:text-primary-dark hover:underline transition-colors"
               >
-                {t('sign_in')}
+                {t("sign_in")}
               </Link>
             </p>
           </form>
@@ -363,10 +391,14 @@ export const SignUp: React.FC = () => {
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-primary via-primary-dark to-secondary relative overflow-hidden">
         {/* Animated Background Pattern */}
         <div className="absolute inset-0 opacity-10">
-          <div className="absolute inset-0" style={{
-            backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)',
-            backgroundSize: '40px 40px'
-          }} />
+          <div
+            className="absolute inset-0"
+            style={{
+              backgroundImage:
+                "radial-gradient(circle at 2px 2px, white 1px, transparent 0)",
+              backgroundSize: "40px 40px",
+            }}
+          />
         </div>
 
         {/* Animated Gradient Orbs */}
@@ -385,21 +417,24 @@ export const SignUp: React.FC = () => {
           </div>
 
           <h2 className="text-4xl font-bold mb-4 tracking-tight">
-            {t('join_future')}
+            {t("join_future")}
           </h2>
-          
+
           <p className="text-white/80 text-lg max-w-md leading-relaxed">
-            {t('sign_up_hero_subtitle')}
+            {t("sign_up_hero_subtitle")}
           </p>
 
           {/* Benefits List */}
           <div className="mt-12 space-y-3 max-w-md">
             {[
-              { icon: '🚀', text: t('benefit_fast_setup') },
-              { icon: '🔒', text: t('benefit_secure') },
-              { icon: '💼', text: t('benefit_pro_features') },
+              { icon: "🚀", text: t("benefit_fast_setup") },
+              { icon: "🔒", text: t("benefit_secure") },
+              { icon: "💼", text: t("benefit_pro_features") },
             ].map((benefit, idx) => (
-              <div key={idx} className="flex items-center gap-3 text-sm bg-white/10 backdrop-blur-sm rounded-xl px-4 py-2">
+              <div
+                key={idx}
+                className="flex items-center gap-3 text-sm bg-white/10 backdrop-blur-sm rounded-xl px-4 py-2"
+              >
                 <span className="text-xl">{benefit.icon}</span>
                 <span className="text-white/90">{benefit.text}</span>
               </div>

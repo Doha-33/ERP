@@ -129,7 +129,7 @@ export const useUserModule = (fetchAllData?: () => Promise<void>) => {
 
   const assignPermissionsToRole = useCallback(async (roleId: string, data: any) => {
     try {
-      await roleService.addPermissionToRole(roleId, data);
+      await roleService.updatePermissionForRole(roleId, data);
       await fetchRoles(); // Refresh roles to get updated permissions
       return true;
     } catch (err) {

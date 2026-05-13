@@ -33,14 +33,16 @@ export const AccountsPayableModal: React.FC<AccountsPayableModalProps> = ({
   initialData,
   isLoading
 }) => {
-  const { t } = useTranslation();
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<APFormData>({
+  const { t, i18n } = useTranslation();
+  const isRTL = i18n.language === 'ar';
+  
+  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<APFormData>({
     resolver: zodResolver(apSchema),
     defaultValues: {
       vendorName: '',
       invoiceNumber: '',
       invoiceDate: new Date().toISOString().split('T')[0],
-      dueDate: new Date().toISOString().split('T')[0],
+      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       amount: 0,
       notes: '',
     }
@@ -51,75 +53,93 @@ export const AccountsPayableModal: React.FC<AccountsPayableModalProps> = ({
       reset({
         vendorName: initialData.vendorName,
         invoiceNumber: initialData.invoiceNumber,
-        invoiceDate: initialData.invoiceDate?.split('T')[0] || '',
-        dueDate: initialData.dueDate?.split('T')[0] || '',
+        invoiceDate: initialData.invoiceDate ? new Date(initialData.invoiceDate).toISOString().split('T')[0] : '',
+        dueDate: initialData.dueDate ? new Date(initialData.dueDate).toISOString().split('T')[0] : '',
         amount: initialData.amount,
         notes: initialData.notes || '',
       });
     } else {
       reset({
         vendorName: '',
-        invoiceNumber: '',
+        invoiceNumber: `PO-${Date.now().toString().slice(-6)}`,
         invoiceDate: new Date().toISOString().split('T')[0],
-        dueDate: new Date().toISOString().split('T')[0],
+        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         amount: 0,
         notes: '',
       });
     }
   }, [initialData, reset]);
 
+  const onSubmitForm = async (data: APFormData) => {
+    await onSubmit(data);
+  };
+
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
       title={initialData ? t('edit_accounts_payable') : t('add_accounts_payable')}
+      className="w-full max-w-md mx-4 sm:mx-auto"
     >
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 pt-4">
+      <form onSubmit={handleSubmit(onSubmitForm)} className="space-y-4" dir={isRTL ? "rtl" : "ltr"}>
         <Input
           label={t('vendor_name')}
           {...register('vendorName')}
           error={errors.vendorName?.message}
+          required
           fullWidth
         />
+        
         <Input
           label={t('invoice_number')}
           {...register('invoiceNumber')}
           error={errors.invoiceNumber?.message}
+          required
           fullWidth
         />
-        <div className="grid grid-cols-2 gap-4">
+        
+        <div className="flex flex-col sm:grid sm:grid-cols-2 gap-4">
           <Input
             label={t('invoice_date')}
             type="date"
             {...register('invoiceDate')}
             error={errors.invoiceDate?.message}
+            required
+            fullWidth
           />
           <Input
             label={t('due_date')}
             type="date"
             {...register('dueDate')}
             error={errors.dueDate?.message}
+            required
+            fullWidth
           />
         </div>
+        
         <Input
           label={t('amount')}
           type="number"
           step="0.01"
           {...register('amount', { valueAsNumber: true })}
           error={errors.amount?.message}
+          required
           fullWidth
         />
+        
         <TextArea
           label={t('notes')}
           {...register('notes')}
           error={errors.notes?.message}
           fullWidth
+          rows={3}
         />
-        <div className="flex justify-end gap-3 mt-6">
-          <Button variant="outline" onClick={onClose} type="button">
+        
+        <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 mt-6">
+          <Button variant="outline" onClick={onClose} type="button" className="w-full sm:w-auto">
             {t('cancel')}
           </Button>
-          <Button type="submit" isLoading={isLoading}>
+          <Button type="submit" isLoading={isLoading || isSubmitting} className="w-full sm:w-auto justify-center">
             {initialData ? t('update') : t('create')}
           </Button>
         </div>

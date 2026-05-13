@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus, Edit2, User, Building2, Calendar, DollarSign, Shield, Users, Hash, FileText } from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
 import { Button, Input, Select, TextArea } from "../../components/ui/Common";
 import { Insurance } from "../../types";
 import { useData } from "../../context/DataContext";
+import { toast } from "sonner";
 
 interface InsuranceModalProps {
   isOpen: boolean;
@@ -38,11 +39,27 @@ export const InsuranceModal: React.FC<InsuranceModalProps> = ({
     familyMembers: "",
   });
 
+  // Helper function to extract ID
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+      if (value._id && typeof value._id === "string") return value._id;
+      if (value.id && typeof value.id === "string") return value.id;
+    }
+    return "";
+  }, []);
+
+  // Generate policy number
+  const generatePolicyNumber = useCallback(() => {
+    const timestamp = Date.now().toString().slice(-6);
+    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    return `POL-${timestamp}`;
+  }, []);
+
   useEffect(() => {
     if (insuranceToEdit && isOpen) {
-      const employeeId = typeof insuranceToEdit.employeeInfo === "object"
-        ? (insuranceToEdit.employeeInfo as any)?._id
-        : insuranceToEdit.employeeInfo || insuranceToEdit.employeeId;
+      const employeeId = extractId(insuranceToEdit.employeeInfo);
 
       setFormData({
         employeeInfo: employeeId || "",
@@ -66,7 +83,7 @@ export const InsuranceModal: React.FC<InsuranceModalProps> = ({
     } else if (!insuranceToEdit && isOpen) {
       setFormData({
         employeeInfo: "",
-        policyNumber: "",
+        policyNumber: generatePolicyNumber(),
         insuranceCompany: "",
         planName: "",
         totalCost: 0,
@@ -78,7 +95,7 @@ export const InsuranceModal: React.FC<InsuranceModalProps> = ({
         familyMembers: "",
       });
     }
-  }, [insuranceToEdit, isOpen]);
+  }, [insuranceToEdit, isOpen, extractId, generatePolicyNumber]);
 
   const planNameOptions = [
     { value: "Bronze", label: "Bronze" },
@@ -103,19 +120,54 @@ export const InsuranceModal: React.FC<InsuranceModalProps> = ({
   ];
 
   const employeeOptions = employees.map(emp => ({
-    value: emp._id || emp.id,
+    value: extractId(emp),
     label: `${emp.fullName} (${emp.employeeCode})`,
   }));
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    
+    // Validation
+    if (!formData.employeeInfo) {
+      toast.error(t("employee_required"));
+      return;
+    }
+    if (!formData.policyNumber) {
+      toast.error(t("policy_number_required"));
+      return;
+    }
+    if (!formData.insuranceCompany) {
+      toast.error(t("insurance_company_required"));
+      return;
+    }
+    if (formData.totalCost <= 0) {
+      toast.error(t("total_cost_positive"));
+      return;
+    }
+    
     setIsSubmitting(true);
     
     try {
-      await onSave(formData);
+      const saveData = {
+        employeeInfo: formData.employeeInfo,
+        policyNumber: formData.policyNumber,
+        insuranceCompany: formData.insuranceCompany,
+        planName: formData.planName,
+        totalCost: formData.totalCost,
+        policyStartDate: formData.policyStartDate,
+        policyEndDate: formData.policyEndDate,
+        coverageExpiryDate: formData.coverageExpiryDate,
+        membershipId: formData.membershipId,
+        policyPlan: formData.policyPlan,
+        familyMembers: formData.familyMembers,
+      };
+      
+      console.log("Saving insurance:", saveData);
+      await onSave(saveData);
       onClose();
     } catch (error) {
       console.error("Error in form submission:", error);
+      toast.error(t("failed_to_save_insurance"));
     } finally {
       setIsSubmitting(false);
     }
@@ -137,21 +189,26 @@ export const InsuranceModal: React.FC<InsuranceModalProps> = ({
       }
       size="4xl"
     >
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-6 max-h-[70vh] overflow-y-auto px-2">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
           {/* Employee */}
           <div className="space-y-1">
             <label className="text-sm font-medium text-gray-700">
               {t("employee")} <span className="text-red-500">*</span>
             </label>
-            <Select
-              value={formData.employeeInfo}
-              onChange={(e) => handleChange("employeeInfo", e.target.value)}
-              options={employeeOptions}
-              placeholder={t("select_employee")}
-              required
-              fullWidth
-            />
+            <div className="relative">
+              <User size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Select
+                value={formData.employeeInfo}
+                onChange={(e) => handleChange("employeeInfo", e.target.value)}
+                options={employeeOptions}
+                placeholder={t("select_employee")}
+                required
+                fullWidth
+                className="pl-10"
+                disabled={!!insuranceToEdit}
+              />
+            </div>
           </div>
 
           {/* Policy Number */}
@@ -159,13 +216,18 @@ export const InsuranceModal: React.FC<InsuranceModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("policy_number")} <span className="text-red-500">*</span>
             </label>
-            <Input
-              value={formData.policyNumber}
-              onChange={(e) => handleChange("policyNumber", e.target.value)}
-              placeholder="POL-001"
-              required
-              fullWidth
-            />
+            <div className="relative">
+              <Hash size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Input
+                value={formData.policyNumber}
+                onChange={(e) => handleChange("policyNumber", e.target.value)}
+                placeholder="POL-001"
+                required
+                fullWidth
+                className="pl-10"
+                disabled={!!insuranceToEdit}
+              />
+            </div>
           </div>
 
           {/* Insurance Company */}
@@ -173,13 +235,17 @@ export const InsuranceModal: React.FC<InsuranceModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("insurance_company")} <span className="text-red-500">*</span>
             </label>
-            <Select
-              value={formData.insuranceCompany}
-              onChange={(e) => handleChange("insuranceCompany", e.target.value)}
-              options={insuranceCompanyOptions}
-              required
-              fullWidth
-            />
+            <div className="relative">
+              <Building2 size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Select
+                value={formData.insuranceCompany}
+                onChange={(e) => handleChange("insuranceCompany", e.target.value)}
+                options={insuranceCompanyOptions}
+                required
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
 
           {/* Plan Name */}
@@ -187,13 +253,17 @@ export const InsuranceModal: React.FC<InsuranceModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("plan_name")} <span className="text-red-500">*</span>
             </label>
-            <Select
-              value={formData.planName}
-              onChange={(e) => handleChange("planName", e.target.value)}
-              options={planNameOptions}
-              required
-              fullWidth
-            />
+            <div className="relative">
+              <Shield size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Select
+                value={formData.planName}
+                onChange={(e) => handleChange("planName", e.target.value)}
+                options={planNameOptions}
+                required
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
 
           {/* Total Cost */}
@@ -201,15 +271,20 @@ export const InsuranceModal: React.FC<InsuranceModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("total_cost")} (EGP) <span className="text-red-500">*</span>
             </label>
-            <Input
-              type="number"
-              step="0.01"
-              value={formData.totalCost}
-              onChange={(e) => handleChange("totalCost", Number(e.target.value))}
-              placeholder="0.00"
-              required
-              fullWidth
-            />
+            <div className="relative">
+              <DollarSign size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={formData.totalCost}
+                onChange={(e) => handleChange("totalCost", Number(e.target.value))}
+                placeholder="0.00"
+                required
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
 
           {/* Policy Plan */}
@@ -217,13 +292,17 @@ export const InsuranceModal: React.FC<InsuranceModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("policy_plan")} <span className="text-red-500">*</span>
             </label>
-            <Select
-              value={formData.policyPlan}
-              onChange={(e) => handleChange("policyPlan", e.target.value)}
-              options={policyPlanOptions}
-              required
-              fullWidth
-            />
+            <div className="relative">
+              <FileText size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Select
+                value={formData.policyPlan}
+                onChange={(e) => handleChange("policyPlan", e.target.value)}
+                options={policyPlanOptions}
+                required
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
 
           {/* Policy Start Date */}
@@ -231,13 +310,17 @@ export const InsuranceModal: React.FC<InsuranceModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("policy_start_date")} <span className="text-red-500">*</span>
             </label>
-            <Input
-              type="date"
-              value={formData.policyStartDate}
-              onChange={(e) => handleChange("policyStartDate", e.target.value)}
-              required
-              fullWidth
-            />
+            <div className="relative">
+              <Calendar size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Input
+                type="date"
+                value={formData.policyStartDate}
+                onChange={(e) => handleChange("policyStartDate", e.target.value)}
+                required
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
 
           {/* Policy End Date */}
@@ -245,13 +328,17 @@ export const InsuranceModal: React.FC<InsuranceModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("policy_end_date")} <span className="text-red-500">*</span>
             </label>
-            <Input
-              type="date"
-              value={formData.policyEndDate}
-              onChange={(e) => handleChange("policyEndDate", e.target.value)}
-              required
-              fullWidth
-            />
+            <div className="relative">
+              <Calendar size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Input
+                type="date"
+                value={formData.policyEndDate}
+                onChange={(e) => handleChange("policyEndDate", e.target.value)}
+                required
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
 
           {/* Coverage Expiry Date */}
@@ -259,13 +346,17 @@ export const InsuranceModal: React.FC<InsuranceModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("coverage_expiry")} <span className="text-red-500">*</span>
             </label>
-            <Input
-              type="date"
-              value={formData.coverageExpiryDate}
-              onChange={(e) => handleChange("coverageExpiryDate", e.target.value)}
-              required
-              fullWidth
-            />
+            <div className="relative">
+              <Calendar size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Input
+                type="date"
+                value={formData.coverageExpiryDate}
+                onChange={(e) => handleChange("coverageExpiryDate", e.target.value)}
+                required
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
 
           {/* Membership ID */}
@@ -273,13 +364,17 @@ export const InsuranceModal: React.FC<InsuranceModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("membership_id")} <span className="text-red-500">*</span>
             </label>
-            <Input
-              value={formData.membershipId}
-              onChange={(e) => handleChange("membershipId", e.target.value)}
-              placeholder="MEM-001"
-              required
-              fullWidth
-            />
+            <div className="relative">
+              <Hash size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Input
+                value={formData.membershipId}
+                onChange={(e) => handleChange("membershipId", e.target.value)}
+                placeholder="MEM-001"
+                required
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
 
           {/* Family Members */}
@@ -287,13 +382,17 @@ export const InsuranceModal: React.FC<InsuranceModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("family_members")} <span className="text-red-500">*</span>
             </label>
-            <Input
-              value={formData.familyMembers}
-              onChange={(e) => handleChange("familyMembers", e.target.value)}
-              placeholder="3 members"
-              required
-              fullWidth
-            />
+            <div className="relative">
+              <Users size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Input
+                value={formData.familyMembers}
+                onChange={(e) => handleChange("familyMembers", e.target.value)}
+                placeholder="3 members"
+                required
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
         </div>
 
@@ -323,8 +422,13 @@ export const InsuranceModal: React.FC<InsuranceModalProps> = ({
           </div>
         </div>
 
-        <div className="flex justify-end gap-3 mt-8">
-          <Button variant="secondary" onClick={onClose} disabled={isSubmitting || isLoading}>
+        <div className="flex justify-end gap-3 mt-8 pt-4 border-t border-gray-100">
+          <Button
+            variant="secondary"
+            onClick={onClose}
+            disabled={isSubmitting || isLoading}
+            type="button"
+          >
             {t("cancel")}
           </Button>
           <Button
@@ -334,7 +438,7 @@ export const InsuranceModal: React.FC<InsuranceModalProps> = ({
             isLoading={isSubmitting || isLoading}
             disabled={isSubmitting || isLoading}
           >
-            {insuranceToEdit ? t("save") : t("add_insurance")}
+            {insuranceToEdit ? t("update_insurance") : t("add_insurance")}
           </Button>
         </div>
       </form>

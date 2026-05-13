@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Edit2, Trash2, Package, DollarSign, Calendar, Building2, Users, Hash } from "lucide-react";
+import { Plus, Edit2, Trash2, Package, DollarSign, Calendar, Building2, Users, Hash, FileText } from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
 import { Button, Input, Select, TextArea } from "../../components/ui/Common";
 import { PurchaseRequest } from "../../types";
@@ -30,7 +30,7 @@ export const PurchaseRequestModal: React.FC<PurchaseRequestModalProps> = ({
   isLoading = false,
 }) => {
   const { t } = useTranslation();
-  const { departments, products, companies, branches } = useData();
+  const { departments, products, companies, branches, fetchDepartments } = useData();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     prNumber: "",
@@ -45,15 +45,39 @@ export const PurchaseRequestModal: React.FC<PurchaseRequestModalProps> = ({
   const [items, setItems] = useState<RequestItem[]>([
     { productId: "", itemName: "", requiredQuantity: 1, estimatedUnitCost: 0, totalCost: 0 }
   ]);
-  
+
+  // Helper function to extract ID
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "object") {
+      return value._id || value.id || "";
+    }
+    return value;
+  }, []);
+
+  // Filter branches based on selected company
+  const filteredBranches = useMemo(() => {
+    if (!formData.companyId) return [];
+    return branches.filter(branch => {
+      const branchCompanyId = extractId(branch.companyId);
+      return branchCompanyId === formData.companyId;
+    });
+  }, [branches, formData.companyId, extractId]);
+
+  // Filter departments based on selected branch
+  const filteredDepartments = useMemo(() => {
+    if (!formData.branchId) return departments;
+    // If departments have branchId reference, filter them
+    return departments.filter(dept => {
+      const deptBranchId = extractId((dept as any).branchId);
+      return !deptBranchId || deptBranchId === formData.branchId;
+    });
+  }, [departments, formData.branchId, extractId]);
+
   useEffect(() => {
     if (requestToEdit && isOpen) {
-      const companyId = typeof requestToEdit.companyId === "object" 
-        ? (requestToEdit.companyId as any)?._id 
-        : requestToEdit.companyId;
-      const branchId = typeof requestToEdit.branchId === "object" 
-        ? (requestToEdit.branchId as any)?._id 
-        : requestToEdit.branchId;
+      const companyId = extractId(requestToEdit.companyId);
+      const branchId = extractId(requestToEdit.branchId);
 
       setFormData({
         prNumber: requestToEdit.prNumber || "",
@@ -69,7 +93,7 @@ export const PurchaseRequestModal: React.FC<PurchaseRequestModalProps> = ({
       
       if (requestToEdit.items && requestToEdit.items.length > 0) {
         setItems(requestToEdit.items.map(item => ({
-          productId: typeof item.productId === "object" ? (item.productId as any)?._id || "" : item.productId || "",
+          productId: extractId(item.productId),
           itemName: item.itemName,
           requiredQuantity: item.requiredQuantity,
           estimatedUnitCost: item.estimatedUnitCost,
@@ -89,25 +113,25 @@ export const PurchaseRequestModal: React.FC<PurchaseRequestModalProps> = ({
       });
       setItems([{ productId: "", itemName: "", requiredQuantity: 1, estimatedUnitCost: 0, totalCost: 0 }]);
     }
-  }, [requestToEdit, isOpen]);
-
-  const departmentOptions = departments.map(d => ({ 
-    value: d.departmentName || d.name, 
-    label: d.departmentName || d.name 
-  }));
+  }, [requestToEdit, isOpen, extractId]);
 
   const companyOptions = companies.map(c => ({ 
-    value: c._id || c.id, 
+    value: extractId(c), 
     label: c.name 
   }));
 
-  const branchOptions = branches.map(b => ({ 
-    value: b._id || b.id, 
+  const branchOptions = filteredBranches.map(b => ({ 
+    value: extractId(b), 
     label: b.name 
   }));
 
+  const departmentOptions = filteredDepartments.map(d => ({ 
+    value: (d as any).departmentName || d.name, 
+    label: (d as any).departmentName || d.name 
+  }));
+
   const productOptions = products.map(p => ({ 
-    value: p._id || p.id, 
+    value: extractId(p), 
     label: `${p.productName} (${p.sku})` 
   }));
 
@@ -119,6 +143,25 @@ export const PurchaseRequestModal: React.FC<PurchaseRequestModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    
+    // Validation
+    if (!formData.prNumber) {
+      toast.error(t("pr_number_required"));
+      return;
+    }
+    if (!formData.companyId) {
+      toast.error(t("company_required"));
+      return;
+    }
+    if (!formData.branchId) {
+      toast.error(t("branch_required"));
+      return;
+    }
+    if (!formData.department) {
+      toast.error(t("department_required"));
+      return;
+    }
+    
     setIsSubmitting(true);
     
     try {
@@ -141,7 +184,26 @@ export const PurchaseRequestModal: React.FC<PurchaseRequestModalProps> = ({
   };
 
   const handleChange = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    // Reset branch when company changes
+    if (field === "companyId") {
+      setFormData(prev => ({ 
+        ...prev, 
+        companyId: value,
+        branchId: "", // Reset branch
+        department: "" // Reset department when company changes
+      }));
+    } 
+    // Reset department when branch changes
+    else if (field === "branchId") {
+      setFormData(prev => ({ 
+        ...prev, 
+        branchId: value,
+        department: "" // Reset department when branch changes
+      }));
+    }
+    else {
+      setFormData(prev => ({ ...prev, [field]: value }));
+    }
   };
 
   const handleItemChange = (index: number, field: keyof RequestItem, value: any) => {
@@ -150,7 +212,7 @@ export const PurchaseRequestModal: React.FC<PurchaseRequestModalProps> = ({
     
     // If product is selected, auto-fill item name
     if (field === "productId" && value) {
-      const selectedProduct = products.find(p => (p._id || p.id) === value);
+      const selectedProduct = products.find(p => extractId(p) === value);
       if (selectedProduct) {
         newItems[index].itemName = selectedProduct.productName;
       }
@@ -213,20 +275,12 @@ export const PurchaseRequestModal: React.FC<PurchaseRequestModalProps> = ({
               fullWidth
             />
             <Select
-              label={t("department")}
-              value={formData.department}
-              onChange={(e) => handleChange("department", e.target.value)}
-              options={departmentOptions}
-              placeholder={t("select_department")}
-              required
-              fullWidth
-            />
-            <Select
               label={t("company")}
               value={formData.companyId}
               onChange={(e) => handleChange("companyId", e.target.value)}
               options={companyOptions}
               placeholder={t("select_company")}
+              required
               fullWidth
             />
             <Select
@@ -234,8 +288,20 @@ export const PurchaseRequestModal: React.FC<PurchaseRequestModalProps> = ({
               value={formData.branchId}
               onChange={(e) => handleChange("branchId", e.target.value)}
               options={branchOptions}
-              placeholder={t("select_branch")}
+              placeholder={formData.companyId ? t("select_branch") : t("select_company_first")}
+              required
               fullWidth
+              disabled={!formData.companyId}
+            />
+            <Select
+              label={t("department")}
+              value={formData.department}
+              onChange={(e) => handleChange("department", e.target.value)}
+              options={departmentOptions}
+              placeholder={formData.branchId ? t("select_department") : t("select_branch_first")}
+              required
+              fullWidth
+              disabled={!formData.branchId}
             />
           </div>
         </div>
@@ -376,5 +442,5 @@ export const PurchaseRequestModal: React.FC<PurchaseRequestModalProps> = ({
   );
 };
 
-// Add this import at the top
-import { FileText } from "lucide-react";
+// Add missing import
+import { toast } from "sonner";

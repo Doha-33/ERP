@@ -11,7 +11,7 @@ import { toast } from "sonner";
 
 export const Suppliers: React.FC = () => {
   const { t } = useTranslation();
-  const { suppliers, addSupplier, updateSupplier, deleteSupplier } = useData();
+  const { suppliers, addSupplier, updateSupplier, deleteSupplier, fetchSuppliers } = useData();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
@@ -22,30 +22,76 @@ export const Suppliers: React.FC = () => {
   const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSave = async (supplier: Partial<Supplier>) => {
+  // Helper function to extract ID
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "object") {
+      return value._id || value.id || "";
+    }
+    return value;
+  }, []);
+
+  const handleSave = async (supplierData: Partial<Supplier>) => {
     try {
       setIsLoading(true);
+      
       if (editingSupplier) {
-        await updateSupplier({ ...supplier, _id: editingSupplier._id, id: editingSupplier.id } as Supplier);
+        // Get the ID from editingSupplier
+        const supplierId = extractId(editingSupplier);
+        
+        if (!supplierId) {
+          toast.error(t("supplier_id_missing"));
+          return;
+        }
+        
+        // Create update data with ID
+        const updateData = {
+          ...supplierData,
+          _id: supplierId,
+          id: supplierId
+        } as Supplier;
+        
+        console.log("Updating supplier with ID:", supplierId, updateData);
+        await updateSupplier(updateData);
         toast.success(t("supplier_updated_successfully"));
       } else {
-        await addSupplier(supplier as Supplier);
+        await addSupplier(supplierData as Supplier);
         toast.success(t("supplier_created_successfully"));
       }
+      
+      await fetchSuppliers(); // Refresh list
       setIsModalOpen(false);
       setEditingSupplier(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving supplier:", error);
-      toast.error(t("failed_to_save_supplier"));
+      const message = error?.response?.data?.message || error?.message || t("failed_to_save_supplier");
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleEdit = useCallback((supplier: Supplier) => {
-    setEditingSupplier(supplier);
+    // Extract ID correctly from the supplier object
+    const supplierId = extractId(supplier);
+    
+    if (!supplierId) {
+      console.error("Supplier ID not found", supplier);
+      toast.error(t("supplier_id_not_found"));
+      return;
+    }
+    
+    // Create a clean supplier object with proper ID
+    const supplierToEdit: Supplier = {
+      ...supplier,
+      _id: supplierId,
+      id: supplierId,
+    };
+    
+    console.log("Editing supplier:", supplierToEdit);
+    setEditingSupplier(supplierToEdit);
     setIsModalOpen(true);
-  }, []);
+  }, [extractId, t]);
 
   const handleDelete = useCallback((id: string) => {
     setDeleteId(id);
@@ -58,11 +104,12 @@ export const Suppliers: React.FC = () => {
         toast.success(t("supplier_deleted_successfully"));
         setDeleteId(null);
         setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+        await fetchSuppliers();
       } catch (error) {
         toast.error(t("failed_to_delete_supplier"));
       }
     }
-  }, [deleteId, deleteSupplier, t]);
+  }, [deleteId, deleteSupplier, fetchSuppliers, t]);
 
   const handleBulkDelete = async () => {
     try {
@@ -71,6 +118,7 @@ export const Suppliers: React.FC = () => {
       toast.success(t("suppliers_deleted_successfully", { count: selectedIds.length }));
       setSelectedIds([]);
       setIsBulkConfirmOpen(false);
+      await fetchSuppliers();
     } catch (error) {
       console.error("Bulk delete failed", error);
       toast.error(t("failed_to_delete_suppliers"));
@@ -202,27 +250,30 @@ export const Suppliers: React.FC = () => {
       {
         header: t("actions"),
         className: "text-center",
-        render: (s) => (
-          <div className="flex items-center justify-center gap-2">
-            <button
-              onClick={() => handleEdit(s)}
-              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("edit")}
-            >
-              <Edit2 size={16} />
-            </button>
-            <button
-              onClick={() => handleDelete(s._id || s.id)}
-              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("delete")}
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-        )
+        render: (s) => {
+          const supplierId = extractId(s);
+          return (
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => handleEdit(s)}
+                className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("edit")}
+              >
+                <Edit2 size={16} />
+              </button>
+              <button
+                onClick={() => handleDelete(supplierId)}
+                className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("delete")}
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          );
+        }
       }
     ],
-    [t, handleEdit, handleDelete]
+    [t, handleEdit, handleDelete, extractId]
   );
 
   return (
@@ -339,15 +390,15 @@ export const Suppliers: React.FC = () => {
       </div>
 
       {/* Table */}
-        <Table
-          data={filteredSuppliers}
-          columns={columns}
-          keyExtractor={(item) => item._id || item.id}
-          isLoading={isLoading}
-          selectable
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-        />
+      <Table
+        data={filteredSuppliers}
+        columns={columns}
+        keyExtractor={(item) => extractId(item)}
+        isLoading={isLoading}
+        selectable
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+      />
 
       {/* Modal */}
       <SupplierModal

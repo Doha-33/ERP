@@ -1,7 +1,7 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { FileText, ChevronRight, History, Eye, UserCheck, UserX, Clock } from "lucide-react";
+import { FileText, ChevronRight, History, Eye, UserCheck, UserX, Clock, Search } from "lucide-react";
 import { Card, Button, Badge, ExportDropdown } from "../../components/ui/Common";
 import { Table, Column } from "../../components/ui/Table";
 import { ResponsesHistoryModal } from "../../components/hr/ResponsesHistoryModal";
@@ -16,7 +16,7 @@ export const Responses: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { fetchResponses, responses, actionHistory } = useData();
+  const { fetchResponses, responses, actionHistory, fetchActionHistory } = useData();
   const [activeTab, setActiveTab] = useState<ResponseType>("eos");
   const [loading, setLoading] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -24,11 +24,23 @@ export const Responses: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
 
+  // Helper function to extract ID
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+      if (value._id && typeof value._id === "string") return value._id;
+      if (value.id && typeof value.id === "string") return value.id;
+    }
+    return "";
+  }, []);
+
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       try {
         await fetchResponses(activeTab === "eos" ? "end-of-service" : activeTab);
+        await fetchActionHistory();
       } catch (error) {
         console.error("Error fetching responses:", error);
         toast.error(t("failed_to_fetch_responses"));
@@ -37,13 +49,14 @@ export const Responses: React.FC = () => {
       }
     };
     load();
-  }, [activeTab, fetchResponses, t]);
+  }, [activeTab, fetchResponses, fetchActionHistory, t]);
 
   const isAdmin = user?.role === "admin";
 
   const handleShowHistory = async (id: string) => {
     try {
-      const filteredHistory = actionHistory.filter(h => h.requestId === id);
+      // Filter history by request ID
+      const filteredHistory = actionHistory.filter(h => extractId(h.requestId) === id);
       setSelectedHistory(filteredHistory);
       setIsHistoryOpen(true);
     } catch (error) {
@@ -53,10 +66,11 @@ export const Responses: React.FC = () => {
   };
 
   const getStatusBadge = (status: string) => {
-    const statusMap: Record<string, { variant: "warning" | "success" | "danger"; label: string }> = {
+    const statusMap: Record<string, { variant: "warning" | "success" | "danger" | "info"; label: string }> = {
       Pending: { variant: "warning", label: t("pending") },
       Approved: { variant: "success", label: t("approved") },
       Rejected: { variant: "danger", label: t("rejected") },
+      Submitted: { variant: "info", label: t("submitted") },
     };
     const config = statusMap[status] || { variant: "info", label: status };
     return <Badge variant={config.variant}>{config.label}</Badge>;
@@ -64,14 +78,18 @@ export const Responses: React.FC = () => {
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "-";
-    return new Date(dateStr).toLocaleDateString();
+    try {
+      return new Date(dateStr).toLocaleDateString();
+    } catch {
+      return "-";
+    }
   };
 
   const filteredResponses = useMemo(() => {
     return responses.filter(item => {
       const matchesSearch = 
         (item.employeeName || item.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (item.requestNumber || "").toLowerCase().includes(searchTerm.toLowerCase());
+        (item.requestNumber || item.id || item._id || "").toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus = !statusFilter || item.status === statusFilter;
       return matchesSearch && matchesStatus;
     });
@@ -93,26 +111,31 @@ export const Responses: React.FC = () => {
   const columns: Column<any>[] = [
     {
       header: t("request_info"),
-      render: (item) => (
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center">
-            <FileText size={18} className="text-indigo-600" />
+      render: (item) => {
+        const itemId = extractId(item);
+        return (
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center">
+              <FileText size={18} className="text-indigo-600" />
+            </div>
+            <div className="flex flex-col">
+              <span className="font-medium text-gray-900">
+                {item.employeeName || item.name || item.requestNumber || "N/A"}
+              </span>
+              <span className="text-xs text-gray-500">
+                {formatDate(item.date || item.createdAt || item.requestDate)}
+              </span>
+            </div>
           </div>
-          <div className="flex flex-col">
-            <span className="font-medium text-gray-900">
-              {item.employeeName || item.name || item.requestNumber}
-            </span>
-            <span className="text-xs text-gray-500">{formatDate(item.date || item.createdAt || item.requestDate)}</span>
-          </div>
-        </div>
-      )
+        );
+      }
     },
     {
       header: t("details"),
       render: (item) => (
         <div className="flex flex-col">
           <span className="text-sm text-gray-600">{item.type || item.requestType || "-"}</span>
-          <span className="text-xs text-gray-400">{item.reason || "-"}</span>
+          <span className="text-xs text-gray-400 max-w-xs truncate">{item.reason || "-"}</span>
         </div>
       )
     },
@@ -123,27 +146,35 @@ export const Responses: React.FC = () => {
     {
       header: t("actions"),
       className: "text-center",
-      render: (item) => (
-        <div className="flex items-center justify-center gap-2">
-          <button
-            onClick={() => handleShowHistory(item.id || item._id)}
-            className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
-            title={t("action_history")}
-          >
-            <History size={16} />
-          </button>
-          <button
-            onClick={() => navigate(`/hr/responses/${activeTab}/${item.id || item._id}`)}
-            className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg border border-indigo-200 transition-colors flex items-center gap-1"
-            title={t("view_details")}
-          >
-            <Eye size={16} />
-            <span className="text-xs hidden sm:inline">{t("view")}</span>
-          </button>
-        </div>
-      )
+      render: (item) => {
+        const itemId = extractId(item);
+        return (
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={() => handleShowHistory(itemId)}
+              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+              title={t("action_history")}
+            >
+              <History size={16} />
+            </button>
+            <button
+              onClick={() => navigate(`/hr/responses/${activeTab}/${itemId}`)}
+              className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg border border-indigo-200 transition-colors flex items-center gap-1"
+              title={t("view_details")}
+            >
+              <Eye size={16} />
+              <span className="text-xs hidden sm:inline">{t("view")}</span>
+            </button>
+          </div>
+        );
+      }
     }
   ];
+
+  const getKeyExtractor = useCallback((item: any) => {
+    const id = extractId(item);
+    return id || Math.random().toString();
+  }, [extractId]);
 
   const tabConfig: Record<ResponseType, { label: string; key: string }> = {
     eos: { label: t("end_of_service"), key: "end-of-service" },
@@ -257,12 +288,12 @@ export const Responses: React.FC = () => {
       </div>
 
       {/* Table */}
-        <Table
-          data={filteredResponses}
-          columns={columns}
-          keyExtractor={(item) => item.id || item._id}
-          isLoading={loading}
-        />
+      <Table
+        data={filteredResponses}
+        columns={columns}
+        keyExtractor={getKeyExtractor}
+        isLoading={loading}
+      />
 
       {/* History Modal */}
       <ResponsesHistoryModal
@@ -273,6 +304,3 @@ export const Responses: React.FC = () => {
     </div>
   );
 };
-
-// Add missing imports
-import { Search } from "lucide-react";

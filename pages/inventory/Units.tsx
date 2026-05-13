@@ -1,7 +1,22 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Search, Edit2, Trash2, Ruler, Hash, Filter, X } from "lucide-react";
-import { Card, Button, Input, Badge, ExportDropdown } from "../../components/ui/Common";
+import {
+  Plus,
+  Search,
+  Edit2,
+  Trash2,
+  Ruler,
+  Hash,
+  Filter,
+  X,
+} from "lucide-react";
+import {
+  Card,
+  Button,
+  Input,
+  Badge,
+  ExportDropdown,
+} from "../../components/ui/Common";
 import { Table, Column } from "../../components/ui/Table";
 import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
 import { UnitModal } from "../../components/inventory/UnitModal";
@@ -11,8 +26,8 @@ import { toast } from "sonner";
 
 export const Units: React.FC = () => {
   const { t } = useTranslation();
-  const { units, addUnit, updateUnit, deleteUnit } = useData();
-  
+  const { units, addUnit, updateUnit, deleteUnit, fetchUnits } = useData();
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -22,31 +37,89 @@ export const Units: React.FC = () => {
   const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSave = async (unit: Partial<Unit>) => {
+  // Helper function to extract ID - IMPORTANT: returns string ID, not object
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+      // Handle both _id and id properties
+      if (value._id && typeof value._id === "string") return value._id;
+      if (value.id && typeof value.id === "string") return value.id;
+      // If it's a MongoDB ObjectId-like object with toString method
+      if (value.toString && typeof value.toString === "function") {
+        const str = value.toString();
+        if (str && !str.includes('Object')) return str;
+      }
+    }
+    return "";
+  }, []);
+
+  const handleSave = async (unitData: Partial<Unit>) => {
     try {
       setIsLoading(true);
+
       if (editingUnit) {
-        const unitId = editingUnit._id || editingUnit.id;
-        await updateUnit(unitId, unit);
+        const unitId = extractId(editingUnit);
+
+        if (!unitId) {
+          toast.error(t("unit_id_missing"));
+          return;
+        }
+
+        // Create update data with ID - ensure _id is a string
+        const updateData = {
+          ...unitData,
+          _id: unitId,
+          id: unitId,
+        } as Unit;
+
+        console.log("Updating unit with ID:", unitId, updateData);
+        await updateUnit(updateData);
         toast.success(t("unit_updated_successfully"));
       } else {
-        await addUnit(unit);
+        await addUnit(unitData as Unit);
         toast.success(t("unit_created_successfully"));
       }
+
+      await fetchUnits();
       setIsModalOpen(false);
       setEditingUnit(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving unit:", error);
-      toast.error(t("failed_to_save_unit"));
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        t("failed_to_save_unit");
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleEdit = useCallback((unit: Unit) => {
-    setEditingUnit(unit);
-    setIsModalOpen(true);
-  }, []);
+  const handleEdit = useCallback(
+    (unit: Unit) => {
+      // Extract ID correctly from the unit object
+      const unitId = extractId(unit);
+
+      if (!unitId) {
+        console.error("Unit ID not found", unit);
+        toast.error(t("unit_id_not_found"));
+        return;
+      }
+
+      // Create a clean unit object with proper ID as string
+      const unitToEdit: Unit = {
+        ...unit,
+        _id: unitId,
+        id: unitId,
+      };
+
+      console.log("Editing unit:", unitToEdit);
+      setEditingUnit(unitToEdit);
+      setIsModalOpen(true);
+    },
+    [extractId, t],
+  );
 
   const handleDelete = useCallback((id: string) => {
     setDeleteId(id);
@@ -55,23 +128,35 @@ export const Units: React.FC = () => {
   const confirmDelete = useCallback(async () => {
     if (deleteId) {
       try {
+        console.log("Deleting unit with ID:", deleteId);
         await deleteUnit(deleteId);
         toast.success(t("unit_deleted_successfully"));
         setDeleteId(null);
-        setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
-      } catch (error) {
-        toast.error(t("failed_to_delete_unit"));
+        setSelectedIds((prev) => prev.filter((sid) => sid !== deleteId));
+        await fetchUnits();
+      } catch (error: any) {
+        console.error("Error deleting unit:", error);
+        toast.error(error?.response?.data?.message || t("failed_to_delete_unit"));
       }
     }
-  }, [deleteId, deleteUnit, t]);
+  }, [deleteId, deleteUnit, fetchUnits, t]);
 
   const handleBulkDelete = async () => {
     try {
       setIsLoading(true);
-      await Promise.all(selectedIds.map(id => deleteUnit(id)));
-      toast.success(t("units_deleted_successfully", { count: selectedIds.length }));
+      // Ensure we have valid IDs
+      const validIds = selectedIds.filter(id => id && typeof id === 'string');
+      if (validIds.length === 0) {
+        toast.error(t("no_valid_ids_selected"));
+        return;
+      }
+      await Promise.all(validIds.map((id) => deleteUnit(id)));
+      toast.success(
+        t("units_deleted_successfully", { count: validIds.length }),
+      );
       setSelectedIds([]);
       setIsBulkConfirmOpen(false);
+      await fetchUnits();
     } catch (error) {
       console.error("Bulk delete failed", error);
       toast.error(t("failed_to_delete_units"));
@@ -81,7 +166,7 @@ export const Units: React.FC = () => {
   };
 
   const getStatusBadge = (status: string) => {
-    const s = (status || '').toUpperCase();
+    const s = (status || "").toUpperCase();
     return (
       <Badge variant={s === "ACTIVE" ? "success" : "danger"}>
         {s === "ACTIVE" ? t("active") : t("inactive")}
@@ -96,21 +181,27 @@ export const Units: React.FC = () => {
 
   // Apply filters
   const filteredUnits = useMemo(() => {
-    return units.filter(u => {
-      const matchesSearch = 
-        (u.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (u.abbreviation || '').toLowerCase().includes(searchTerm.toLowerCase());
-      
-      const matchesStatus = !statusFilter || (u.status || u.state || '').toUpperCase() === statusFilter.toUpperCase();
-      
+    return units.filter((u) => {
+      const matchesSearch =
+        (u.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (u.abbreviation || "").toLowerCase().includes(searchTerm.toLowerCase());
+
+      const matchesStatus =
+        !statusFilter ||
+        (u.status || "").toUpperCase() === statusFilter.toUpperCase();
+
       return matchesSearch && matchesStatus;
     });
   }, [units, searchTerm, statusFilter]);
 
   // Statistics
   const totalUnits = filteredUnits.length;
-  const activeUnits = filteredUnits.filter(u => (u.status || u.state || '').toUpperCase() === "ACTIVE").length;
-  const baseUnits = filteredUnits.filter(u => !u.parentUnitId).length;
+  const activeUnits = filteredUnits.filter(
+    (u) => (u.status || "").toUpperCase() === "ACTIVE",
+  ).length;
+  const baseUnits = filteredUnits.filter(
+    (u) => !u.parentUnit && !u.parentUnitId,
+  ).length;
 
   const statusOptions = [
     { value: "", label: t("all_statuses") },
@@ -132,7 +223,13 @@ export const Units: React.FC = () => {
               <span className="text-xs text-gray-500">{u.abbreviation}</span>
             </div>
           </div>
-        )
+        ),
+      },
+      {
+        header: t("code"),
+        render: (u) => (
+          <span className="text-sm font-mono text-gray-500">{u.code || "-"}</span>
+        ),
       },
       {
         header: t("conversion"),
@@ -142,49 +239,64 @@ export const Units: React.FC = () => {
             <span className="text-sm text-gray-600">
               1 {u.abbreviation} = {u.conversionFactor} × base
             </span>
-            {u.parentUnitId && (
+            {(u.parentUnit || u.parentUnitId) && (
               <span className="text-xs text-gray-400 ml-1">
-                (linked)
+                (sub-unit)
               </span>
             )}
           </div>
-        )
+        ),
       },
       {
         header: t("created_at"),
         render: (u) => (
-          <span className="text-sm text-gray-500">{formatDate(u.createdAt)}</span>
-        )
+          <span className="text-sm text-gray-500">
+            {formatDate(u.createdAt)}
+          </span>
+        ),
       },
       {
         header: t("status"),
-        render: (u) => getStatusBadge(u.status || u.state)
+        render: (u) => getStatusBadge(u.status),
       },
       {
         header: t("actions"),
         className: "text-center",
-        render: (u) => (
-          <div className="flex items-center justify-center gap-2">
-            <button
-              onClick={() => handleEdit(u)}
-              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("edit")}
-            >
-              <Edit2 size={16} />
-            </button>
-            <button
-              onClick={() => handleDelete(u._id || u.id)}
-              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("delete")}
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-        )
-      }
+        render: (u) => {
+          const unitId = extractId(u);
+          if (!unitId) {
+            console.warn("Could not extract ID for unit:", u);
+            return null;
+          }
+          return (
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => handleEdit(u)}
+                className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("edit")}
+              >
+                <Edit2 size={16} />
+              </button>
+              <button
+                onClick={() => handleDelete(unitId)}
+                className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("delete")}
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          );
+        },
+      },
     ],
-    [t, handleEdit, handleDelete]
+    [t, handleEdit, handleDelete, extractId],
   );
+
+  // Get valid key extractor
+  const getKeyExtractor = useCallback((item: Unit) => {
+    const id = extractId(item);
+    return id || Math.random().toString();
+  }, [extractId]);
 
   return (
     <div className="space-y-6">
@@ -194,9 +306,7 @@ export const Units: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-900">
             {t("units_of_measure")}
           </h1>
-          <p className="text-gray-500 mt-1">
-            {t("manage_product_units")}
-          </p>
+          <p className="text-gray-500 mt-1">{t("manage_product_units")}</p>
         </div>
         <div className="flex gap-3">
           {selectedIds.length > 0 && (
@@ -264,7 +374,10 @@ export const Units: React.FC = () => {
       {/* Filters */}
       <div className="flex flex-wrap gap-4 items-center">
         <div className="relative max-w-md">
-          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search
+            size={18}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+          />
           <input
             type="text"
             placeholder={t("search_units")}
@@ -300,15 +413,15 @@ export const Units: React.FC = () => {
       </div>
 
       {/* Table */}
-        <Table
-          data={filteredUnits}
-          columns={columns}
-          keyExtractor={(item) => item._id || item.id}
-          isLoading={isLoading}
-          selectable
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-        />
+      <Table
+        data={filteredUnits}
+        columns={columns}
+        keyExtractor={getKeyExtractor}
+        isLoading={isLoading}
+        selectable
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+      />
 
       {/* Modal */}
       <UnitModal

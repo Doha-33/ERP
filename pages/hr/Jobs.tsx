@@ -11,7 +11,7 @@ import { toast } from "sonner";
 
 export const Jobs: React.FC = () => {
   const { t } = useTranslation();
-  const { jobs, departments, addJob, updateJob, deleteJob } = useData();
+  const { jobs, departments, addJob, updateJob, deleteJob, fetchJobs } = useData();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<Job | null>(null);
@@ -22,35 +22,74 @@ export const Jobs: React.FC = () => {
   const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSave = async (job: Partial<Job>) => {
+  // Helper function to extract ID
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+      if (value._id && typeof value._id === "string") return value._id;
+      if (value.id && typeof value.id === "string") return value.id;
+    }
+    return "";
+  }, []);
+
+  const handleSave = async (jobData: Partial<Job>) => {
     try {
       setIsLoading(true);
+      
       if (editingJob) {
-        const jobId = editingJob._id;
+        const jobId = extractId(editingJob);
+        
         if (!jobId) {
-          toast.error(t("invalid_job_id"));
+          toast.error(t("job_id_missing"));
           return;
         }
-        await updateJob({ ...editingJob, ...job, _id: jobId } as Job);
+        
+        const updateData = {
+          ...jobData,
+          _id: jobId,
+          id: jobId
+        } as Job;
+        
+        console.log("Updating job with ID:", jobId, updateData);
+        await updateJob(updateData);
         toast.success(t("job_updated_successfully"));
       } else {
-        await addJob(job as Job);
+        await addJob(jobData as Job);
         toast.success(t("job_created_successfully"));
       }
+      
+      await fetchJobs();
       setIsModalOpen(false);
       setEditingJob(null);
     } catch (error: any) {
       console.error("Error saving job:", error);
-      toast.error(error?.response?.data?.message || t("failed_to_save_job"));
+      const message = error?.response?.data?.message || error?.message || t("failed_to_save_job");
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleEdit = useCallback((job: Job) => {
-    setEditingJob(job);
+    const jobId = extractId(job);
+    
+    if (!jobId) {
+      console.error("Job ID not found", job);
+      toast.error(t("job_id_not_found"));
+      return;
+    }
+    
+    const jobToEdit: Job = {
+      ...job,
+      _id: jobId,
+      id: jobId,
+    };
+    
+    console.log("Editing job:", jobToEdit);
+    setEditingJob(jobToEdit);
     setIsModalOpen(true);
-  }, []);
+  }, [extractId, t]);
 
   const handleDelete = useCallback((id: string) => {
     setDeleteId(id);
@@ -63,19 +102,26 @@ export const Jobs: React.FC = () => {
         toast.success(t("job_deleted_successfully"));
         setDeleteId(null);
         setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+        await fetchJobs();
       } catch (error) {
         toast.error(t("failed_to_delete_job"));
       }
     }
-  }, [deleteId, deleteJob, t]);
+  }, [deleteId, deleteJob, fetchJobs, t]);
 
   const handleBulkDelete = async () => {
     try {
       setIsLoading(true);
-      await Promise.all(selectedIds.map(id => deleteJob(id)));
-      toast.success(t("jobs_deleted_successfully", { count: selectedIds.length }));
+      const validIds = selectedIds.filter(id => id && typeof id === 'string');
+      if (validIds.length === 0) {
+        toast.error(t("no_valid_ids_selected"));
+        return;
+      }
+      await Promise.all(validIds.map(id => deleteJob(id)));
+      toast.success(t("jobs_deleted_successfully", { count: validIds.length }));
       setSelectedIds([]);
       setIsBulkConfirmOpen(false);
+      await fetchJobs();
     } catch (error) {
       console.error("Bulk delete failed", error);
       toast.error(t("failed_to_delete_jobs"));
@@ -90,15 +136,12 @@ export const Jobs: React.FC = () => {
     if (typeof job.departmentId === "object") {
       return (job.departmentId as any)?.departmentName || "-";
     }
-    const department = departments.find(d => (d._id || d.id) === job.departmentId);
+    const department = departments.find(d => extractId(d) === job.departmentId);
     return department?.departmentName || "-";
   };
 
   const getDepartmentId = (job: Job): string => {
-    if (typeof job.departmentId === "object") {
-      return (job.departmentId as any)?._id || "";
-    }
-    return job.departmentId || "";
+    return extractId(job.departmentId);
   };
 
   const getStatusBadge = (status: string) => {
@@ -131,7 +174,7 @@ export const Jobs: React.FC = () => {
   const departmentOptions = [
     { value: "", label: t("all_departments") },
     ...departments.map(d => ({ 
-      value: d._id || d.id, 
+      value: extractId(d), 
       label: d.departmentName 
     }))
   ];
@@ -168,28 +211,36 @@ export const Jobs: React.FC = () => {
       {
         header: t("actions"),
         className: "text-center",
-        render: (j) => (
-          <div className="flex items-center justify-center gap-2">
-            <button
-              onClick={() => handleEdit(j)}
-              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("edit")}
-            >
-              <Edit2 size={16} />
-            </button>
-            <button
-              onClick={() => handleDelete(j._id)}
-              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("delete")}
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-        )
+        render: (j) => {
+          const jobId = extractId(j);
+          return (
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => handleEdit(j)}
+                className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("edit")}
+              >
+                <Edit2 size={16} />
+              </button>
+              <button
+                onClick={() => handleDelete(jobId)}
+                className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("delete")}
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          );
+        }
       }
     ],
-    [t, handleEdit, handleDelete]
+    [t, handleEdit, handleDelete, extractId]
   );
+
+  const getKeyExtractor = useCallback((item: Job) => {
+    const id = extractId(item);
+    return id || Math.random().toString();
+  }, [extractId]);
 
   return (
     <div className="space-y-6">
@@ -294,15 +345,15 @@ export const Jobs: React.FC = () => {
       </div>
 
       {/* Table */}
-        <Table
-          data={filteredJobs}
-          columns={columns}
-          keyExtractor={(item) => item._id}
-          isLoading={isLoading}
-          selectable
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-        />
+      <Table
+        data={filteredJobs}
+        columns={columns}
+        keyExtractor={getKeyExtractor}
+        isLoading={isLoading}
+        selectable
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+      />
 
       {/* Modal */}
       <JobModal

@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus, Edit2, Building2, MapPin, User, Phone, Hash, Layers } from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
 import { Button, Input, Select } from "../../components/ui/Common";
 import { Warehouse } from "../../types";
 import { useData } from "../../context/DataContext";
+import { toast } from "sonner";
 
 interface WarehouseModalProps {
   isOpen: boolean;
@@ -22,7 +23,7 @@ export const WarehouseModal: React.FC<WarehouseModalProps> = ({
   isLoading = false,
 }) => {
   const { t } = useTranslation();
-  const { companies, branches } = useData();
+  const { companies, branches, fetchCompanies, fetchBranches } = useData();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     code: "",
@@ -36,14 +37,28 @@ export const WarehouseModal: React.FC<WarehouseModalProps> = ({
     state: "ACTIVE",
   });
 
+  // Helper function to extract ID
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "object") {
+      return value._id || value.id || "";
+    }
+    return value;
+  }, []);
+
+  // Filter branches based on selected company
+  const filteredBranches = useMemo(() => {
+    if (!formData.companyId) return [];
+    return branches.filter(branch => {
+      const branchCompanyId = extractId(branch.companyId);
+      return branchCompanyId === formData.companyId;
+    });
+  }, [branches, formData.companyId, extractId]);
+
   useEffect(() => {
     if (warehouseToEdit && isOpen) {
-      const companyId = typeof warehouseToEdit.companyId === "object" 
-        ? (warehouseToEdit.companyId as any)?._id 
-        : warehouseToEdit.companyId;
-      const branchId = typeof warehouseToEdit.branchId === "object" 
-        ? (warehouseToEdit.branchId as any)?._id 
-        : warehouseToEdit.branchId;
+      const companyId = extractId(warehouseToEdit.companyId);
+      const branchId = extractId(warehouseToEdit.branchId);
 
       setFormData({
         code: warehouseToEdit.code || "",
@@ -69,7 +84,7 @@ export const WarehouseModal: React.FC<WarehouseModalProps> = ({
         state: "ACTIVE",
       });
     }
-  }, [warehouseToEdit, isOpen]);
+  }, [warehouseToEdit, isOpen, extractId]);
 
   const typeOptions = [
     { value: "MAIN_WAREHOUSE", label: t("main_warehouse") },
@@ -87,31 +102,87 @@ export const WarehouseModal: React.FC<WarehouseModalProps> = ({
   ];
 
   const companyOptions = companies.map(c => ({ 
-    value: c._id || c.id, 
+    value: extractId(c), 
     label: c.name 
   }));
 
-  const branchOptions = branches.map(b => ({ 
-    value: b._id || b.id, 
+  const branchOptions = filteredBranches.map(b => ({ 
+    value: extractId(b), 
     label: b.name 
   }));
 
+  // Generate warehouse code automatically
+  const generateWarehouseCode = useCallback(() => {
+    const timestamp = Date.now().toString().slice(-6);
+    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    return `WH-${timestamp}-${random}`;
+  }, []);
+
+  // Auto-generate code when creating new
+  useEffect(() => {
+    if (!warehouseToEdit && isOpen && !formData.code) {
+      setFormData(prev => ({ ...prev, code: generateWarehouseCode() }));
+    }
+  }, [warehouseToEdit, isOpen, generateWarehouseCode, formData.code]);
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    
+    // Validation
+    if (!formData.code.trim()) {
+      toast.error(t("warehouse_code_required"));
+      return;
+    }
+    if (!formData.warehouseName.trim()) {
+      toast.error(t("warehouse_name_required"));
+      return;
+    }
+    if (!formData.companyId) {
+      toast.error(t("company_required"));
+      return;
+    }
+    if (!formData.branchId) {
+      toast.error(t("branch_required"));
+      return;
+    }
+    
     setIsSubmitting(true);
     
     try {
-      await onSave(formData);
+      const saveData = {
+        code: formData.code,
+        warehouseName: formData.warehouseName,
+        type: formData.type,
+        companyId: formData.companyId,
+        branchId: formData.branchId,
+        managerName: formData.managerName || undefined,
+        phoneNumber: formData.phoneNumber || undefined,
+        location: formData.location || undefined,
+        state: formData.state,
+      };
+      
+      console.log("Saving warehouse:", saveData);
+      await onSave(saveData);
       onClose();
     } catch (error) {
       console.error("Error in form submission:", error);
+      toast.error(t("failed_to_save_warehouse"));
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleChange = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    // Reset branch when company changes
+    if (field === "companyId") {
+      setFormData(prev => ({ 
+        ...prev, 
+        companyId: value,
+        branchId: "" // Reset branch selection
+      }));
+    } else {
+      setFormData(prev => ({ ...prev, [field]: value }));
+    }
   };
 
   return (
@@ -133,13 +204,18 @@ export const WarehouseModal: React.FC<WarehouseModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("warehouse_code")} <span className="text-red-500">*</span>
             </label>
-            <Input
-              value={formData.code}
-              onChange={(e) => handleChange("code", e.target.value)}
-              placeholder="WH-001"
-              required
-              fullWidth
-            />
+            <div className="relative">
+              <Hash size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Input
+                value={formData.code}
+                onChange={(e) => handleChange("code", e.target.value)}
+                placeholder="WH-001"
+                required
+                fullWidth
+                className="pl-10"
+                disabled={!!warehouseToEdit}
+              />
+            </div>
           </div>
 
           {/* Warehouse Name */}
@@ -147,13 +223,17 @@ export const WarehouseModal: React.FC<WarehouseModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("warehouse_name")} <span className="text-red-500">*</span>
             </label>
-            <Input
-              value={formData.warehouseName}
-              onChange={(e) => handleChange("warehouseName", e.target.value)}
-              placeholder={t("enter_warehouse_name")}
-              required
-              fullWidth
-            />
+            <div className="relative">
+              <Building2 size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Input
+                value={formData.warehouseName}
+                onChange={(e) => handleChange("warehouseName", e.target.value)}
+                placeholder={t("enter_warehouse_name")}
+                required
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
 
           {/* Type */}
@@ -161,13 +241,17 @@ export const WarehouseModal: React.FC<WarehouseModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("type")} <span className="text-red-500">*</span>
             </label>
-            <Select
-              value={formData.type}
-              onChange={(e) => handleChange("type", e.target.value)}
-              options={typeOptions}
-              required
-              fullWidth
-            />
+            <div className="relative">
+              <Layers size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Select
+                value={formData.type}
+                onChange={(e) => handleChange("type", e.target.value)}
+                options={typeOptions}
+                required
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
 
           {/* Company */}
@@ -185,7 +269,7 @@ export const WarehouseModal: React.FC<WarehouseModalProps> = ({
             />
           </div>
 
-          {/* Branch */}
+          {/* Branch - Filtered by selected company */}
           <div className="space-y-1">
             <label className="text-sm font-medium text-gray-700">
               {t("branch")} <span className="text-red-500">*</span>
@@ -194,10 +278,16 @@ export const WarehouseModal: React.FC<WarehouseModalProps> = ({
               value={formData.branchId}
               onChange={(e) => handleChange("branchId", e.target.value)}
               options={branchOptions}
-              placeholder={t("select_branch")}
+              placeholder={formData.companyId ? t("select_branch") : t("select_company_first")}
               required
               fullWidth
+              disabled={!formData.companyId}
             />
+            {formData.companyId && branchOptions.length === 0 && (
+              <p className="text-xs text-amber-600 mt-1">
+                {t("no_branches_available_for_this_company")}
+              </p>
+            )}
           </div>
 
           {/* Manager Name */}
@@ -205,12 +295,16 @@ export const WarehouseModal: React.FC<WarehouseModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("manager")}
             </label>
-            <Input
-              value={formData.managerName}
-              onChange={(e) => handleChange("managerName", e.target.value)}
-              placeholder={t("enter_manager_name")}
-              fullWidth
-            />
+            <div className="relative">
+              <User size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Input
+                value={formData.managerName}
+                onChange={(e) => handleChange("managerName", e.target.value)}
+                placeholder={t("enter_manager_name")}
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
 
           {/* Phone Number */}
@@ -218,12 +312,16 @@ export const WarehouseModal: React.FC<WarehouseModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("phone_number")}
             </label>
-            <Input
-              value={formData.phoneNumber}
-              onChange={(e) => handleChange("phoneNumber", e.target.value)}
-              placeholder="+20123456789"
-              fullWidth
-            />
+            <div className="relative">
+              <Phone size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Input
+                value={formData.phoneNumber}
+                onChange={(e) => handleChange("phoneNumber", e.target.value)}
+                placeholder="+20123456789"
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
 
           {/* Location */}
@@ -231,12 +329,16 @@ export const WarehouseModal: React.FC<WarehouseModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("location")}
             </label>
-            <Input
-              value={formData.location}
-              onChange={(e) => handleChange("location", e.target.value)}
-              placeholder={t("enter_location")}
-              fullWidth
-            />
+            <div className="relative">
+              <MapPin size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Input
+                value={formData.location}
+                onChange={(e) => handleChange("location", e.target.value)}
+                placeholder={t("enter_location")}
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
 
           {/* Status */}
@@ -254,8 +356,13 @@ export const WarehouseModal: React.FC<WarehouseModalProps> = ({
           </div>
         </div>
 
-        <div className="flex justify-end gap-3 mt-8">
-          <Button variant="secondary" onClick={onClose} disabled={isSubmitting || isLoading}>
+        <div className="flex justify-end gap-3 mt-8 pt-4 border-t border-gray-100">
+          <Button 
+            variant="secondary" 
+            onClick={onClose} 
+            disabled={isSubmitting || isLoading}
+            type="button"
+          >
             {t("cancel")}
           </Button>
           <Button
@@ -265,7 +372,7 @@ export const WarehouseModal: React.FC<WarehouseModalProps> = ({
             isLoading={isSubmitting || isLoading}
             disabled={isSubmitting || isLoading}
           >
-            {warehouseToEdit ? t("save") : t("add_warehouse")}
+            {warehouseToEdit ? t("update_warehouse") : t("add_warehouse")}
           </Button>
         </div>
       </form>

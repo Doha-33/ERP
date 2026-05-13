@@ -15,6 +15,8 @@ import { Toaster } from "sonner";
 // Auth Pages
 import { SignIn } from "./pages/auth/SignIn";
 import { SignUp } from "./pages/auth/SignUp";
+import { ForgotPassword } from "./pages/auth/ForgotPassword";
+import { ResetPassword } from "./pages/auth/ResetPassword";
 
 // Dashboard
 import { Dashboard } from "./pages/dashboard/Dashboard";
@@ -226,7 +228,11 @@ const App: React.FC = () => {
                   {/* Public Routes */}
                   <Route path="/signin" element={<SignIn />} />
                   <Route path="/signup" element={<SignUp />} />
-
+                  <Route path="/forgot-password" element={<ForgotPassword />} />
+                  <Route
+                    path="/reset-password/:token"
+                    element={<ResetPassword />}
+                  />
                   {/* Protected Routes */}
                   <Route
                     path="/"

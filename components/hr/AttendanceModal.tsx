@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Calendar, Clock, UserPlus, Edit2 } from "lucide-react";
+import { Calendar, Clock, UserPlus, Edit2, Timer, TrendingUp, AlertCircle } from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
 import { Button, Input, Select } from "../../components/ui/Common";
 import { Attendance, Employee } from "../../types";
 import { useData } from "../../context/DataContext";
+import { toast } from "sonner";
 
 interface AttendanceModalProps {
   isOpen: boolean;
@@ -32,51 +33,130 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
     shiftType: "MORNING",
     breakDuration: 0,
     status: "PRESENT",
+    workingHours: 0,
+    overtimeHours: 0,
+    lateMinutes: 0,
+    earlyLeaveMinutes: 0,
     notes: "",
   });
 
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+      if (value._id && typeof value._id === "string") return value._id;
+      if (value.id && typeof value.id === "string") return value.id;
+    }
+    return "";
+  }, []);
+
+  // Helper function to calculate working hours
+  const calculateWorkingHours = useCallback((checkIn: string, checkOut: string, breakDuration: number): number => {
+    if (!checkIn || !checkOut) return 0;
+    try {
+      const [inHours, inMinutes] = checkIn.split(':').map(Number);
+      const [outHours, outMinutes] = checkOut.split(':').map(Number);
+      
+      let totalMinutes = (outHours * 60 + outMinutes) - (inHours * 60 + inMinutes);
+      if (totalMinutes < 0) totalMinutes += 24 * 60; // Handle overnight shifts
+      
+      totalMinutes -= breakDuration;
+      return Math.max(0, totalMinutes / 60);
+    } catch {
+      return 0;
+    }
+  }, []);
+
+  // Helper function to combine date and time into ISO string
+  const combineDateTime = (dateStr: string, timeStr: string): string | undefined => {
+    if (!dateStr) return undefined;
+    if (!timeStr) return undefined;
+    
+    try {
+      const [year, month, day] = dateStr.split('-');
+      const [hours, minutes] = timeStr.split(':');
+      const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), parseInt(hours), parseInt(minutes));
+      return date.toISOString();
+    } catch (error) {
+      console.error("Error combining date and time:", error);
+      return undefined;
+    }
+  };
+
+  // Helper function to extract time from ISO string
+  const extractTimeFromISO = (isoString: string): string => {
+    if (!isoString) return "";
+    try {
+      const date = new Date(isoString);
+      if (isNaN(date.getTime())) return "";
+      return date.toTimeString().slice(0, 5);
+    } catch {
+      return "";
+    }
+  };
+
+  // Helper function to extract date from ISO string
+  const extractDateFromISO = (isoString: string): string => {
+    if (!isoString) return "";
+    try {
+      const date = new Date(isoString);
+      if (isNaN(date.getTime())) return "";
+      return date.toISOString().split('T')[0];
+    } catch {
+      return "";
+    }
+  };
+
   useEffect(() => {
     if (recordToEdit && isOpen) {
-      const employeeId = typeof recordToEdit.employeeId === "object" 
-        ? (recordToEdit.employeeId as any)._id 
-        : recordToEdit.employeeId;
-      
-      const formatDate = (dateStr: string) => {
-        if (!dateStr) return "";
-        return new Date(dateStr).toISOString().split("T")[0];
-      };
-
-      const formatTime = (timeStr: string) => {
-        if (!timeStr) return "";
-        return new Date(timeStr).toISOString().slice(11, 16);
-      };
+      const employeeId = extractId(recordToEdit.employeeId);
 
       setFormData({
         employeeId: employeeId || "",
-        date: formatDate(recordToEdit.date),
-        checkInTime: formatTime(recordToEdit.checkInTime),
-        checkOutTime: formatTime(recordToEdit.checkOutTime),
+        date: extractDateFromISO(recordToEdit.date),
+        checkInTime: extractTimeFromISO(recordToEdit.checkInTime),
+        checkOutTime: extractTimeFromISO(recordToEdit.checkOutTime),
         shiftType: recordToEdit.shiftType || "MORNING",
         breakDuration: recordToEdit.breakDuration || 0,
         status: recordToEdit.status || "PRESENT",
+        workingHours: recordToEdit.workingHours || 0,
+        overtimeHours: recordToEdit.overtimeHours || 0,
+        lateMinutes: recordToEdit.lateMinutes || 0,
+        earlyLeaveMinutes: recordToEdit.earlyLeaveMinutes || 0,
         notes: recordToEdit.notes || "",
       });
     } else if (!recordToEdit && isOpen) {
       setFormData({
         employeeId: "",
-        date: new Date().toISOString().split("T")[0],
+        date: new Date().toISOString().split('T')[0],
         checkInTime: "",
         checkOutTime: "",
         shiftType: "MORNING",
         breakDuration: 0,
         status: "PRESENT",
+        workingHours: 0,
+        overtimeHours: 0,
+        lateMinutes: 0,
+        earlyLeaveMinutes: 0,
         notes: "",
       });
     }
   }, [recordToEdit, isOpen]);
 
-  const employeeOptions = employees.map(emp => ({
-    value: emp._id || emp.id,
+  // Auto-calculate working hours when checkIn, checkOut, or breakDuration changes
+  useEffect(() => {
+    if (formData.checkInTime && formData.checkOutTime) {
+      const calculatedHours = calculateWorkingHours(
+        formData.checkInTime,
+        formData.checkOutTime,
+        formData.breakDuration
+      );
+      setFormData(prev => ({ ...prev, workingHours: parseFloat(calculatedHours.toFixed(1)) }));
+    }
+  }, [formData.checkInTime, formData.checkOutTime, formData.breakDuration, calculateWorkingHours]);
+
+  const employeeOptions = employees.map((emp) => ({
+    value: extractId(emp),
     label: `${emp.fullName} (${emp.employeeCode})`,
   }));
 
@@ -96,20 +176,65 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setIsSubmitting(true);
     
+    if (!formData.employeeId) {
+      toast.error(t("employee_required"));
+      return;
+    }
+    if (!formData.date) {
+      toast.error(t("date_required"));
+      return;
+    }
+    
+    setIsSubmitting(true);
+
     try {
-      await onSave(formData);
+      const saveData: any = {
+        employeeId: formData.employeeId,
+        date: combineDateTime(formData.date, "00:00"),
+        shiftType: formData.shiftType,
+        breakDuration: formData.breakDuration,
+        status: formData.status,
+        workingHours: formData.workingHours,
+        overtimeHours: formData.overtimeHours,
+        lateMinutes: formData.lateMinutes,
+        earlyLeaveMinutes: formData.earlyLeaveMinutes,
+        notes: formData.notes || undefined,
+      };
+      
+      if (formData.checkInTime) {
+        saveData.checkInTime = combineDateTime(formData.date, formData.checkInTime);
+      }
+      
+      if (formData.checkOutTime) {
+        saveData.checkOutTime = combineDateTime(formData.date, formData.checkOutTime);
+      }
+      
+      console.log("Saving attendance:", saveData);
+      await onSave(saveData);
       onClose();
     } catch (error) {
       console.error("Error in form submission:", error);
+      toast.error(t("failed_to_save_attendance"));
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleChange = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  // Get status color for preview
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "PRESENT": return "text-green-600 bg-green-50";
+      case "ABSENT": return "text-red-600 bg-red-50";
+      case "LATE": return "text-orange-600 bg-orange-50";
+      case "LEAVE": return "text-blue-600 bg-blue-50";
+      case "PERMISSION": return "text-purple-600 bg-purple-50";
+      default: return "text-gray-600 bg-gray-50";
+    }
   };
 
   return (
@@ -124,21 +249,26 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
       }
       size="4xl"
     >
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-6 max-h-[70vh] overflow-y-auto px-2">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
           {/* Employee */}
           <div className="space-y-1">
             <label className="text-sm font-medium text-gray-700">
               {t("employee")} <span className="text-red-500">*</span>
             </label>
-            <Select
-              value={formData.employeeId}
-              onChange={(e) => handleChange("employeeId", e.target.value)}
-              options={employeeOptions}
-              placeholder={t("select_employee")}
-              required
-              fullWidth
-            />
+            <div className="relative">
+              <UserPlus size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Select
+                value={formData.employeeId}
+                onChange={(e) => handleChange("employeeId", e.target.value)}
+                options={employeeOptions}
+                placeholder={t("select_employee")}
+                required
+                fullWidth
+                className="pl-10"
+                disabled={!!recordToEdit}
+              />
+            </div>
           </div>
 
           {/* Date */}
@@ -146,13 +276,18 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("date")} <span className="text-red-500">*</span>
             </label>
-            <Input
-              type="date"
-              value={formData.date}
-              onChange={(e) => handleChange("date", e.target.value)}
-              required
-              fullWidth
-            />
+            <div className="relative">
+              <Calendar size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Input
+                type="date"
+                value={formData.date}
+                onChange={(e) => handleChange("date", e.target.value)}
+                required
+                fullWidth
+                className="pl-10"
+                disabled={!!recordToEdit}
+              />
+            </div>
           </div>
 
           {/* Check In Time */}
@@ -160,12 +295,16 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("check_in_time")}
             </label>
-            <Input
-              type="time"
-              value={formData.checkInTime}
-              onChange={(e) => handleChange("checkInTime", e.target.value)}
-              fullWidth
-            />
+            <div className="relative">
+              <Clock size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Input
+                type="time"
+                value={formData.checkInTime}
+                onChange={(e) => handleChange("checkInTime", e.target.value)}
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
 
           {/* Check Out Time */}
@@ -173,24 +312,27 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("check_out_time")}
             </label>
-            <Input
-              type="time"
-              value={formData.checkOutTime}
-              onChange={(e) => handleChange("checkOutTime", e.target.value)}
-              fullWidth
-            />
+            <div className="relative">
+              <Clock size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Input
+                type="time"
+                value={formData.checkOutTime}
+                onChange={(e) => handleChange("checkOutTime", e.target.value)}
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
 
           {/* Shift Type */}
           <div className="space-y-1">
             <label className="text-sm font-medium text-gray-700">
-              {t("shift_type")} <span className="text-red-500">*</span>
+              {t("shift_type")}
             </label>
             <Select
               value={formData.shiftType}
               onChange={(e) => handleChange("shiftType", e.target.value)}
               options={shiftTypeOptions}
-              required
               fullWidth
             />
           </div>
@@ -202,6 +344,7 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
             </label>
             <Input
               type="number"
+              min="0"
               value={formData.breakDuration}
               onChange={(e) => handleChange("breakDuration", Number(e.target.value))}
               placeholder="0"
@@ -212,15 +355,92 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
           {/* Status */}
           <div className="space-y-1">
             <label className="text-sm font-medium text-gray-700">
-              {t("status")} <span className="text-red-500">*</span>
+              {t("status")}
             </label>
             <Select
               value={formData.status}
               onChange={(e) => handleChange("status", e.target.value)}
               options={statusOptions}
-              required
               fullWidth
             />
+          </div>
+
+          {/* Working Hours */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("working_hours")} (hrs)
+            </label>
+            <div className="relative">
+              <Timer size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Input
+                type="number"
+                step="0.1"
+                min="0"
+                value={formData.workingHours}
+                onChange={(e) => handleChange("workingHours", Number(e.target.value))}
+                placeholder="0"
+                fullWidth
+                className="pl-10"
+              />
+            </div>
+          </div>
+
+          {/* Overtime Hours */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("overtime_hours")} (hrs)
+            </label>
+            <div className="relative">
+              <TrendingUp size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Input
+                type="number"
+                step="0.1"
+                min="0"
+                value={formData.overtimeHours}
+                onChange={(e) => handleChange("overtimeHours", Number(e.target.value))}
+                placeholder="0"
+                fullWidth
+                className="pl-10"
+              />
+            </div>
+          </div>
+
+          {/* Late Minutes */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("late_minutes")}
+            </label>
+            <div className="relative">
+              <AlertCircle size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Input
+                type="number"
+                min="0"
+                value={formData.lateMinutes}
+                onChange={(e) => handleChange("lateMinutes", Number(e.target.value))}
+                placeholder="0"
+                fullWidth
+                className="pl-10"
+              />
+            </div>
+          </div>
+
+          {/* Early Leave Minutes */}
+          <div className="space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              {t("early_leave_minutes")}
+            </label>
+            <div className="relative">
+              <AlertCircle size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Input
+                type="number"
+                min="0"
+                value={formData.earlyLeaveMinutes}
+                onChange={(e) => handleChange("earlyLeaveMinutes", Number(e.target.value))}
+                placeholder="0"
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
 
           {/* Notes */}
@@ -237,8 +457,37 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
           </div>
         </div>
 
-        <div className="flex justify-end gap-3 mt-8">
-          <Button variant="secondary" onClick={onClose} disabled={isSubmitting || isLoading}>
+        {/* Summary Preview */}
+        {formData.workingHours > 0 && (
+          <div className={`rounded-xl p-4 border ${getStatusColor(formData.status)}`}>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <p className="text-xs font-medium opacity-70">{t("working_hours")}</p>
+                <p className="text-lg font-bold">{formData.workingHours} hrs</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium opacity-70">{t("overtime_hours")}</p>
+                <p className="text-lg font-bold">{formData.overtimeHours} hrs</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium opacity-70">{t("late_minutes")}</p>
+                <p className="text-lg font-bold">{formData.lateMinutes} min</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium opacity-70">{t("early_leave_minutes")}</p>
+                <p className="text-lg font-bold">{formData.earlyLeaveMinutes} min</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-end gap-3 mt-8 pt-4 border-t border-gray-100">
+          <Button
+            variant="secondary"
+            onClick={onClose}
+            disabled={isSubmitting || isLoading}
+            type="button"
+          >
             {t("cancel")}
           </Button>
           <Button
@@ -248,7 +497,7 @@ export const AttendanceModal: React.FC<AttendanceModalProps> = ({
             isLoading={isSubmitting || isLoading}
             disabled={isSubmitting || isLoading}
           >
-            {recordToEdit ? t("save") : t("add_attendance")}
+            {recordToEdit ? t("update_attendance") : t("add_attendance")}
           </Button>
         </div>
       </form>

@@ -93,6 +93,15 @@ export const useEmployeeModule = (fetchAllData?: () => Promise<void>) => {
   }, [fetchAllData]);
 
   // --- Attendance ---
+  const fetchAttendanceRecords = useCallback(async () => {
+    try {
+      const data = await hrService.getAttendance();
+      setAttendanceRecords(Array.isArray(data) ? data : data?.data || []);
+    } catch (error) {
+      console.error("Error fetching Attendances:", error);
+    }
+  }, []);
+
   const addAttendanceRecord = useCallback(async (record: any) => {
     try {
       await hrService.addAttendance(record);
@@ -159,6 +168,15 @@ export const useEmployeeModule = (fetchAllData?: () => Promise<void>) => {
   }, [fetchAllData]);
 
   // --- Contract ---
+  const fetchContracts = useCallback(async () => {
+    try {
+      const data = await hrService.getContracts();
+      setContracts(Array.isArray(data) ? data : data?.data || []);
+    } catch (error) {
+      console.error("Error fetching Contracts:", error);
+    }
+  }, []);
+
   const addContract = useCallback(async (contract: Contract) => {
     try {
       await hrService.addContract(contract);
@@ -191,17 +209,17 @@ export const useEmployeeModule = (fetchAllData?: () => Promise<void>) => {
     addEmployee, updateEmployee, deleteEmployee,
     getEmployeeById, getEmployeeFromServer,
     addDocument, updateDocument, deleteDocument,
-    addAttendanceRecord, updateAttendanceRecord, deleteAttendanceRecord,
+    addAttendanceRecord, updateAttendanceRecord, deleteAttendanceRecord, fetchAttendanceRecords,
     addEvaluation, updateEvaluation, deleteEvaluation,
     addCareerHistory, updateCareerHistory, deleteCareerHistory,
-    addContract, updateContract, deleteContract,
+    addContract, updateContract, deleteContract, fetchContracts,
   }), [
     employees, documents, attendanceRecords, evaluations, careerHistory, contracts, 
     addEmployee, updateEmployee, deleteEmployee, getEmployeeById, getEmployeeFromServer,
     addDocument, updateDocument, deleteDocument,
-    addAttendanceRecord, updateAttendanceRecord, deleteAttendanceRecord,
+    addAttendanceRecord, updateAttendanceRecord, deleteAttendanceRecord, fetchAttendanceRecords,
     addEvaluation, updateEvaluation, deleteEvaluation,
     addCareerHistory, updateCareerHistory, deleteCareerHistory,
-    addContract, updateContract, deleteContract,
+    addContract, updateContract, deleteContract, fetchContracts,
   ]);
 };

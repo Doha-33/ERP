@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus, Edit2, Building2, Star } from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
 import { Button, Input, Select } from "../../components/ui/Common";
 import { SupplierRating } from "../../types";
 import { useData } from "../../context/DataContext";
+import { toast } from "sonner";
 
 interface SupplierRatingModalProps {
   isOpen: boolean;
@@ -34,11 +35,18 @@ export const SupplierRatingModal: React.FC<SupplierRatingModalProps> = ({
   
   const [ratingCode, setRatingCode] = useState(`SR-${Date.now().toString().slice(-4)}`);
 
+  // Helper function to extract ID
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "object") {
+      return value._id || value.id || "";
+    }
+    return value;
+  }, []);
+
   useEffect(() => {
     if (ratingToEdit && isOpen) {
-      const supplierId = typeof ratingToEdit.supplierId === "object"
-        ? (ratingToEdit.supplierId as any)?._id
-        : ratingToEdit.supplierId;
+      const supplierId = extractId(ratingToEdit.supplierId);
 
       setFormData({
         supplierId: supplierId || "",
@@ -58,38 +66,63 @@ export const SupplierRatingModal: React.FC<SupplierRatingModalProps> = ({
       });
       setRatingCode(`SR-${Date.now().toString().slice(-4)}`);
     }
-  }, [ratingToEdit, isOpen]);
+  }, [ratingToEdit, isOpen, extractId]);
 
   const supplierOptions = suppliers.map(s => ({
-    value: s._id || s.id,
+    value: extractId(s),
     label: s.supplierName,
   }));
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    
+    // Validation
+    if (!formData.supplierId) {
+      toast.error(t("supplier_required"));
+      return;
+    }
+    
+    // Validate rating values are between 1 and 5
+    const ratings = [formData.quality, formData.delivery, formData.service, formData.compliance];
+    for (const rating of ratings) {
+      if (rating < 1 || rating > 5) {
+        toast.error(t("rating_must_be_between_1_and_5"));
+        return;
+      }
+    }
+    
     setIsSubmitting(true);
     
     // Calculate overall rating
-    const overallRating = Math.round(
+    const overallRating = Number((
       (formData.quality + formData.delivery + formData.service + formData.compliance) / 4
-    );
+    ).toFixed(1));
     
     try {
-      await onSave({
+      const saveData = {
         ...formData,
         ratingCode,
         overallRating,
-      });
+      };
+      
+      console.log("Saving supplier rating:", saveData);
+      await onSave(saveData);
       onClose();
     } catch (error) {
       console.error("Error in form submission:", error);
+      toast.error(t("failed_to_save_supplier_rating"));
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleChange = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    let newValue = value;
+    // Ensure rating is between 1 and 5
+    if (["quality", "delivery", "service", "compliance"].includes(field)) {
+      newValue = Math.min(5, Math.max(1, Number(value) || 1));
+    }
+    setFormData(prev => ({ ...prev, [field]: newValue }));
   };
 
   const renderStarsPreview = (rating: number) => (
@@ -104,9 +137,9 @@ export const SupplierRatingModal: React.FC<SupplierRatingModalProps> = ({
     </div>
   );
 
-  const overallRating = Math.round(
+  const overallRating = Number((
     (formData.quality + formData.delivery + formData.service + formData.compliance) / 4
-  );
+  ).toFixed(1));
 
   return (
     <Modal
@@ -127,19 +160,26 @@ export const SupplierRatingModal: React.FC<SupplierRatingModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("supplier")} <span className="text-red-500">*</span>
             </label>
-            <Select
-              value={formData.supplierId}
-              onChange={(e) => handleChange("supplierId", e.target.value)}
-              options={supplierOptions}
-              placeholder={t("select_supplier")}
-              required
-              fullWidth
-            />
+            <div className="relative">
+              <Building2 size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Select
+                value={formData.supplierId}
+                onChange={(e) => handleChange("supplierId", e.target.value)}
+                options={supplierOptions}
+                placeholder={t("select_supplier")}
+                required
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
 
           {/* Rating Criteria */}
           <div className="col-span-2">
-            <h3 className="text-md font-semibold text-gray-900 mb-4">{t("rating_criteria")}</h3>
+            <h3 className="text-md font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <Star size={18} className="text-indigo-600" />
+              {t("rating_criteria")}
+            </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
               {/* Quality */}
               <div className="space-y-1">
@@ -153,7 +193,7 @@ export const SupplierRatingModal: React.FC<SupplierRatingModalProps> = ({
                     max={5}
                     step={1}
                     value={formData.quality}
-                    onChange={(e) => handleChange("quality", Number(e.target.value))}
+                    onChange={(e) => handleChange("quality", e.target.value)}
                     className="w-24"
                     required
                     fullWidth={false}
@@ -174,7 +214,7 @@ export const SupplierRatingModal: React.FC<SupplierRatingModalProps> = ({
                     max={5}
                     step={1}
                     value={formData.delivery}
-                    onChange={(e) => handleChange("delivery", Number(e.target.value))}
+                    onChange={(e) => handleChange("delivery", e.target.value)}
                     className="w-24"
                     required
                     fullWidth={false}
@@ -195,7 +235,7 @@ export const SupplierRatingModal: React.FC<SupplierRatingModalProps> = ({
                     max={5}
                     step={1}
                     value={formData.service}
-                    onChange={(e) => handleChange("service", Number(e.target.value))}
+                    onChange={(e) => handleChange("service", e.target.value)}
                     className="w-24"
                     required
                     fullWidth={false}
@@ -216,7 +256,7 @@ export const SupplierRatingModal: React.FC<SupplierRatingModalProps> = ({
                     max={5}
                     step={1}
                     value={formData.compliance}
-                    onChange={(e) => handleChange("compliance", Number(e.target.value))}
+                    onChange={(e) => handleChange("compliance", e.target.value)}
                     className="w-24"
                     required
                     fullWidth={false}
@@ -234,7 +274,7 @@ export const SupplierRatingModal: React.FC<SupplierRatingModalProps> = ({
             <div>
               <p className="text-sm font-medium text-gray-700">{t("overall_rating")}</p>
               <div className="flex items-center gap-2 mt-1">
-                {renderStarsPreview(overallRating)}
+                {renderStarsPreview(Math.round(overallRating))}
                 <span className="text-lg font-bold text-indigo-600">{overallRating}/5</span>
               </div>
             </div>
@@ -245,8 +285,13 @@ export const SupplierRatingModal: React.FC<SupplierRatingModalProps> = ({
           </div>
         </div>
 
-        <div className="flex justify-end gap-3 mt-8">
-          <Button variant="secondary" onClick={onClose} disabled={isSubmitting || isLoading}>
+        <div className="flex justify-end gap-3 mt-8 pt-4 border-t border-gray-100">
+          <Button 
+            variant="secondary" 
+            onClick={onClose} 
+            disabled={isSubmitting || isLoading}
+            type="button"
+          >
             {t("cancel")}
           </Button>
           <Button
@@ -256,7 +301,7 @@ export const SupplierRatingModal: React.FC<SupplierRatingModalProps> = ({
             isLoading={isSubmitting || isLoading}
             disabled={isSubmitting || isLoading}
           >
-            {ratingToEdit ? t("save") : t("add_supplier_rating")}
+            {ratingToEdit ? t("update_rating") : t("add_rating")}
           </Button>
         </div>
       </form>

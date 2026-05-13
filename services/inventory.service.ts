@@ -33,7 +33,7 @@ const inventoryService = {
   },
 
   async updateStockItem(id: string, data: any) {
-    const res = await apiClient.put(`/inventory/product-list/update/${id}`, data);
+    const res = await apiClient.patch(`/inventory/product-list/update/${id}`, data);
     return res.data.data;
   },
 
@@ -83,7 +83,7 @@ const inventoryService = {
   },
 
   async updateWarehouse(id: string, data: any) {
-    const res = await apiClient.put(`/warehouses/update/${id}`, data);
+    const res = await apiClient.patch(`/warehouses/update/${id}`, data);
     return res.data.data;
   },
 
@@ -109,7 +109,7 @@ const inventoryService = {
   },
 
   async updateCategory(id: string, data: any) {
-    const res = await apiClient.put(`/inventory/category/update/${id}`, data);
+    const res = await apiClient.patch(`/inventory/category/update/${id}`, data);
     return res.data.data;
   },
 
@@ -172,7 +172,7 @@ const inventoryService = {
   },
 
   async getStockMovements(productId?: string) {
-    const url = productId ? `/stock/movements/${productId}` : '/stock/movements';
+    const url = productId ? `/stock/movements/${productId}` : '/stock/movements/list';
     const res = await apiClient.get(url);
     const data = res.data.data || [];
     return data.map((m: any) => ({

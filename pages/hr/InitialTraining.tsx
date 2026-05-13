@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Search, Edit2, Trash2, Calendar, BookOpen, User, Filter, X, ChevronDown, Award, Clock, XCircle } from "lucide-react";
+import { Plus, Search, Edit2, Trash2, Calendar, BookOpen, User, Filter, X, ChevronDown, Award, Clock, XCircle, CheckCircle } from "lucide-react";
 import { Card, Button, Input, Badge, ExportDropdown } from "../../components/ui/Common";
 import { Table, Column } from "../../components/ui/Table";
 import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
@@ -13,7 +13,7 @@ import { toast } from "sonner";
 export const InitialTrainingPage: React.FC = () => {
   const { t } = useTranslation();
   const { user } = useAuth();
-  const { initialTrainings, addInitialTraining, updateInitialTraining, deleteInitialTraining, employees } = useData();
+  const { initialTrainings, addInitialTraining, updateInitialTraining, deleteInitialTraining, employees, fetchInitialTrainings } = useData();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTraining, setEditingTraining] = useState<InitialTraining | null>(null);
@@ -27,30 +27,74 @@ export const InitialTrainingPage: React.FC = () => {
 
   const isAdmin = user?.role === "admin";
 
-  const handleSave = async (training: Partial<InitialTraining>) => {
+  // Helper function to extract ID
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+      if (value._id && typeof value._id === "string") return value._id;
+      if (value.id && typeof value.id === "string") return value.id;
+    }
+    return "";
+  }, []);
+
+  const handleSave = async (trainingData: Partial<InitialTraining>) => {
     try {
       setIsLoading(true);
+      
       if (editingTraining) {
-        await updateInitialTraining({ ...training, _id: editingTraining._id, id: editingTraining.id } as InitialTraining);
+        const trainingId = extractId(editingTraining);
+        
+        if (!trainingId) {
+          toast.error(t("initial_training_id_missing"));
+          return;
+        }
+        
+        const updateData = {
+          ...trainingData,
+          _id: trainingId,
+          id: trainingId
+        } as InitialTraining;
+        
+        console.log("Updating initial training with ID:", trainingId, updateData);
+        await updateInitialTraining(updateData);
         toast.success(t("initial_training_updated_successfully"));
       } else {
-        await addInitialTraining(training as InitialTraining);
+        await addInitialTraining(trainingData as InitialTraining);
         toast.success(t("initial_training_created_successfully"));
       }
+      
+      await fetchInitialTrainings();
       setIsModalOpen(false);
       setEditingTraining(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving initial training:", error);
-      toast.error(t("failed_to_save_initial_training"));
+      const message = error?.response?.data?.message || error?.message || t("failed_to_save_initial_training");
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleEdit = useCallback((training: InitialTraining) => {
-    setEditingTraining(training);
+    const trainingId = extractId(training);
+    
+    if (!trainingId) {
+      console.error("Initial training ID not found", training);
+      toast.error(t("initial_training_id_not_found"));
+      return;
+    }
+    
+    const trainingToEdit: InitialTraining = {
+      ...training,
+      _id: trainingId,
+      id: trainingId,
+    };
+    
+    console.log("Editing initial training:", trainingToEdit);
+    setEditingTraining(trainingToEdit);
     setIsModalOpen(true);
-  }, []);
+  }, [extractId, t]);
 
   const handleDelete = useCallback((id: string) => {
     setDeleteId(id);
@@ -63,19 +107,26 @@ export const InitialTrainingPage: React.FC = () => {
         toast.success(t("initial_training_deleted_successfully"));
         setDeleteId(null);
         setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+        await fetchInitialTrainings();
       } catch (error) {
         toast.error(t("failed_to_delete_initial_training"));
       }
     }
-  }, [deleteId, deleteInitialTraining, t]);
+  }, [deleteId, deleteInitialTraining, fetchInitialTrainings, t]);
 
   const handleBulkDelete = async () => {
     try {
       setIsLoading(true);
-      await Promise.all(selectedIds.map(id => deleteInitialTraining(id)));
-      toast.success(t("initial_trainings_deleted_successfully", { count: selectedIds.length }));
+      const validIds = selectedIds.filter(id => id && typeof id === 'string');
+      if (validIds.length === 0) {
+        toast.error(t("no_valid_ids_selected"));
+        return;
+      }
+      await Promise.all(validIds.map(id => deleteInitialTraining(id)));
+      toast.success(t("initial_trainings_deleted_successfully", { count: validIds.length }));
       setSelectedIds([]);
       setIsBulkConfirmOpen(false);
+      await fetchInitialTrainings();
     } catch (error) {
       console.error("Bulk delete failed", error);
       toast.error(t("failed_to_delete_initial_trainings"));
@@ -89,7 +140,7 @@ export const InitialTrainingPage: React.FC = () => {
     if (typeof training.employeeInfo === "object" && training.employeeInfo !== null) {
       return (training.employeeInfo as any)?.fullName || "-";
     }
-    const employee = employees.find(e => (e._id || e.id) === training.employeeInfo);
+    const employee = employees.find(e => extractId(e) === training.employeeInfo);
     return employee?.fullName || training.empName || "-";
   };
 
@@ -97,7 +148,7 @@ export const InitialTrainingPage: React.FC = () => {
     if (typeof training.employeeInfo === "object" && training.employeeInfo !== null) {
       return (training.employeeInfo as any)?.employeeCode || "-";
     }
-    const employee = employees.find(e => (e._id || e.id) === training.employeeInfo);
+    const employee = employees.find(e => extractId(e) === training.employeeInfo);
     return employee?.employeeCode || training.empCode || "-";
   };
 
@@ -110,14 +161,23 @@ export const InitialTrainingPage: React.FC = () => {
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "-";
-    return new Date(dateStr).toLocaleDateString();
+    try {
+      return new Date(dateStr).toLocaleDateString();
+    } catch {
+      return "-";
+    }
   };
 
+  // API expects: Pending, Done, Canceled (not Completed or Failed)
   const getStatusBadge = (status: string) => {
-    const statusMap: Record<string, { variant: "warning" | "success" | "danger"; label: string }> = {
+    const statusMap: Record<string, { variant: "warning" | "success" | "danger" | "info"; label: string }> = {
       Pending: { variant: "warning", label: t("pending") },
+      Done: { variant: "success", label: t("done") },
       Completed: { variant: "success", label: t("completed") },
+      Canceled: { variant: "danger", label: t("canceled") },
       Failed: { variant: "danger", label: t("failed") },
+      Paid: { variant: "success", label: t("paid") },
+      Unpaid: { variant: "danger", label: t("unpaid") },
     };
     const config = statusMap[status] || { variant: "info", label: status };
     return <Badge variant={config.variant}>{config.label}</Badge>;
@@ -141,15 +201,18 @@ export const InitialTrainingPage: React.FC = () => {
 
   // Statistics
   const totalTrainings = filteredTrainings.length;
-  const completedTrainings = filteredTrainings.filter(t => t.status === "Completed").length;
+  const completedTrainings = filteredTrainings.filter(t => t.status === "Done" || t.status === "Completed").length;
   const pendingTrainings = filteredTrainings.filter(t => t.status === "Pending").length;
-  const failedTrainings = filteredTrainings.filter(t => t.status === "Failed").length;
+  const failedTrainings = filteredTrainings.filter(t => t.status === "Failed" || t.status === "Canceled").length;
 
+  // API expects: Pending, Done, Canceled, Paid, Unpaid
   const statusOptions = [
     { value: "", label: t("all_statuses") },
     { value: "Pending", label: t("pending") },
-    { value: "Completed", label: t("completed") },
-    { value: "Failed", label: t("failed") },
+    { value: "Done", label: t("done") },
+    { value: "Canceled", label: t("canceled") },
+    { value: "Paid", label: t("paid") },
+    { value: "Unpaid", label: t("unpaid") },
   ];
 
   const typeOptions = [
@@ -165,17 +228,22 @@ export const InitialTrainingPage: React.FC = () => {
     () => [
       {
         header: t("employee"),
-        render: (item) => (
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
-              <User size={18} className="text-indigo-600" />
+        render: (item) => {
+          const employeeName = getEmployeeName(item);
+          const employeeCode = getEmployeeCode(item);
+          const initial = employeeName.charAt(0).toUpperCase();
+          return (
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center">
+                <User size={18} className="text-indigo-600" />
+              </div>
+              <div className="flex flex-col">
+                <span className="font-medium text-gray-900">{employeeName}</span>
+                <span className="text-xs text-gray-500">{employeeCode}</span>
+              </div>
             </div>
-            <div className="flex flex-col">
-              <span className="font-medium text-gray-900">{getEmployeeName(item)}</span>
-              <span className="text-xs text-gray-500">{getEmployeeCode(item)}</span>
-            </div>
-          </div>
-        )
+          );
+        }
       },
       {
         header: t("training_info"),
@@ -220,28 +288,36 @@ export const InitialTrainingPage: React.FC = () => {
       {
         header: t("actions"),
         className: "text-center",
-        render: (item) => (
-          <div className="flex items-center justify-center gap-2">
-            <button
-              onClick={() => handleEdit(item)}
-              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("edit")}
-            >
-              <Edit2 size={16} />
-            </button>
-            <button
-              onClick={() => handleDelete(item._id || item.id)}
-              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("delete")}
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-        )
+        render: (item) => {
+          const trainingId = extractId(item);
+          return (
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => handleEdit(item)}
+                className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("edit")}
+              >
+                <Edit2 size={16} />
+              </button>
+              <button
+                onClick={() => handleDelete(trainingId)}
+                className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("delete")}
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          );
+        }
       }
     ],
-    [t, handleEdit, handleDelete]
+    [t, handleEdit, handleDelete, extractId]
   );
+
+  const getKeyExtractor = useCallback((item: InitialTraining) => {
+    const id = extractId(item);
+    return id || Math.random().toString();
+  }, [extractId]);
 
   return (
     <div className="space-y-6">
@@ -292,7 +368,7 @@ export const InitialTrainingPage: React.FC = () => {
         </div>
         <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
           <div className="flex items-center gap-2">
-            <Award size={18} className="text-green-600" />
+            <CheckCircle size={18} className="text-green-600" />
             <p className="text-xs text-gray-500">{t("completed")}</p>
           </div>
           <p className="text-xl font-bold text-green-600 mt-1">{completedTrainings}</p>
@@ -307,7 +383,7 @@ export const InitialTrainingPage: React.FC = () => {
         <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
           <div className="flex items-center gap-2">
             <XCircle size={18} className="text-red-600" />
-            <p className="text-xs text-gray-500">{t("failed")}</p>
+            <p className="text-xs text-gray-500">{t("canceled_failed")}</p>
           </div>
           <p className="text-xl font-bold text-red-600 mt-1">{failedTrainings}</p>
         </div>
@@ -365,15 +441,15 @@ export const InitialTrainingPage: React.FC = () => {
       </div>
 
       {/* Table */}
-        <Table
-          data={filteredTrainings}
-          columns={columns}
-          keyExtractor={(item) => item._id || item.id}
-          isLoading={isLoading}
-          selectable
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-        />
+      <Table
+        data={filteredTrainings}
+        columns={columns}
+        keyExtractor={getKeyExtractor}
+        isLoading={isLoading}
+        selectable
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+      />
 
       {/* Modal */}
       <InitialTrainingModal

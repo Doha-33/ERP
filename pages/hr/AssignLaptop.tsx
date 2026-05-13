@@ -1,7 +1,26 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Search, Edit2, Trash2, Laptop, User, Hash, Calendar, Filter, X, ChevronDown, UserCheck } from "lucide-react";
-import { Card, Button, Input, Badge, ExportDropdown } from "../../components/ui/Common";
+import {
+  Plus,
+  Search,
+  Edit2,
+  Trash2,
+  Laptop,
+  User,
+  Hash,
+  Calendar,
+  Filter,
+  X,
+  ChevronDown,
+  UserCheck,
+} from "lucide-react";
+import {
+  Card,
+  Button,
+  Input,
+  Badge,
+  ExportDropdown,
+} from "../../components/ui/Common";
 import { Table, Column } from "../../components/ui/Table";
 import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
 import { AssignLaptopModal } from "../../components/hr/AssignLaptopModal";
@@ -11,8 +30,15 @@ import { toast } from "sonner";
 
 export const AssignLaptopPage: React.FC = () => {
   const { t } = useTranslation();
-  const { assignLaptops, addAssignLaptop, updateAssignLaptop, deleteAssignLaptop, employees } = useData();
-  
+  const {
+    assignLaptops,
+    addAssignLaptop,
+    updateAssignLaptop,
+    deleteAssignLaptop,
+    fetchAssignLaptops,
+    employees,
+  } = useData();
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLaptop, setEditingLaptop] = useState<AssignLaptop | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -23,30 +49,93 @@ export const AssignLaptopPage: React.FC = () => {
   const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSave = async (laptop: Partial<AssignLaptop>) => {
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+      if (value._id && typeof value._id === "string") return value._id;
+      if (value.id && typeof value.id === "string") return value.id;
+    }
+    return "";
+  }, []);
+
+  const handleSave = async (laptopData: Partial<AssignLaptop>) => {
     try {
       setIsLoading(true);
+
       if (editingLaptop) {
-        await updateAssignLaptop({ ...laptop, _id: editingLaptop._id, id: editingLaptop.id } as AssignLaptop);
+        const laptopId = extractId(editingLaptop);
+
+        if (!laptopId) {
+          toast.error(t("assign_laptop_id_missing"));
+          return;
+        }
+
+        const updateData = {
+          ...laptopData,
+          _id: laptopId,
+          id: laptopId,
+        } as AssignLaptop;
+
+        console.log("Updating assigned laptop with ID:", laptopId, updateData);
+        await updateAssignLaptop(updateData);
         toast.success(t("assign_laptop_updated_successfully"));
       } else {
-        await addAssignLaptop(laptop as AssignLaptop);
+        await addAssignLaptop(laptopData as AssignLaptop);
         toast.success(t("assign_laptop_created_successfully"));
       }
+
+      await fetchAssignLaptops();
       setIsModalOpen(false);
       setEditingLaptop(null);
-    } catch (error) {
-      console.error("Error saving assign laptop:", error);
-      toast.error(t("failed_to_save_assign_laptop"));
+    } catch (error: any) {
+      console.error("Error saving assigned laptop:", error);
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        t("failed_to_save_assign_laptop");
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleEdit = useCallback((laptop: AssignLaptop) => {
-    setEditingLaptop(laptop);
-    setIsModalOpen(true);
-  }, []);
+  const handleEdit = useCallback(
+    (laptop: AssignLaptop) => {
+      const laptopId = extractId(laptop);
+
+      if (!laptopId) {
+        console.error("Assigned laptop ID not found", laptop);
+        toast.error(t("assign_laptop_id_not_found"));
+        return;
+      }
+
+      const laptopToEdit: AssignLaptop = {
+        ...laptop,
+        _id: laptopId,
+        id: laptopId,
+      };
+
+      console.log("Editing assigned laptop:", laptopToEdit);
+      setEditingLaptop(laptopToEdit);
+      setIsModalOpen(true);
+    },
+    [extractId, t],
+  );
+
+  // تحديث getStatusBadge لدعم القيم الجديدة
+  const getStatusBadge = (status: string) => {
+    const statusMap: Record<
+      string,
+      { variant: "success" | "warning" | "danger" | "info"; label: string }
+    > = {
+      Done: { variant: "success", label: t("done") },
+      Pending: { variant: "warning", label: t("pending") },
+      Canceled: { variant: "danger", label: t("canceled") },
+    };
+    const config = statusMap[status] || { variant: "info", label: status };
+    return <Badge variant={config.variant}>{config.label}</Badge>;
+  };
 
   const handleDelete = useCallback((id: string) => {
     setDeleteId(id);
@@ -58,7 +147,7 @@ export const AssignLaptopPage: React.FC = () => {
         await deleteAssignLaptop(deleteId);
         toast.success(t("assign_laptop_deleted_successfully"));
         setDeleteId(null);
-        setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+        setSelectedIds((prev) => prev.filter((sid) => sid !== deleteId));
       } catch (error) {
         toast.error(t("failed_to_delete_assign_laptop"));
       }
@@ -68,8 +157,10 @@ export const AssignLaptopPage: React.FC = () => {
   const handleBulkDelete = async () => {
     try {
       setIsLoading(true);
-      await Promise.all(selectedIds.map(id => deleteAssignLaptop(id)));
-      toast.success(t("assign_laptops_deleted_successfully", { count: selectedIds.length }));
+      await Promise.all(selectedIds.map((id) => deleteAssignLaptop(id)));
+      toast.success(
+        t("assign_laptops_deleted_successfully", { count: selectedIds.length }),
+      );
       setSelectedIds([]);
       setIsBulkConfirmOpen(false);
     } catch (error) {
@@ -82,18 +173,28 @@ export const AssignLaptopPage: React.FC = () => {
 
   // Helper functions
   const getEmployeeName = (laptop: AssignLaptop): string => {
-    if (typeof laptop.employeeInfo === "object" && laptop.employeeInfo !== null) {
+    if (
+      typeof laptop.employeeInfo === "object" &&
+      laptop.employeeInfo !== null
+    ) {
       return (laptop.employeeInfo as any)?.fullName || "-";
     }
-    const employee = employees.find(e => (e._id || e.id) === laptop.employeeInfo);
+    const employee = employees.find(
+      (e) => (e._id || e.id) === laptop.employeeInfo,
+    );
     return employee?.fullName || laptop.empName || "-";
   };
 
   const getEmployeeCode = (laptop: AssignLaptop): string => {
-    if (typeof laptop.employeeInfo === "object" && laptop.employeeInfo !== null) {
+    if (
+      typeof laptop.employeeInfo === "object" &&
+      laptop.employeeInfo !== null
+    ) {
       return (laptop.employeeInfo as any)?.employeeCode || "-";
     }
-    const employee = employees.find(e => (e._id || e.id) === laptop.employeeInfo);
+    const employee = employees.find(
+      (e) => (e._id || e.id) === laptop.employeeInfo,
+    );
     return employee?.employeeCode || laptop.empCode || "-";
   };
 
@@ -102,37 +203,33 @@ export const AssignLaptopPage: React.FC = () => {
     return new Date(dateStr).toLocaleDateString();
   };
 
-  const getStatusBadge = (status: string) => {
-    const statusMap: Record<string, { variant: "success" | "warning" | "info"; label: string }> = {
-      Assigned: { variant: "success", label: t("assigned") },
-      Pending: { variant: "warning", label: t("pending") },
-      Returned: { variant: "info", label: t("returned") },
-    };
-    const config = statusMap[status] || { variant: "info", label: status };
-    return <Badge variant={config.variant}>{config.label}</Badge>;
-  };
-
   // Apply filters
   const filteredLaptops = useMemo(() => {
-    return assignLaptops.filter(l => {
+    return assignLaptops.filter((l) => {
       const employeeName = getEmployeeName(l).toLowerCase();
-      const matchesSearch = 
+      const matchesSearch =
         employeeName.includes(searchTerm.toLowerCase()) ||
         l.serialNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         l.deviceType?.toLowerCase().includes(searchTerm.toLowerCase());
-      
+
       const matchesStatus = !statusFilter || l.status === statusFilter;
       const matchesDevice = !deviceFilter || l.deviceType === deviceFilter;
-      
+
       return matchesSearch && matchesStatus && matchesDevice;
     });
   }, [assignLaptops, searchTerm, statusFilter, deviceFilter]);
 
   // Statistics
   const totalAssignments = filteredLaptops.length;
-  const assignedCount = filteredLaptops.filter(l => l.status === "Assigned").length;
-  const pendingCount = filteredLaptops.filter(l => l.status === "Pending").length;
-  const returnedCount = filteredLaptops.filter(l => l.status === "Returned").length;
+  const assignedCount = filteredLaptops.filter(
+    (l) => l.status === "Assigned",
+  ).length;
+  const pendingCount = filteredLaptops.filter(
+    (l) => l.status === "Pending",
+  ).length;
+  const returnedCount = filteredLaptops.filter(
+    (l) => l.status === "Returned",
+  ).length;
 
   const statusOptions = [
     { value: "", label: t("all_statuses") },
@@ -161,11 +258,15 @@ export const AssignLaptopPage: React.FC = () => {
               <User size={18} className="text-indigo-600" />
             </div>
             <div className="flex flex-col">
-              <span className="font-medium text-gray-900">{getEmployeeName(l)}</span>
-              <span className="text-xs text-gray-500">{getEmployeeCode(l)}</span>
+              <span className="font-medium text-gray-900">
+                {getEmployeeName(l)}
+              </span>
+              <span className="text-xs text-gray-500">
+                {getEmployeeCode(l)}
+              </span>
             </div>
           </div>
-        )
+        ),
       },
       {
         header: t("device_info"),
@@ -173,14 +274,18 @@ export const AssignLaptopPage: React.FC = () => {
           <div className="flex flex-col gap-0.5">
             <div className="flex items-center gap-1.5">
               <Laptop size={14} className="text-blue-600" />
-              <span className="text-sm font-medium text-gray-700">{l.deviceType}</span>
+              <span className="text-sm font-medium text-gray-700">
+                {l.deviceType}
+              </span>
             </div>
             <div className="flex items-center gap-1.5">
               <Hash size={12} className="text-gray-400" />
-              <span className="text-xs font-mono text-gray-500">{l.serialNumber}</span>
+              <span className="text-xs font-mono text-gray-500">
+                {l.serialNumber}
+              </span>
             </div>
           </div>
-        )
+        ),
       },
       {
         header: t("assignment"),
@@ -188,18 +293,20 @@ export const AssignLaptopPage: React.FC = () => {
           <div className="flex flex-col gap-0.5">
             <div className="flex items-center gap-1.5">
               <Calendar size={12} className="text-gray-400" />
-              <span className="text-xs text-gray-600">{formatDate(l.doneAt)}</span>
+              <span className="text-xs text-gray-600">
+                {formatDate(l.doneAt)}
+              </span>
             </div>
             <div className="flex items-center gap-1.5">
               <UserCheck size={12} className="text-gray-400" />
               <span className="text-xs text-gray-500">{l.doneBy || "-"}</span>
             </div>
           </div>
-        )
+        ),
       },
       {
         header: t("status"),
-        render: (l) => getStatusBadge(l.status)
+        render: (l) => getStatusBadge(l.status),
       },
       {
         header: t("actions"),
@@ -221,10 +328,10 @@ export const AssignLaptopPage: React.FC = () => {
               <Trash2 size={16} />
             </button>
           </div>
-        )
-      }
+        ),
+      },
     ],
-    [t, handleEdit, handleDelete]
+    [t, handleEdit, handleDelete],
   );
 
   return (
@@ -235,9 +342,7 @@ export const AssignLaptopPage: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-900">
             {t("assign_laptop")}
           </h1>
-          <p className="text-gray-500 mt-1">
-            {t("manage_assign_laptop")}
-          </p>
+          <p className="text-gray-500 mt-1">{t("manage_assign_laptop")}</p>
         </div>
         <div className="flex gap-3">
           {selectedIds.length > 0 && (
@@ -272,35 +377,46 @@ export const AssignLaptopPage: React.FC = () => {
             <Laptop size={18} className="text-indigo-600" />
             <p className="text-xs text-gray-500">{t("total_assignments")}</p>
           </div>
-          <p className="text-xl font-bold text-gray-900 mt-1">{totalAssignments}</p>
+          <p className="text-xl font-bold text-gray-900 mt-1">
+            {totalAssignments}
+          </p>
         </div>
         <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
           <div className="flex items-center gap-2">
             <CheckCircle size={18} className="text-green-600" />
             <p className="text-xs text-gray-500">{t("assigned")}</p>
           </div>
-          <p className="text-xl font-bold text-green-600 mt-1">{assignedCount}</p>
+          <p className="text-xl font-bold text-green-600 mt-1">
+            {assignedCount}
+          </p>
         </div>
         <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
           <div className="flex items-center gap-2">
             <Clock size={18} className="text-orange-600" />
             <p className="text-xs text-gray-500">{t("pending")}</p>
           </div>
-          <p className="text-xl font-bold text-orange-600 mt-1">{pendingCount}</p>
+          <p className="text-xl font-bold text-orange-600 mt-1">
+            {pendingCount}
+          </p>
         </div>
         <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
           <div className="flex items-center gap-2">
             <XCircle size={18} className="text-gray-500" />
             <p className="text-xs text-gray-500">{t("returned")}</p>
           </div>
-          <p className="text-xl font-bold text-gray-600 mt-1">{returnedCount}</p>
+          <p className="text-xl font-bold text-gray-600 mt-1">
+            {returnedCount}
+          </p>
         </div>
       </div>
 
       {/* Filters */}
       <div className="flex flex-wrap gap-4 items-center">
         <div className="relative max-w-md">
-          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search
+            size={18}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+          />
           <input
             type="text"
             placeholder={t("search_assign_laptop")}
@@ -349,15 +465,15 @@ export const AssignLaptopPage: React.FC = () => {
       </div>
 
       {/* Table */}
-        <Table
-          data={filteredLaptops}
-          columns={columns}
-          keyExtractor={(item) => item._id || item.id}
-          isLoading={isLoading}
-          selectable
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-        />
+      <Table
+        data={filteredLaptops}
+        columns={columns}
+        keyExtractor={(item) => item._id || item.id}
+        isLoading={isLoading}
+        selectable
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+      />
 
       {/* Modal */}
       <AssignLaptopModal
@@ -386,7 +502,9 @@ export const AssignLaptopPage: React.FC = () => {
         onClose={() => setIsBulkConfirmOpen(false)}
         onConfirm={handleBulkDelete}
         title={t("delete_assign_laptops")}
-        message={t("are_you_sure_delete_assign_laptops", { count: selectedIds.length })}
+        message={t("are_you_sure_delete_assign_laptops", {
+          count: selectedIds.length,
+        })}
       />
     </div>
   );

@@ -1,7 +1,29 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Search, Edit2, Trash2, FileText, Calendar, DollarSign, Building2, Filter, X, ChevronDown, Briefcase, Clock, CheckCircle, XCircle } from "lucide-react";
-import { Card, Button, Input, Badge, ExportDropdown } from "../../components/ui/Common";
+import {
+  Plus,
+  Search,
+  Edit2,
+  Trash2,
+  FileText,
+  Calendar,
+  DollarSign,
+  Building2,
+  Filter,
+  X,
+  ChevronDown,
+  Briefcase,
+  Clock,
+  CheckCircle,
+  XCircle,
+} from "lucide-react";
+import {
+  Card,
+  Button,
+  Input,
+  Badge,
+  ExportDropdown,
+} from "../../components/ui/Common";
 import { Table, Column } from "../../components/ui/Table";
 import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
 import { ContractModal } from "../../components/hr/ContractModal";
@@ -13,8 +35,17 @@ import { toast } from "sonner";
 export const Contracts: React.FC = () => {
   const { t } = useTranslation();
   const { user } = useAuth();
-  const { contracts, branches, employees, addContract, updateContract, deleteContract, currentUserEmployee } = useData();
-  
+  const {
+    contracts,
+    branches,
+    employees,
+    addContract,
+    updateContract,
+    deleteContract,
+    fetchContracts,
+    currentUserEmployee,
+  } = useData();
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingContract, setEditingContract] = useState<Contract | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -27,30 +58,79 @@ export const Contracts: React.FC = () => {
 
   const isAdmin = user?.role === "admin";
 
-  const handleSave = async (contract: Partial<Contract>) => {
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+      if (value._id && typeof value._id === "string") return value._id;
+      if (value.id && typeof value.id === "string") return value.id;
+    }
+    return "";
+  }, []);
+
+  const handleSave = async (contractData: Partial<Contract>) => {
     try {
       setIsLoading(true);
+
       if (editingContract) {
-        await updateContract({ ...contract, _id: editingContract._id, id: editingContract.id } as Contract);
+        const contractId = extractId(editingContract);
+
+        if (!contractId) {
+          toast.error(t("contract_id_missing"));
+          return;
+        }
+
+        const updateData = {
+          ...contractData,
+          _id: contractId,
+          id: contractId,
+        } as Contract;
+
+        console.log("Updating contract with ID:", contractId, updateData);
+        await updateContract(updateData);
         toast.success(t("contract_updated_successfully"));
       } else {
-        await addContract(contract as Contract);
+        await addContract(contractData as Contract);
         toast.success(t("contract_created_successfully"));
       }
+
+      await fetchContracts();
       setIsModalOpen(false);
       setEditingContract(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving contract:", error);
-      toast.error(t("failed_to_save_contract"));
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        t("failed_to_save_contract");
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleEdit = useCallback((contract: Contract) => {
-    setEditingContract(contract);
-    setIsModalOpen(true);
-  }, []);
+  const handleEdit = useCallback(
+    (contract: Contract) => {
+      const contractId = extractId(contract);
+
+      if (!contractId) {
+        console.error("Contract ID not found", contract);
+        toast.error(t("contract_id_not_found"));
+        return;
+      }
+
+      const contractToEdit: Contract = {
+        ...contract,
+        _id: contractId,
+        id: contractId,
+      };
+
+      console.log("Editing contract:", contractToEdit);
+      setEditingContract(contractToEdit);
+      setIsModalOpen(true);
+    },
+    [extractId, t],
+  );
 
   const handleDelete = useCallback((id: string) => {
     setDeleteId(id);
@@ -62,7 +142,7 @@ export const Contracts: React.FC = () => {
         await deleteContract(deleteId);
         toast.success(t("contract_deleted_successfully"));
         setDeleteId(null);
-        setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+        setSelectedIds((prev) => prev.filter((sid) => sid !== deleteId));
       } catch (error) {
         toast.error(t("failed_to_delete_contract"));
       }
@@ -72,8 +152,10 @@ export const Contracts: React.FC = () => {
   const handleBulkDelete = async () => {
     try {
       setIsLoading(true);
-      await Promise.all(selectedIds.map(id => deleteContract(id)));
-      toast.success(t("contracts_deleted_successfully", { count: selectedIds.length }));
+      await Promise.all(selectedIds.map((id) => deleteContract(id)));
+      toast.success(
+        t("contracts_deleted_successfully", { count: selectedIds.length }),
+      );
       setSelectedIds([]);
       setIsBulkConfirmOpen(false);
     } catch (error) {
@@ -86,18 +168,28 @@ export const Contracts: React.FC = () => {
 
   // Helper functions
   const getEmployeeName = (contract: Contract): string => {
-    if (typeof contract.employeeInfo === "object" && contract.employeeInfo !== null) {
+    if (
+      typeof contract.employeeInfo === "object" &&
+      contract.employeeInfo !== null
+    ) {
       return (contract.employeeInfo as any)?.fullName || "-";
     }
-    const employee = employees.find(e => (e._id || e.id) === contract.employeeId);
+    const employee = employees.find(
+      (e) => (e._id || e.id) === contract.employeeId,
+    );
     return employee?.fullName || contract.employeeName || "-";
   };
 
   const getEmployeeCode = (contract: Contract): string => {
-    if (typeof contract.employeeInfo === "object" && contract.employeeInfo !== null) {
+    if (
+      typeof contract.employeeInfo === "object" &&
+      contract.employeeInfo !== null
+    ) {
       return (contract.employeeInfo as any)?.employeeCode || "-";
     }
-    const employee = employees.find(e => (e._id || e.id) === contract.employeeId);
+    const employee = employees.find(
+      (e) => (e._id || e.id) === contract.employeeId,
+    );
     return employee?.employeeCode || "-";
   };
 
@@ -105,12 +197,15 @@ export const Contracts: React.FC = () => {
     if (typeof contract.branch === "object" && contract.branch !== null) {
       return (contract.branch as any)?.name || "-";
     }
-    const branch = branches.find(b => (b._id || b.id) === contract.branch);
+    const branch = branches.find((b) => (b._id || b.id) === contract.branch);
     return branch?.name || contract.branch || "-";
   };
 
   const getStatusBadge = (status: string) => {
-    const statusMap: Record<string, { variant: "success" | "warning" | "danger" | "info"; label: string }> = {
+    const statusMap: Record<
+      string,
+      { variant: "success" | "warning" | "danger" | "info"; label: string }
+    > = {
       Active: { variant: "success", label: t("active") },
       Expired: { variant: "danger", label: t("expired") },
       "Under Renewal": { variant: "warning", label: t("under_renewal") },
@@ -129,7 +224,9 @@ export const Contracts: React.FC = () => {
     if (!endDateStr) return false;
     const endDate = new Date(endDateStr);
     const today = new Date();
-    const daysLeft = Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    const daysLeft = Math.ceil(
+      (endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+    );
     return daysLeft > 0 && daysLeft <= 30;
   };
 
@@ -137,39 +234,51 @@ export const Contracts: React.FC = () => {
   const accessibleContracts = useMemo(() => {
     if (isAdmin) return contracts;
     const currentId = currentUserEmployee?._id || currentUserEmployee?.id;
-    return contracts.filter(c => {
-      const empId = typeof c.employeeInfo === "object" ? (c.employeeInfo as any)._id : c.employeeId;
+    return contracts.filter((c) => {
+      const empId =
+        typeof c.employeeInfo === "object"
+          ? (c.employeeInfo as any)._id
+          : c.employeeId;
       return empId === currentId;
     });
   }, [isAdmin, contracts, currentUserEmployee]);
 
   const filteredContracts = useMemo(() => {
-    return accessibleContracts.filter(c => {
+    return accessibleContracts.filter((c) => {
       const employeeName = getEmployeeName(c).toLowerCase();
-      const matchesSearch = 
+      const matchesSearch =
         employeeName.includes(searchTerm.toLowerCase()) ||
         c.contractId?.toLowerCase().includes(searchTerm.toLowerCase());
-      
+
       const matchesBranch = !branchFilter || getBranchName(c) === branchFilter;
       const matchesStatus = !statusFilter || c.state === statusFilter;
-      
+
       return matchesSearch && matchesBranch && matchesStatus;
     });
   }, [accessibleContracts, searchTerm, branchFilter, statusFilter]);
 
   // Statistics
   const totalContracts = filteredContracts.length;
-  const activeContracts = filteredContracts.filter(c => c.state === "Active").length;
-  const expiredContracts = filteredContracts.filter(c => c.state === "Expired").length;
-  const totalSalary = filteredContracts.reduce((sum, c) => sum + (c.basicSalary + c.allowances), 0);
-  const expiringSoon = filteredContracts.filter(c => isExpiringSoon(c.endDate)).length;
+  const activeContracts = filteredContracts.filter(
+    (c) => c.state === "Active",
+  ).length;
+  const expiredContracts = filteredContracts.filter(
+    (c) => c.state === "Expired",
+  ).length;
+  const totalSalary = filteredContracts.reduce(
+    (sum, c) => sum + (Number(c.basicSalary) + Number(c.allowances)),
+    0,
+  );
+  const expiringSoon = filteredContracts.filter((c) =>
+    isExpiringSoon(c.endDate),
+  ).length;
 
   const branchOptions = [
     { value: "", label: t("all_branches") },
-    ...branches.map(b => ({ 
-      value: b.name, 
-      label: b.name 
-    }))
+    ...branches.map((b) => ({
+      value: b.name,
+      label: b.name,
+    })),
   ];
 
   const statusOptions = [
@@ -194,16 +303,18 @@ export const Contracts: React.FC = () => {
               <span className="text-xs text-gray-500">{c.contractType}</span>
             </div>
           </div>
-        )
+        ),
       },
       {
         header: t("employee"),
         render: (c) => (
           <div className="flex flex-col">
-            <span className="font-medium text-gray-900">{getEmployeeName(c)}</span>
+            <span className="font-medium text-gray-900">
+              {getEmployeeName(c)}
+            </span>
             <span className="text-xs text-gray-500">{getEmployeeCode(c)}</span>
           </div>
-        )
+        ),
       },
       {
         header: t("job_branch"),
@@ -218,7 +329,7 @@ export const Contracts: React.FC = () => {
               <span className="text-sm text-gray-500">{getBranchName(c)}</span>
             </div>
           </div>
-        )
+        ),
       },
       {
         header: t("period"),
@@ -228,30 +339,38 @@ export const Contracts: React.FC = () => {
             <div className="flex flex-col gap-0.5">
               <div className="flex items-center gap-1.5">
                 <Calendar size={12} className="text-gray-400" />
-                <span className="text-xs text-gray-600">{formatDate(c.startDate)} → {formatDate(c.endDate)}</span>
+                <span className="text-xs text-gray-600">
+                  {formatDate(c.startDate)} → {formatDate(c.endDate)}
+                </span>
               </div>
               <div className="flex items-center gap-1.5">
                 <Clock size={12} className="text-gray-400" />
-                <span className={`text-xs ${expiring ? "text-orange-600 font-medium" : "text-gray-500"}`}>
+                <span
+                  className={`text-xs ${expiring ? "text-orange-600 font-medium" : "text-gray-500"}`}
+                >
                   {c.duration}
                 </span>
               </div>
             </div>
           );
-        }
+        },
       },
       {
         header: t("salary"),
         render: (c) => (
           <div className="flex flex-col">
-            <span className="text-sm font-bold text-green-600">{c.basicSalary.toLocaleString()} EGP</span>
-            <span className="text-xs text-gray-500">{t("allowances")}: {c.allowances.toLocaleString()}</span>
+            <span className="text-sm font-bold text-green-600">
+              {c.basicSalary.toLocaleString()} EGP
+            </span>
+            <span className="text-xs text-gray-500">
+              {t("allowances")}: {c.allowances.toLocaleString()}
+            </span>
           </div>
-        )
+        ),
       },
       {
         header: t("status"),
-        render: (c) => getStatusBadge(c.state)
+        render: (c) => getStatusBadge(c.state),
       },
       {
         header: t("actions"),
@@ -277,10 +396,10 @@ export const Contracts: React.FC = () => {
               </>
             )}
           </div>
-        )
-      }
+        ),
+      },
     ],
-    [t, handleEdit, handleDelete, isAdmin]
+    [t, handleEdit, handleDelete, isAdmin],
   );
 
   return (
@@ -333,35 +452,45 @@ export const Contracts: React.FC = () => {
             <FileText size={18} className="text-indigo-600" />
             <p className="text-xs text-gray-500">{t("total_contracts")}</p>
           </div>
-          <p className="text-xl font-bold text-gray-900 mt-1">{totalContracts}</p>
+          <p className="text-xl font-bold text-gray-900 mt-1">
+            {totalContracts}
+          </p>
         </div>
         <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
           <div className="flex items-center gap-2">
             <DollarSign size={18} className="text-green-600" />
             <p className="text-xs text-gray-500">{t("total_salary")}</p>
           </div>
-          <p className="text-xl font-bold text-green-600 mt-1">{totalSalary.toLocaleString()} EGP</p>
+          <p className="text-xl font-bold text-green-600 mt-1">
+            {totalSalary} EGP
+          </p>
         </div>
         <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
           <div className="flex items-center gap-2">
             <CheckCircle size={18} className="text-green-500" />
             <p className="text-xs text-gray-500">{t("active")}</p>
           </div>
-          <p className="text-xl font-bold text-green-600 mt-1">{activeContracts}</p>
+          <p className="text-xl font-bold text-green-600 mt-1">
+            {activeContracts}
+          </p>
         </div>
         <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
           <div className="flex items-center gap-2">
             <Clock size={18} className="text-orange-600" />
             <p className="text-xs text-gray-500">{t("expiring_soon")}</p>
           </div>
-          <p className="text-xl font-bold text-orange-600 mt-1">{expiringSoon}</p>
+          <p className="text-xl font-bold text-orange-600 mt-1">
+            {expiringSoon}
+          </p>
         </div>
         <div className="bg-white rounded-xl border border-gray-100 p-3 shadow-sm">
           <div className="flex items-center gap-2">
             <XCircle size={18} className="text-red-600" />
             <p className="text-xs text-gray-500">{t("expired")}</p>
           </div>
-          <p className="text-xl font-bold text-red-600 mt-1">{expiredContracts}</p>
+          <p className="text-xl font-bold text-red-600 mt-1">
+            {expiredContracts}
+          </p>
         </div>
       </div>
 
@@ -369,7 +498,10 @@ export const Contracts: React.FC = () => {
       {isAdmin && (
         <div className="flex flex-wrap gap-4 items-center">
           <div className="relative max-w-md">
-            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Search
+              size={18}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+            />
             <input
               type="text"
               placeholder={t("search_contracts")}
@@ -419,15 +551,15 @@ export const Contracts: React.FC = () => {
       )}
 
       {/* Table */}
-        <Table
-          data={filteredContracts}
-          columns={columns}
-          keyExtractor={(item) => item._id || item.id}
-          isLoading={isLoading}
-          selectable={isAdmin}
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-        />
+      <Table
+        data={filteredContracts}
+        columns={columns}
+        keyExtractor={(item) => item._id || item.id}
+        isLoading={isLoading}
+        selectable={isAdmin}
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+      />
 
       {/* Modal */}
       <ContractModal
@@ -456,7 +588,9 @@ export const Contracts: React.FC = () => {
         onClose={() => setIsBulkConfirmOpen(false)}
         onConfirm={handleBulkDelete}
         title={t("delete_contracts")}
-        message={t("are_you_sure_delete_contracts", { count: selectedIds.length })}
+        message={t("are_you_sure_delete_contracts", {
+          count: selectedIds.length,
+        })}
       />
     </div>
   );

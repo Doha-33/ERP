@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Search, Edit2, Trash2, Package, Building2, DollarSign, Filter, X, FileText, Truck, CreditCard, Eye } from "lucide-react";
+import { Plus, Search, Edit2, Trash2, Package, Building2, DollarSign, Filter, X, FileText, Truck, CreditCard, Eye, Clock } from "lucide-react";
 import { Card, Button, Input, Badge, ExportDropdown } from "../../components/ui/Common";
 import { Table, Column } from "../../components/ui/Table";
 import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
@@ -11,7 +11,7 @@ import { toast } from "sonner";
 
 export const PurchaseOrders: React.FC = () => {
   const { t } = useTranslation();
-  const { purchaseOrders, addPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder } = useData();
+  const { purchaseOrders, addPurchaseOrder, updatePurchaseOrder, deletePurchaseOrder, fetchPurchaseOrders } = useData();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<PurchaseOrder | null>(null);
@@ -22,30 +22,76 @@ export const PurchaseOrders: React.FC = () => {
   const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSave = async (order: Partial<PurchaseOrder>) => {
+  // Helper function to extract ID
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "object") {
+      return value._id || value.id || "";
+    }
+    return value;
+  }, []);
+
+  const handleSave = async (orderData: Partial<PurchaseOrder>) => {
     try {
       setIsLoading(true);
+      
       if (editingOrder) {
-        await updatePurchaseOrder({ ...order, _id: editingOrder._id, id: editingOrder.id } as PurchaseOrder);
+        // Get the ID from editingOrder
+        const orderId = extractId(editingOrder);
+        
+        if (!orderId) {
+          toast.error(t("purchase_order_id_missing"));
+          return;
+        }
+        
+        // Create update data with ID
+        const updateData = {
+          ...orderData,
+          _id: orderId,
+          id: orderId
+        } as PurchaseOrder;
+        
+        console.log("Updating purchase order with ID:", orderId, updateData);
+        await updatePurchaseOrder(updateData);
         toast.success(t("purchase_order_updated_successfully"));
       } else {
-        await addPurchaseOrder(order as PurchaseOrder);
+        await addPurchaseOrder(orderData as PurchaseOrder);
         toast.success(t("purchase_order_created_successfully"));
       }
+      
+      await fetchPurchaseOrders(); // Refresh list
       setIsModalOpen(false);
       setEditingOrder(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving purchase order:", error);
-      toast.error(t("failed_to_save_purchase_order"));
+      const message = error?.response?.data?.message || error?.message || t("failed_to_save_purchase_order");
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleEdit = useCallback((order: PurchaseOrder) => {
-    setEditingOrder(order);
+    // Extract ID correctly from the order object
+    const orderId = extractId(order);
+    
+    if (!orderId) {
+      console.error("Purchase order ID not found", order);
+      toast.error(t("purchase_order_id_not_found"));
+      return;
+    }
+    
+    // Create a clean order object with proper ID
+    const orderToEdit: PurchaseOrder = {
+      ...order,
+      _id: orderId,
+      id: orderId,
+    };
+    
+    console.log("Editing purchase order:", orderToEdit);
+    setEditingOrder(orderToEdit);
     setIsModalOpen(true);
-  }, []);
+  }, [extractId, t]);
 
   const handleDelete = useCallback((id: string) => {
     setDeleteId(id);
@@ -58,11 +104,12 @@ export const PurchaseOrders: React.FC = () => {
         toast.success(t("purchase_order_deleted_successfully"));
         setDeleteId(null);
         setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+        await fetchPurchaseOrders();
       } catch (error) {
         toast.error(t("failed_to_delete_purchase_order"));
       }
     }
-  }, [deleteId, deletePurchaseOrder, t]);
+  }, [deleteId, deletePurchaseOrder, fetchPurchaseOrders, t]);
 
   const handleBulkDelete = async () => {
     try {
@@ -71,6 +118,7 @@ export const PurchaseOrders: React.FC = () => {
       toast.success(t("purchase_orders_deleted_successfully", { count: selectedIds.length }));
       setSelectedIds([]);
       setIsBulkConfirmOpen(false);
+      await fetchPurchaseOrders();
     } catch (error) {
       console.error("Bulk delete failed", error);
       toast.error(t("failed_to_delete_purchase_orders"));
@@ -223,27 +271,30 @@ export const PurchaseOrders: React.FC = () => {
       {
         header: t("actions"),
         className: "text-center",
-        render: (o) => (
-          <div className="flex items-center justify-center gap-2">
-            <button
-              onClick={() => handleEdit(o)}
-              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("edit")}
-            >
-              <Edit2 size={16} />
-            </button>
-            <button
-              onClick={() => handleDelete(o._id || o.id)}
-              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("delete")}
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-        )
+        render: (o) => {
+          const orderId = extractId(o);
+          return (
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => handleEdit(o)}
+                className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("edit")}
+              >
+                <Edit2 size={16} />
+              </button>
+              <button
+                onClick={() => handleDelete(orderId)}
+                className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("delete")}
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          );
+        }
       }
     ],
-    [t, handleEdit, handleDelete]
+    [t, handleEdit, handleDelete, extractId]
   );
 
   return (
@@ -362,15 +413,15 @@ export const PurchaseOrders: React.FC = () => {
       </div>
 
       {/* Table */}
-        <Table
-          data={filteredOrders}
-          columns={columns}
-          keyExtractor={(item) => item._id || item.id}
-          isLoading={isLoading}
-          selectable
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-        />
+      <Table
+        data={filteredOrders}
+        columns={columns}
+        keyExtractor={(item) => extractId(item)}
+        isLoading={isLoading}
+        selectable
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+      />
 
       {/* Modal */}
       <PurchaseOrderModal
@@ -404,6 +455,3 @@ export const PurchaseOrders: React.FC = () => {
     </div>
   );
 };
-
-// Add missing imports
-import { Clock } from "lucide-react";

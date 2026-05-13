@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Search, Edit2, Trash2, Package, Building2, Filter, X, FileText, Calendar } from "lucide-react";
+import { Plus, Search, Edit2, Trash2, Package, Building2, Filter, X, FileText, Calendar, Clock, CheckCircle, XCircle } from "lucide-react";
 import { Card, Button, Input, Badge, ExportDropdown } from "../../components/ui/Common";
 import { Table, Column } from "../../components/ui/Table";
 import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
@@ -11,7 +11,7 @@ import { toast } from "sonner";
 
 export const ReturnsToSupplier: React.FC = () => {
   const { t } = useTranslation();
-  const { returnsToSupplier, addReturnToSupplier, updateReturnToSupplier, deleteReturnToSupplier, suppliers } = useData();
+  const { returnsToSupplier, addReturnToSupplier, updateReturnToSupplier, deleteReturnToSupplier, fetchReturnsToSupplier, suppliers } = useData();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingReturn, setEditingReturn] = useState<ReturnToSupplier | null>(null);
@@ -22,30 +22,76 @@ export const ReturnsToSupplier: React.FC = () => {
   const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Helper function to extract ID
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "object") {
+      return value._id || value.id || "";
+    }
+    return value;
+  }, []);
+
   const handleSave = async (returnData: Partial<ReturnToSupplier>) => {
     try {
       setIsLoading(true);
+      
       if (editingReturn) {
-        await updateReturnToSupplier({ ...returnData, id: editingReturn._id || editingReturn.id } as ReturnToSupplier);
+        // Get the ID from editingReturn
+        const returnId = extractId(editingReturn);
+        
+        if (!returnId) {
+          toast.error(t("return_id_missing"));
+          return;
+        }
+        
+        // Create update data with ID
+        const updateData = {
+          ...returnData,
+          _id: returnId,
+          id: returnId
+        } as ReturnToSupplier;
+        
+        console.log("Updating return with ID:", returnId, updateData);
+        await updateReturnToSupplier(updateData);
         toast.success(t("return_updated_successfully"));
       } else {
         await addReturnToSupplier(returnData as ReturnToSupplier);
         toast.success(t("return_created_successfully"));
       }
+      
+      await fetchReturnsToSupplier(); // Refresh list
       setIsModalOpen(false);
       setEditingReturn(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving return:", error);
-      toast.error(t("failed_to_save_return"));
+      const message = error?.response?.data?.message || error?.message || t("failed_to_save_return");
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleEdit = useCallback((returnData: ReturnToSupplier) => {
-    setEditingReturn(returnData);
+    // Extract ID correctly from the return object
+    const returnId = extractId(returnData);
+    
+    if (!returnId) {
+      console.error("Return ID not found", returnData);
+      toast.error(t("return_id_not_found"));
+      return;
+    }
+    
+    // Create a clean return object with proper ID
+    const returnToEdit: ReturnToSupplier = {
+      ...returnData,
+      _id: returnId,
+      id: returnId,
+    };
+    
+    console.log("Editing return:", returnToEdit);
+    setEditingReturn(returnToEdit);
     setIsModalOpen(true);
-  }, []);
+  }, [extractId, t]);
 
   const handleDelete = useCallback((id: string) => {
     setDeleteId(id);
@@ -58,11 +104,12 @@ export const ReturnsToSupplier: React.FC = () => {
         toast.success(t("return_deleted_successfully"));
         setDeleteId(null);
         setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+        await fetchReturnsToSupplier();
       } catch (error) {
         toast.error(t("failed_to_delete_return"));
       }
     }
-  }, [deleteId, deleteReturnToSupplier, t]);
+  }, [deleteId, deleteReturnToSupplier, fetchReturnsToSupplier, t]);
 
   const handleBulkDelete = async () => {
     try {
@@ -71,6 +118,7 @@ export const ReturnsToSupplier: React.FC = () => {
       toast.success(t("returns_deleted_successfully", { count: selectedIds.length }));
       setSelectedIds([]);
       setIsBulkConfirmOpen(false);
+      await fetchReturnsToSupplier();
     } catch (error) {
       console.error("Bulk delete failed", error);
       toast.error(t("failed_to_delete_returns"));
@@ -83,7 +131,7 @@ export const ReturnsToSupplier: React.FC = () => {
     if (typeof returnData.supplierId === "object" && returnData.supplierId !== null) {
       return (returnData.supplierId as any)?.supplierName || "-";
     }
-    const supplier = suppliers.find(s => (s._id || s.id) === returnData.supplierId);
+    const supplier = suppliers.find(s => extractId(s) === returnData.supplierId);
     return supplier?.supplierName || "-";
   };
 
@@ -190,27 +238,30 @@ export const ReturnsToSupplier: React.FC = () => {
       {
         header: t("actions"),
         className: "text-center",
-        render: (r) => (
-          <div className="flex items-center justify-center gap-2">
-            <button
-              onClick={() => handleEdit(r)}
-              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("edit")}
-            >
-              <Edit2 size={16} />
-            </button>
-            <button
-              onClick={() => handleDelete(r._id || r.id)}
-              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("delete")}
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-        )
+        render: (r) => {
+          const returnId = extractId(r);
+          return (
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => handleEdit(r)}
+                className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("edit")}
+              >
+                <Edit2 size={16} />
+              </button>
+              <button
+                onClick={() => handleDelete(returnId)}
+                className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("delete")}
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          );
+        }
       }
     ],
-    [t, handleEdit, handleDelete]
+    [t, handleEdit, handleDelete, extractId]
   );
 
   return (
@@ -329,15 +380,15 @@ export const ReturnsToSupplier: React.FC = () => {
       </div>
 
       {/* Table */}
-        <Table
-          data={filteredReturns}
-          columns={columns}
-          keyExtractor={(item) => item._id || item.id}
-          isLoading={isLoading}
-          selectable
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-        />
+      <Table
+        data={filteredReturns}
+        columns={columns}
+        keyExtractor={(item) => extractId(item)}
+        isLoading={isLoading}
+        selectable
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+      />
 
       {/* Modal */}
       <ReturnToSupplierModal
@@ -371,6 +422,3 @@ export const ReturnsToSupplier: React.FC = () => {
     </div>
   );
 };
-
-// Add missing imports
-import { Clock, CheckCircle, XCircle } from "lucide-react";

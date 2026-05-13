@@ -122,7 +122,7 @@ export const JournalEntryModal: React.FC<JournalEntryModalProps> = ({
   const statusOptions = [
     { value: 'DRAFT', label: t('draft') },
     { value: 'POSTED', label: t('posted') },
-    { value: 'CANCELLED', label: t('cancelled') },
+    { value: 'REVERSED', label: t('reversed') },
   ];
 
   return (

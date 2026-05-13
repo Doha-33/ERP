@@ -11,7 +11,7 @@ import { toast } from "sonner";
 
 export const PurchaseInvoices: React.FC = () => {
   const { t } = useTranslation();
-  const { purchaseInvoices, addPurchaseInvoice, updatePurchaseInvoice, deletePurchaseInvoice } = useData();
+  const { purchaseInvoices, addPurchaseInvoice, updatePurchaseInvoice, deletePurchaseInvoice, fetchPurchaseInvoices } = useData();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<PurchaseInvoice | null>(null);
@@ -22,30 +22,76 @@ export const PurchaseInvoices: React.FC = () => {
   const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSave = async (invoice: Partial<PurchaseInvoice>) => {
+  // Helper function to extract ID
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "object") {
+      return value._id || value.id || "";
+    }
+    return value;
+  }, []);
+
+  const handleSave = async (invoiceData: Partial<PurchaseInvoice>) => {
     try {
       setIsLoading(true);
+      
       if (editingInvoice) {
-        await updatePurchaseInvoice({ ...invoice, _id: editingInvoice._id, id: editingInvoice.id } as PurchaseInvoice );
+        // Get the ID from editingInvoice
+        const invoiceId = extractId(editingInvoice);
+        
+        if (!invoiceId) {
+          toast.error(t("purchase_invoice_id_missing"));
+          return;
+        }
+        
+        // Create update data with ID
+        const updateData = {
+          ...invoiceData,
+          _id: invoiceId,
+          id: invoiceId
+        } as PurchaseInvoice;
+        
+        console.log("Updating purchase invoice with ID:", invoiceId, updateData);
+        await updatePurchaseInvoice(updateData);
         toast.success(t("purchase_invoice_updated_successfully"));
       } else {
-        await addPurchaseInvoice(invoice as PurchaseInvoice);
+        await addPurchaseInvoice(invoiceData as PurchaseInvoice);
         toast.success(t("purchase_invoice_created_successfully"));
       }
+      
+      await fetchPurchaseInvoices(); // Refresh list
       setIsModalOpen(false);
       setEditingInvoice(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving purchase invoice:", error);
-      toast.error(t("failed_to_save_purchase_invoice"));
+      const message = error?.response?.data?.message || error?.message || t("failed_to_save_purchase_invoice");
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleEdit = useCallback((invoice: PurchaseInvoice) => {
-    setEditingInvoice(invoice);
+    // Extract ID correctly from the invoice object
+    const invoiceId = extractId(invoice);
+    
+    if (!invoiceId) {
+      console.error("Purchase invoice ID not found", invoice);
+      toast.error(t("purchase_invoice_id_not_found"));
+      return;
+    }
+    
+    // Create a clean invoice object with proper ID
+    const invoiceToEdit: PurchaseInvoice = {
+      ...invoice,
+      _id: invoiceId,
+      id: invoiceId,
+    };
+    
+    console.log("Editing purchase invoice:", invoiceToEdit);
+    setEditingInvoice(invoiceToEdit);
     setIsModalOpen(true);
-  }, []);
+  }, [extractId, t]);
 
   const handleDelete = useCallback((id: string) => {
     setDeleteId(id);
@@ -58,11 +104,12 @@ export const PurchaseInvoices: React.FC = () => {
         toast.success(t("purchase_invoice_deleted_successfully"));
         setDeleteId(null);
         setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+        await fetchPurchaseInvoices();
       } catch (error) {
         toast.error(t("failed_to_delete_purchase_invoice"));
       }
     }
-  }, [deleteId, deletePurchaseInvoice, t]);
+  }, [deleteId, deletePurchaseInvoice, fetchPurchaseInvoices, t]);
 
   const handleBulkDelete = async () => {
     try {
@@ -71,6 +118,7 @@ export const PurchaseInvoices: React.FC = () => {
       toast.success(t("purchase_invoices_deleted_successfully", { count: selectedIds.length }));
       setSelectedIds([]);
       setIsBulkConfirmOpen(false);
+      await fetchPurchaseInvoices();
     } catch (error) {
       console.error("Bulk delete failed", error);
       toast.error(t("failed_to_delete_purchase_invoices"));
@@ -220,27 +268,30 @@ export const PurchaseInvoices: React.FC = () => {
       {
         header: t("actions"),
         className: "text-center",
-        render: (i) => (
-          <div className="flex items-center justify-center gap-2">
-            <button
-              onClick={() => handleEdit(i)}
-              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("edit")}
-            >
-              <Edit2 size={16} />
-            </button>
-            <button
-              onClick={() => handleDelete(i._id || i.id)}
-              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("delete")}
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-        )
+        render: (i) => {
+          const invoiceId = extractId(i);
+          return (
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => handleEdit(i)}
+                className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("edit")}
+              >
+                <Edit2 size={16} />
+              </button>
+              <button
+                onClick={() => handleDelete(invoiceId)}
+                className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("delete")}
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          );
+        }
       }
     ],
-    [t, handleEdit, handleDelete]
+    [t, handleEdit, handleDelete, extractId]
   );
 
   return (
@@ -359,15 +410,15 @@ export const PurchaseInvoices: React.FC = () => {
       </div>
 
       {/* Table */}
-        <Table
-          data={filteredInvoices}
-          columns={columns}
-          keyExtractor={(item) => item._id || item.id}
-          isLoading={isLoading}
-          selectable
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-        />
+      <Table
+        data={filteredInvoices}
+        columns={columns}
+        keyExtractor={(item) => extractId(item)}
+        isLoading={isLoading}
+        selectable
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+      />
 
       {/* Modal */}
       <PurchaseInvoiceModal
@@ -401,6 +452,3 @@ export const PurchaseInvoices: React.FC = () => {
     </div>
   );
 };
-
-// Add missing imports
-import { Clock } from "lucide-react";

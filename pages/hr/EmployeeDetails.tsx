@@ -1,12 +1,13 @@
-
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { 
   ChevronLeft, FileText, X, Download, Clock, Award, 
   FileCheck, FileX, FileClock, ChevronRight, Edit, Eye,
   Calendar as CalendarIcon, CheckCircle2, AlertCircle, 
-  TrendingUp, Timer, CreditCard, Plus, Trash2
+  TrendingUp, Timer, CreditCard, Plus, Trash2, Building2,
+  Briefcase, Mail, Phone, MapPin, User, Hash, Flag, Heart,
+  DollarSign, Globe
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { useData } from '../../context/DataContext';
@@ -16,12 +17,33 @@ import { EmployeeModal } from '../../components/hr/EmployeeModal';
 import { DocumentModal } from '../../components/hr/DocumentModal';
 import { ConfirmationModal } from '../../components/ui/ConfirmationModal';
 
+// Helper function to extract ID
+const extractId = (value: any): string => {
+  if (!value) return "";
+  if (typeof value === "object") {
+    return value._id || value.id || "";
+  }
+  return value;
+};
+
 // --- Helper Components ---
 
-const InfoItem: React.FC<{ label: string; value: string | undefined }> = ({ label, value }) => (
+const InfoItem: React.FC<{ label: string; value: string | undefined; highlight?: boolean }> = ({ label, value, highlight }) => (
   <div className="space-y-1">
     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{label}</p>
-    <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">{value || '-'}</p>
+    <p className={`text-sm font-semibold ${highlight ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-700 dark:text-gray-200'}`}>
+      {value || '-'}
+    </p>
+  </div>
+);
+
+const SectionHeader: React.FC<{ title: string; icon: React.ReactNode; action?: React.ReactNode }> = ({ title, icon, action }) => (
+  <div className="flex justify-between items-center mb-6 border-b border-gray-100 dark:border-gray-800 pb-4">
+    <h3 className="text-lg font-black text-slate-800 dark:text-white uppercase tracking-tight flex items-center gap-2">
+      {icon}
+      {title}
+    </h3>
+    {action}
   </div>
 );
 
@@ -59,7 +81,7 @@ const DocPreviewCard: React.FC<{
          <div className="flex justify-between items-center">
             <span className="text-xs font-bold text-gray-500">{doc.expiryDate}</span>
             <Badge status={new Date(doc.expiryDate) < new Date() ? 'Rejected' : 'Active'}>
-               {new Date(doc.expiryDate) < new Date() ? t('rejected') : t('active')}
+               {new Date(doc.expiryDate) < new Date() ? t('expired') : t('active')}
             </Badge>
          </div>
       </div>
@@ -209,7 +231,7 @@ export const EmployeeDetails: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const { 
-    getEmployeeById, updateEmployee, attendanceRecords, requests, leaves,
+    employees, updateEmployee, attendanceRecords, requests, leaves,
     documents, addDocument, updateDocument, deleteDocument
   } = useData();
   const [activeTab, setActiveTab] = useState<'information' | 'dashboard'>('dashboard');
@@ -220,98 +242,166 @@ export const EmployeeDetails: React.FC = () => {
   const [editingDoc, setEditingDoc] = useState<DocumentRecord | null>(null);
   const [deleteDocId, setDeleteDocId] = useState<string | null>(null);
 
-  const employee = getEmployeeById(id || '');
+  // Find employee using extractId helper
+  const employee = useMemo(() => {
+    if (!id) return null;
+    return employees.find(emp => extractId(emp) === id);
+  }, [employees, id]);
+
+  // Filter data for this employee using extractId
+  const employeeAttendance = useMemo(() => {
+    if (!employee) return [];
+    const empId = extractId(employee);
+    return attendanceRecords.filter(r => {
+      const recordEmpId = typeof r.employeeId === 'object' ? extractId(r.employeeId) : r.employeeId;
+      return recordEmpId === empId;
+    });
+  }, [attendanceRecords, employee]);
+
+  const employeeRequests = useMemo(() => {
+    if (!employee) return [];
+    const empId = extractId(employee);
+    return requests.filter(r => extractId(r.employeeId) === empId);
+  }, [requests, employee]);
+
+  const employeeLeaves = useMemo(() => {
+    if (!employee) return [];
+    const empId = extractId(employee);
+    return leaves.filter(l => extractId(l.employeeId) === empId);
+  }, [leaves, employee]);
+
+  const employeeDocs = useMemo(() => {
+    if (!employee) return [];
+    const empId = extractId(employee);
+    return documents.filter(d => extractId(d.employeeId) === empId);
+  }, [documents, employee]);
 
   if (!employee) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] text-gray-500 animate-pulse">
         <FileX size={48} className="mb-4 opacity-20" />
-        <p className="font-bold uppercase tracking-widest text-xs">Employee not found</p>
-        <Button variant="ghost" onClick={() => navigate('/hr')} className="mt-4 text-primary font-black">Back to List</Button>
+        <p className="font-bold uppercase tracking-widest text-xs">{t('employee_not_found')}</p>
+        <Button variant="ghost" onClick={() => navigate('/hr/employees')} className="mt-4 text-primary font-black">
+          {t('back_to_list')}
+        </Button>
       </div>
     );
   }
 
-  const employeeAttendance = attendanceRecords.filter(r => {
-      const empId = typeof r.employeeId === 'object' ? r.employeeId._id : r.employeeId;
-      return empId === employee.id;
-  });
-  const employeeRequests = requests.filter(r => r.employeeId === employee.id);
-  const employeeLeaves = leaves.filter(l => l.employeeId === employee.id);
-  const employeeDocs = documents.filter(d => d.employeeId === employee.id);
-
   const handleDocSave = async (data: any) => {
     try {
       if (editingDoc) {
-        await updateDocument(data.id, data.data);
+        await updateDocument(editingDoc.id, data);
       } else {
-        await addDocument(data);
+        await addDocument({ ...data, employeeId: extractId(employee) });
       }
+      setIsDocModalOpen(false);
+      setEditingDoc(null);
     } catch (err) {
+      console.error("Failed to save document:", err);
       throw err;
     }
   };
 
   const handleEditDoc = (doc: DocumentRecord) => {
-      setEditingDoc(doc);
-      setIsDocModalOpen(true);
+    setEditingDoc(doc);
+    setIsDocModalOpen(true);
   };
 
   const handleDeleteDocConfirm = async () => {
-      if (deleteDocId) {
-          try {
-            await deleteDocument(deleteDocId);
-            setDeleteDocId(null);
-          } catch (err) {
-            alert('Failed to delete document. Please try again.');
-          }
+    if (deleteDocId) {
+      try {
+        await deleteDocument(deleteDocId);
+        setDeleteDocId(null);
+      } catch (err) {
+        console.error("Failed to delete document:", err);
+        alert('Failed to delete document. Please try again.');
       }
+    }
   };
+
+  // Get bank info safely
+  const bankInfo = (employee as any).bankInfo || { bankName: "", accountNumber: "" };
 
   return (
     <div className="space-y-8 max-w-[1600px] mx-auto pb-12">
+      {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-center gap-6">
         <div className="flex items-center gap-5">
-           <button onClick={() => navigate('/hr')} className="p-3 bg-white dark:bg-dark-surface rounded-2xl shadow-sm hover:shadow-md transition-all group">
-              <ChevronLeft size={20} className="text-gray-400 group-hover:text-primary transition-colors" />
-           </button>
-           <h1 className="text-2xl font-black text-slate-800 dark:text-white uppercase tracking-tight">{t('employee_info')}</h1>
+          <button 
+            onClick={() => navigate('/hr/employees')} 
+            className="p-3 bg-white dark:bg-dark-surface rounded-2xl shadow-sm hover:shadow-md transition-all group"
+          >
+            <ChevronLeft size={20} className="text-gray-400 group-hover:text-indigo-600 transition-colors" />
+          </button>
+          <h1 className="text-2xl font-black text-slate-800 dark:text-white uppercase tracking-tight">{t('employee_details')}</h1>
         </div>
 
-        <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 p-1.5 rounded-2xl border border-white dark:border-gray-700 shadow-inner">
-           <button 
+        <div className="flex items-center gap-3">
+          <Button 
+            size="sm" 
+            variant="outline" 
+            onClick={() => setIsEditModalOpen(true)} 
+            className="gap-2 text-indigo-600 border-indigo-300 bg-indigo-50/50 hover:bg-indigo-100"
+          >
+            <Edit size={16} /> {t('edit_employee')}
+          </Button>
+          <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 p-1.5 rounded-2xl border border-white dark:border-gray-700 shadow-inner">
+            <button 
               onClick={() => setActiveTab('information')}
-              className={`px-8 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'information' ? 'bg-white dark:bg-gray-700 shadow-md text-primary' : 'text-gray-400 hover:text-gray-600'}`}
-           >
+              className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'information' ? 'bg-white dark:bg-gray-700 shadow-md text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
+            >
               {t('basic_information')}
-           </button>
-           <button 
+            </button>
+            <button 
               onClick={() => setActiveTab('dashboard')}
-              className={`px-8 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'dashboard' ? 'bg-primary shadow-lg shadow-primary/30 text-white' : 'text-gray-400 hover:text-gray-600'}`}
-           >
+              className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${activeTab === 'dashboard' ? 'bg-indigo-600 shadow-lg shadow-indigo-600/30 text-white' : 'text-gray-400 hover:text-gray-600'}`}
+            >
               {t('dashboard')}
-           </button>
+            </button>
+          </div>
         </div>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-8 items-start">
-        <div className="w-full lg:w-72 lg:sticky lg:top-24 space-y-6">
-           <div className="bg-[#D4DBFF] dark:bg-blue-900/30 p-8 rounded-[2.5rem] flex flex-col items-center text-center border-none shadow-xl shadow-blue-100/50 dark:shadow-none animate-in fade-in slide-in-from-left-4 duration-700">
-              <div className="relative mb-6">
-                 <img src={employee.photo || `https://ui-avatars.com/api/?name=${employee.fullName}&background=random`} className="w-24 h-24 rounded-[2rem] object-cover shadow-2xl border-4 border-white dark:border-gray-800" alt="" />
-                 <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 border-4 border-white dark:border-gray-800 rounded-full"></div>
+        {/* Sidebar */}
+        <div className="w-full lg:w-80 lg:sticky lg:top-24 space-y-6">
+          <div className="bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-indigo-900/30 dark:to-blue-900/30 p-8 rounded-[2.5rem] flex flex-col items-center text-center border-none shadow-xl shadow-indigo-100/50 dark:shadow-none animate-in fade-in slide-in-from-left-4 duration-700">
+            <div className="relative mb-6">
+              <img 
+                src={employee.photo || `https://ui-avatars.com/api/?name=${encodeURIComponent(employee.fullName || 'User')}&background=4f46e5&color=fff&bold=true`} 
+                className="w-28 h-28 rounded-[2rem] object-cover shadow-2xl border-4 border-white dark:border-gray-800" 
+                alt={employee.fullName} 
+              />
+              <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-green-500 border-4 border-white dark:border-gray-800 rounded-full"></div>
+            </div>
+            <h2 className="text-xl font-black text-slate-800 dark:text-white leading-tight mb-2">{employee.fullName}</h2>
+            <span className="px-4 py-1.5 bg-white/60 dark:bg-gray-800/60 rounded-full text-[10px] font-black text-indigo-600 uppercase tracking-wider">
+              {employee.jobId?.jobName || employee.jobGrade || '-'}
+            </span>
+            <div className="mt-4 w-full pt-4 border-t border-indigo-200/50">
+              <div className="flex items-center justify-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                <Badge variant={employee.employeeStatus === 'ACTIVE' ? 'success' : employee.employeeStatus === 'ON_LEAVE' ? 'warning' : 'danger'}>
+                  {t((employee.employeeStatus || 'active').toLowerCase())}
+                </Badge>
+                {employee.employeeCode && (
+                  <span className="text-xs font-mono text-gray-500">#{employee.employeeCode}</span>
+                )}
               </div>
-              <h2 className="text-lg font-black text-slate-800 dark:text-white leading-tight mb-2">{employee.fullName}</h2>
-              <span className="px-4 py-1.5 bg-white/60 dark:bg-gray-800/60 rounded-full text-[10px] font-black text-primary uppercase tracking-wider">{employee.jobId?.jobName || '-'}</span>
-           </div>
+            </div>
+          </div>
 
-           <Card className="p-6 border-none shadow-sm space-y-6 animate-in fade-in slide-in-from-left-6 duration-700 delay-100">
-              <InfoItem label={t('status')} value={t((employee.employeeStatus || 'Active').toLowerCase())} />
-              <InfoItem label={t('join_date')} value={employee.joinDate} />
-              <InfoItem label={t('email')} value={employee.email} />
-           </Card>
+          <Card className="p-6 border-none shadow-sm space-y-5 animate-in fade-in slide-in-from-left-6 duration-700 delay-100">
+            <InfoItem label={t('employee_code')} value={employee.employeeCode} />
+            <InfoItem label={t('join_date')} value={employee.hireDate ? new Date(employee.hireDate).toLocaleDateString() : '-'} />
+            <InfoItem label={t('email')} value={employee.email} />
+            <InfoItem label={t('phone')} value={employee.phoneNumber} />
+            <InfoItem label={t('nationality')} value={employee.nationality} />
+            <InfoItem label={t('job_grade')} value={employee.jobGrade} />
+          </Card>
         </div>
 
+        {/* Main Content */}
         <div className="flex-1 w-full min-w-0">
           {activeTab === 'dashboard' ? (
             <DashboardTab 
@@ -322,40 +412,75 @@ export const EmployeeDetails: React.FC = () => {
             />
           ) : (
             <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              {/* Work Information Section */}
               <Card className="p-8 border-none shadow-sm">
-                <div className="flex justify-between items-center mb-8 border-b border-gray-50 dark:border-gray-800 pb-4">
-                  <h3 className="text-lg font-black text-slate-800 dark:text-white uppercase tracking-tight">{t('work_information')}</h3>
-                  <Button size="sm" variant="outline" onClick={() => setIsEditModalOpen(true)} className="gap-2 text-primary border-primary bg-blue-50/50">
-                    <Edit size={14} /> {t('edit_employee')}
-                  </Button>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-y-10 gap-x-8">
-                  <InfoItem label={t('emp_code')} value={employee.employeeCode} />
-                  <InfoItem label={t('full_name')} value={employee.fullName} />
-                  <InfoItem label={t('nationality')} value={employee.nationality} />
-                  <InfoItem label={t('birth_date')} value={employee.dob} />
-                  <InfoItem label={t('gender')} value={t(employee.gender?.toLowerCase() || '')} />
-                  <InfoItem label={t('marital_status')} value={t(employee.maritalStatus?.toLowerCase() || '')} />
-                  <InfoItem label={t('phone')} value={employee.phone} />
-                  <InfoItem label={t('address')} value={employee.address} />
+                <SectionHeader 
+                  title={t('work_information')} 
+                  icon={<Briefcase size={20} className="text-indigo-600" />}
+                />
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-y-6 gap-x-8">
                   <InfoItem label={t('company')} value={employee.companyId?.name} />
                   <InfoItem label={t('branch')} value={employee.branchId?.name} />
+                  <InfoItem label={t('department')} value={employee.departmentId?.departmentName} />
+                  <InfoItem label={t('job')} value={employee.jobId?.jobName} />
                   <InfoItem label={t('job_grade')} value={employee.jobGrade} />
+                  <InfoItem label={t('contract_type')} value={(employee as any).contractType} />
+                  <InfoItem label={t('contract_start_date')} value={(employee as any).contractStartDate ? new Date((employee as any).contractStartDate).toLocaleDateString() : '-'} />
+                  <InfoItem label={t('contract_end_date')} value={(employee as any).contractEndDate ? new Date((employee as any).contractEndDate).toLocaleDateString() : '-'} />
+                  <InfoItem label={t('internal_employee_number')} value={(employee as any).internalEmployeeNumber} />
+                  <InfoItem label={t('id_number')} value={(employee as any).idNumber} />
+                  <InfoItem label={t('gosi_id')} value={(employee as any).gosiId} />
                 </div>
               </Card>
 
+              {/* Personal Information Section */}
               <Card className="p-8 border-none shadow-sm">
-                <div className="flex justify-between items-center mb-8 border-b border-gray-50 dark:border-gray-800 pb-4">
-                   <h3 className="text-lg font-black text-slate-800 dark:text-white uppercase tracking-tight">{t('documents')}</h3>
-                   <Button size="sm" className="bg-primary hover:bg-blue-700 gap-2" onClick={() => { setEditingDoc(null); setIsDocModalOpen(true); }}>
-                      <Plus size={14} /> {t('add_documents')}
-                   </Button>
+                <SectionHeader 
+                  title={t('personal_information')} 
+                  icon={<User size={20} className="text-indigo-600" />}
+                />
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-y-6 gap-x-8">
+                  <InfoItem label={t('full_name')} value={employee.fullName} />
+                  <InfoItem label={t('gender')} value={t(employee.gender?.toLowerCase() || '')} />
+                  <InfoItem label={t('marital_status')} value={t(employee.maritalStatus?.toLowerCase() || '')} />
+                  <InfoItem label={t('nationality')} value={employee.nationality} />
+                  <InfoItem label={t('birth_date')} value={(employee as any).birthDate ? new Date((employee as any).birthDate).toLocaleDateString() : '-'} />
+                  <InfoItem label={t('phone')} value={employee.phoneNumber} />
+                  <InfoItem label={t('email')} value={employee.email} />
+                  <InfoItem label={t('address')} value={employee.address} />
                 </div>
+              </Card>
+
+              {/* Bank Information Section */}
+              {(bankInfo.bankName || bankInfo.accountNumber) && (
+                <Card className="p-8 border-none shadow-sm">
+                  <SectionHeader 
+                    title={t('bank_information')} 
+                    icon={<CreditCard size={20} className="text-indigo-600" />}
+                  />
+                  <div className="grid grid-cols-2 gap-x-8 gap-y-6">
+                    <InfoItem label={t('bank_name')} value={bankInfo.bankName} />
+                    <InfoItem label={t('account_number')} value={bankInfo.accountNumber} />
+                  </div>
+                </Card>
+              )}
+
+              {/* Documents Section */}
+              <Card className="p-8 border-none shadow-sm">
+                <SectionHeader 
+                  title={t('documents')} 
+                  icon={<FileText size={20} className="text-indigo-600" />}
+                  action={
+                    <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 gap-2" onClick={() => { setEditingDoc(null); setIsDocModalOpen(true); }}>
+                      <Plus size={14} /> {t('add_documents')}
+                    </Button>
+                  }
+                />
                 
                 {employeeDocs.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-gray-400">
-                     <FileText size={40} className="mb-2 opacity-20" />
-                     <p className="text-xs font-bold uppercase tracking-widest">No documents uploaded yet</p>
+                    <FileText size={48} className="mb-2 opacity-20" />
+                    <p className="text-xs font-bold uppercase tracking-widest">{t('no_documents_uploaded')}</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -376,27 +501,36 @@ export const EmployeeDetails: React.FC = () => {
         </div>
       </div>
 
+      {/* Employee Edit Modal */}
       <EmployeeModal 
         isOpen={isEditModalOpen} 
         onClose={() => setIsEditModalOpen(false)} 
-        onSave={(updated) => updateEmployee(updated)} 
+        onSave={async (updated) => {
+          await updateEmployee(updated);
+          setIsEditModalOpen(false);
+        }} 
         employeeToEdit={employee} 
       />
 
+      {/* Document Modal */}
       <DocumentModal 
         isOpen={isDocModalOpen}
-        onClose={() => setIsDocModalOpen(false)}
+        onClose={() => {
+          setIsDocModalOpen(false);
+          setEditingDoc(null);
+        }}
         onSave={handleDocSave}
         documentToEdit={editingDoc}
-        fixedEmployeeId={employee.id}
+        fixedEmployeeId={extractId(employee)}
       />
 
+      {/* Delete Confirmation Modal */}
       <ConfirmationModal
         isOpen={!!deleteDocId}
         onClose={() => setDeleteDocId(null)}
         onConfirm={handleDeleteDocConfirm}
         title={t('confirm_delete')}
-        message={t('are_you_sure_delete')}
+        message={t('are_you_sure_delete_document')}
       />
     </div>
   );

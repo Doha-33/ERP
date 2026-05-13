@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Edit2, Trash2, Package, DollarSign, Calendar, Building2, Users, Hash, Warehouse, Truck, User } from "lucide-react";
+import { Plus, Edit2, Trash2, Package, DollarSign, Calendar, Building2, Users, Hash, Warehouse, Truck, User, FileText } from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
 import { Button, Input, Select, TextArea } from "../../components/ui/Common";
 import { GoodsReceipt } from "../../types";
 import { useData } from "../../context/DataContext";
+import { toast } from "sonner";
 
 interface GoodsReceiptModalProps {
   isOpen: boolean;
@@ -33,7 +34,7 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
   isLoading = false,
 }) => {
   const { t } = useTranslation();
-  const { products, companies, branches, purchaseOrders, warehouses, currentUserEmployee } = useData();
+  const { products, companies, branches, purchaseOrders, warehouses, currentUserEmployee, fetchPurchaseOrders } = useData();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     grnNumber: "",
@@ -49,21 +50,41 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
     { productId: "", sku: "", orderedQuantity: 1, receivedQuantity: 1, acceptedQuantity: 1, rejectedQuantity: 0, unitPrice: 0, total: 0 }
   ]);
 
+  // Helper function to extract ID
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "object") {
+      return value._id || value.id || "";
+    }
+    return value;
+  }, []);
+
+  // Filter purchase orders based on selected company and branch
+  const filteredPurchaseOrders = useMemo(() => {
+    // If no company/branch filters, return all
+    return purchaseOrders;
+  }, [purchaseOrders]);
+
+  // Filter warehouses based on selected branch
+  const filteredWarehouses = useMemo(() => {
+    if (!formData.branchId) return warehouses;
+    return warehouses.filter(warehouse => {
+      const warehouseBranchId = extractId(warehouse.branchId);
+      return warehouseBranchId === formData.branchId;
+    });
+  }, [warehouses, formData.branchId, extractId]);
+
   // Calculate total value
   const totalQty = items.reduce((sum, item) => sum + (item.acceptedQuantity || 0), 0);
   const totalValue = items.reduce((sum, item) => sum + (item.total || 0), 0);
 
   useEffect(() => {
     if (receiptToEdit && isOpen) {
-      const poId = typeof receiptToEdit.purchaseOrderId === "object" 
-        ? (receiptToEdit.purchaseOrderId as any)?._id 
-        : receiptToEdit.purchaseOrderId;
-      const supplierId = typeof receiptToEdit.supplierId === "object" 
-        ? (receiptToEdit.supplierId as any)?._id 
-        : receiptToEdit.supplierId;
-      const warehouseId = typeof receiptToEdit.warehouseId === "object" 
-        ? (receiptToEdit.warehouseId as any)?._id 
-        : receiptToEdit.warehouseId;
+      const poId = extractId(receiptToEdit.purchaseOrderId);
+      const supplierId = extractId(receiptToEdit.supplierId);
+      const warehouseId = extractId(receiptToEdit.warehouseId);
+      const receivedBy = extractId(receiptToEdit.receivedBy);
+      const branchId = extractId(receiptToEdit.branchId);
 
       setFormData({
         grnNumber: receiptToEdit.grnNumber || "",
@@ -73,15 +94,13 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
         receiptDate: receiptToEdit.receiptDate 
           ? new Date(receiptToEdit.receiptDate).toISOString().split("T")[0] 
           : new Date().toISOString().split("T")[0],
-        receivedBy: typeof receiptToEdit.receivedBy === "object" 
-          ? (receiptToEdit.receivedBy as any)?.username || (receiptToEdit.receivedBy as any)?.fullName || ""
-          : receiptToEdit.receivedBy || "",
+        receivedBy: receivedBy || (currentUserEmployee?.username || ""),
         notes: receiptToEdit.notes || "",
       });
       
       if (receiptToEdit.items && receiptToEdit.items.length > 0) {
         setItems(receiptToEdit.items.map(item => ({
-          productId: typeof item.productId === "object" ? (item.productId as any)?._id || "" : item.productId || "",
+          productId: extractId(item.productId),
           sku: item.sku || "",
           orderedQuantity: item.orderedQuantity || 0,
           receivedQuantity: item.receivedQuantity || 0,
@@ -105,22 +124,20 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
       });
       setItems([{ productId: "", sku: "", orderedQuantity: 1, receivedQuantity: 1, acceptedQuantity: 1, rejectedQuantity: 0, unitPrice: 0, total: 0 }]);
     }
-  }, [receiptToEdit, isOpen, currentUserEmployee]);
+  }, [receiptToEdit, isOpen, currentUserEmployee, extractId]);
 
   // Update items when PO is selected
   const onPOChange = (poId: string) => {
-    const selectedPO = purchaseOrders.find(po => (po._id || po.id) === poId);
+    const selectedPO = purchaseOrders.find(po => extractId(po) === poId);
     if (selectedPO) {
       setFormData(prev => ({
         ...prev,
-        supplierId: typeof selectedPO.supplierId === "object" 
-          ? (selectedPO.supplierId as any)?._id 
-          : selectedPO.supplierId || "",
+        supplierId: extractId(selectedPO.supplierId),
       }));
       
       if (selectedPO.items && selectedPO.items.length > 0) {
         setItems(selectedPO.items.map(item => ({
-          productId: typeof item.productId === "object" ? (item.productId as any)?._id || "" : item.productId || "",
+          productId: extractId(item.productId),
           sku: item.sku || "",
           orderedQuantity: item.quantity,
           receivedQuantity: item.quantity,
@@ -135,10 +152,25 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    
+    // Validation
+    if (!formData.grnNumber) {
+      toast.error(t("grn_number_required"));
+      return;
+    }
+    if (!formData.purchaseOrderId) {
+      toast.error(t("purchase_order_required"));
+      return;
+    }
+    if (!formData.warehouseId) {
+      toast.error(t("warehouse_required"));
+      return;
+    }
+    
     setIsSubmitting(true);
     
     try {
-      await onSave({
+      const saveData = {
         ...formData,
         items: items.map(item => ({
           productId: item.productId,
@@ -152,10 +184,14 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
         })),
         totalQty,
         totalValue,
-      });
+      };
+      
+      console.log("Saving goods receipt:", saveData);
+      await onSave(saveData);
       onClose();
     } catch (error) {
       console.error("Error in form submission:", error);
+      toast.error(t("failed_to_save_goods_receipt"));
     } finally {
       setIsSubmitting(false);
     }
@@ -171,7 +207,7 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
     
     // If product is selected, auto-fill SKU
     if (field === "productId" && value) {
-      const selectedProduct = products.find(p => (p._id || p.id) === value);
+      const selectedProduct = products.find(p => extractId(p) === value);
       if (selectedProduct) {
         newItems[index].sku = selectedProduct.sku;
       }
@@ -204,19 +240,19 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
 
   const poOptions = [
     { value: "", label: t("select_po") },
-    ...purchaseOrders.map(po => ({ 
-      value: po._id || po.id, 
+    ...filteredPurchaseOrders.map(po => ({ 
+      value: extractId(po), 
       label: po.referenceNo 
     }))
   ];
 
-  const warehouseOptions = warehouses.map(w => ({ 
-    value: w._id || w.id, 
+  const warehouseOptions = filteredWarehouses.map(w => ({ 
+    value: extractId(w), 
     label: w.warehouseName 
   }));
 
   const productOptions = products.map(p => ({ 
-    value: p._id || p.id, 
+    value: extractId(p), 
     label: `${p.productName} (${p.sku})` 
   }));
 
@@ -240,51 +276,95 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
             {t("receipt_information")}
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3">
-            <Input
-              label={t("grn_number")}
-              value={formData.grnNumber}
-              onChange={(e) => handleChange("grnNumber", e.target.value)}
-              placeholder="GRN-001"
-              required
-              fullWidth
-            />
-            <Input
-              label={t("receipt_date")}
-              type="date"
-              value={formData.receiptDate}
-              onChange={(e) => handleChange("receiptDate", e.target.value)}
-              required
-              fullWidth
-            />
-            <Select
-              label={t("purchase_order")}
-              value={formData.purchaseOrderId}
-              onChange={(e) => {
-                handleChange("purchaseOrderId", e.target.value);
-                onPOChange(e.target.value);
-              }}
-              options={poOptions}
-              placeholder={t("select_po")}
-              required
-              fullWidth
-            />
-            <Select
-              label={t("warehouse")}
-              value={formData.warehouseId}
-              onChange={(e) => handleChange("warehouseId", e.target.value)}
-              options={warehouseOptions}
-              placeholder={t("select_warehouse")}
-              required
-              fullWidth
-            />
-            <Input
-              label={t("received_by")}
-              value={formData.receivedBy}
-              onChange={(e) => handleChange("receivedBy", e.target.value)}
-              placeholder={t("enter_received_by")}
-              required
-              fullWidth
-            />
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-gray-700">
+                {t("grn_number")} <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <FileText size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <Input
+                  value={formData.grnNumber}
+                  onChange={(e) => handleChange("grnNumber", e.target.value)}
+                  placeholder="GRN-001"
+                  required
+                  fullWidth
+                  className="pl-10"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-gray-700">
+                {t("receipt_date")} <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <Calendar size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <Input
+                  type="date"
+                  value={formData.receiptDate}
+                  onChange={(e) => handleChange("receiptDate", e.target.value)}
+                  required
+                  fullWidth
+                  className="pl-10"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-gray-700">
+                {t("purchase_order")} <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <Package size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <Select
+                  value={formData.purchaseOrderId}
+                  onChange={(e) => {
+                    handleChange("purchaseOrderId", e.target.value);
+                    onPOChange(e.target.value);
+                  }}
+                  options={poOptions}
+                  placeholder={t("select_po")}
+                  required
+                  fullWidth
+                  className="pl-10"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-gray-700">
+                {t("warehouse")} <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <Warehouse size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <Select
+                  value={formData.warehouseId}
+                  onChange={(e) => handleChange("warehouseId", e.target.value)}
+                  options={warehouseOptions}
+                  placeholder={t("select_warehouse")}
+                  required
+                  fullWidth
+                  className="pl-10"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-gray-700">
+                {t("received_by")} <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <User size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <Input
+                  value={formData.receivedBy}
+                  onChange={(e) => handleChange("receivedBy", e.target.value)}
+                  placeholder={t("enter_received_by")}
+                  required
+                  fullWidth
+                  className="pl-10"
+                />
+              </div>
+            </div>
           </div>
         </div>
 
@@ -424,17 +504,21 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
         </div>
 
         {/* Notes */}
-        <TextArea
-          label={t("notes")}
-          value={formData.notes}
-          onChange={(e) => handleChange("notes", e.target.value)}
-          placeholder={t("enter_notes")}
-          rows={3}
-          fullWidth
-        />
+        <div className="space-y-1">
+          <label className="text-sm font-medium text-gray-700">
+            {t("notes")}
+          </label>
+          <TextArea
+            value={formData.notes}
+            onChange={(e) => handleChange("notes", e.target.value)}
+            placeholder={t("enter_notes")}
+            rows={3}
+            fullWidth
+          />
+        </div>
 
-        <div className="flex justify-end gap-3 mt-8">
-          <Button variant="secondary" onClick={onClose} disabled={isSubmitting || isLoading}>
+        <div className="flex justify-end gap-3 mt-8 pt-4 border-t border-gray-100">
+          <Button variant="secondary" onClick={onClose} disabled={isSubmitting || isLoading} type="button">
             {t("cancel")}
           </Button>
           <Button
@@ -451,6 +535,3 @@ export const GoodsReceiptModal: React.FC<GoodsReceiptModalProps> = ({
     </Modal>
   );
 };
-
-// Add this import at the top
-import { FileText } from "lucide-react";

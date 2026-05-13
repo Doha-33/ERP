@@ -1,6 +1,15 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Edit2, User, Calendar, DollarSign, Award, Gift, Star } from "lucide-react";
+import {
+  Plus,
+  Edit2,
+  User,
+  Calendar,
+  DollarSign,
+  Award,
+  Gift,
+  Star,
+} from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
 import { Button, Input, Select, TextArea } from "../../components/ui/Common";
 import { Reward } from "../../types";
@@ -34,21 +43,36 @@ export const RewardModal: React.FC<RewardModalProps> = ({
     notes: "",
   });
 
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+      if (value._id && typeof value._id === "string") return value._id;
+      if (value.id && typeof value.id === "string") return value.id;
+    }
+    return "";
+  }, []);
+
   useEffect(() => {
     if (rewardToEdit && isOpen) {
-      const employeeId = typeof rewardToEdit.employeeInfo === "object"
-        ? (rewardToEdit.employeeInfo as any)?._id
-        : rewardToEdit.employeeInfo || rewardToEdit.employeeId;
+      const employeeId = extractId(rewardToEdit.employeeInfo);
 
       setFormData({
         employeeInfo: employeeId || "",
-        rewardsType: rewardToEdit.rewardsType || rewardToEdit.rewardType || "Performance Bonus",
-        rewardDate: rewardToEdit.rewardDate || rewardToEdit.date
-          ? new Date(rewardToEdit.rewardDate || rewardToEdit.date).toISOString().split("T")[0]
-          : new Date().toISOString().split("T")[0],
+        rewardsType:
+          rewardToEdit.rewardsType ||
+          rewardToEdit.rewardType ||
+          "Performance Bonus",
+        rewardDate:
+          rewardToEdit.rewardDate || rewardToEdit.date
+            ? new Date(rewardToEdit.rewardDate || rewardToEdit.date)
+                .toISOString()
+                .split("T")[0]
+            : new Date().toISOString().split("T")[0],
         rewardAmount: rewardToEdit.rewardAmount || rewardToEdit.amount || 0,
         bonus: rewardToEdit.bonus || rewardToEdit.bonusAmount || 0,
-        commissions: rewardToEdit.commissions || rewardToEdit.commissionAmount || 0,
+        commissions:
+          rewardToEdit.commissions || rewardToEdit.commissionAmount || 0,
         notes: rewardToEdit.notes || "",
       });
     } else if (!rewardToEdit && isOpen) {
@@ -62,25 +86,25 @@ export const RewardModal: React.FC<RewardModalProps> = ({
         notes: "",
       });
     }
-  }, [rewardToEdit, isOpen]);
+  }, [rewardToEdit, isOpen, extractId]);
 
   const rewardTypeOptions = [
     { value: "Performance Bonus", label: t("performance_bonus"), icon: Star },
     { value: "Spot Reward", label: t("spot_reward"), icon: Award },
-    { value: "Incentive", label: t("incentive"), icon: Gift },
+    { value: "Incentive Scheme", label: t("incentive_scheme"), icon: Gift },
     { value: "Annual Bonus", label: t("annual_bonus"), icon: Award },
-    { value: "Team Award", label: t("team_award"), icon: Star },
+    { value: "Other", label: t("other"), icon: Star },
   ];
 
-  const employeeOptions = employees.map(emp => ({
-    value: emp._id || emp.id,
+  const employeeOptions = employees.map((emp) => ({
+    value: extractId(emp),
     label: `${emp.fullName} (${emp.employeeCode})`,
   }));
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
+
     try {
       await onSave(formData);
       onClose();
@@ -92,10 +116,13 @@ export const RewardModal: React.FC<RewardModalProps> = ({
   };
 
   const handleChange = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const totalAmount = (formData.rewardAmount || 0) + (formData.bonus || 0) + (formData.commissions || 0);
+  const totalAmount =
+    (formData.rewardAmount || 0) +
+    (formData.bonus || 0) +
+    (formData.commissions || 0);
 
   return (
     <Modal
@@ -163,7 +190,9 @@ export const RewardModal: React.FC<RewardModalProps> = ({
               type="number"
               step="0.01"
               value={formData.rewardAmount}
-              onChange={(e) => handleChange("rewardAmount", Number(e.target.value))}
+              onChange={(e) =>
+                handleChange("rewardAmount", Number(e.target.value))
+              }
               placeholder="0.00"
               required
               fullWidth
@@ -194,7 +223,9 @@ export const RewardModal: React.FC<RewardModalProps> = ({
               type="number"
               step="0.01"
               value={formData.commissions}
-              onChange={(e) => handleChange("commissions", Number(e.target.value))}
+              onChange={(e) =>
+                handleChange("commissions", Number(e.target.value))
+              }
               placeholder="0.00"
               fullWidth
             />
@@ -224,25 +255,37 @@ export const RewardModal: React.FC<RewardModalProps> = ({
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
               <p className="text-xs text-gray-500">{t("reward_amount")}</p>
-              <p className="text-sm font-bold text-green-600">{formData.rewardAmount.toLocaleString()} EGP</p>
+              <p className="text-sm font-bold text-green-600">
+                {formData.rewardAmount.toLocaleString()} EGP
+              </p>
             </div>
             <div>
               <p className="text-xs text-gray-500">{t("bonus")}</p>
-              <p className="text-sm font-bold text-blue-600">{formData.bonus.toLocaleString()} EGP</p>
+              <p className="text-sm font-bold text-blue-600">
+                {formData.bonus.toLocaleString()} EGP
+              </p>
             </div>
             <div>
               <p className="text-xs text-gray-500">{t("commissions")}</p>
-              <p className="text-sm font-bold text-purple-600">{formData.commissions.toLocaleString()} EGP</p>
+              <p className="text-sm font-bold text-purple-600">
+                {formData.commissions.toLocaleString()} EGP
+              </p>
             </div>
             <div>
               <p className="text-xs text-gray-500">{t("total_reward")}</p>
-              <p className="text-lg font-bold text-emerald-600">{totalAmount.toLocaleString()} EGP</p>
+              <p className="text-lg font-bold text-emerald-600">
+                {totalAmount.toLocaleString()} EGP
+              </p>
             </div>
           </div>
         </div>
 
         <div className="flex justify-end gap-3 mt-8">
-          <Button variant="secondary" onClick={onClose} disabled={isSubmitting || isLoading}>
+          <Button
+            variant="secondary"
+            onClick={onClose}
+            disabled={isSubmitting || isLoading}
+          >
             {t("cancel")}
           </Button>
           <Button

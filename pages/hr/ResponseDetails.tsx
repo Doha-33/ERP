@@ -1,223 +1,334 @@
-import React, { useState, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
-import { ChevronLeft, FileText, Download } from 'lucide-react';
-import { Card, Button, Badge } from '../../components/ui/Common';
-import { useData } from '../../context/DataContext';
-import { ResponseRejectModal } from '../../components/hr/ResponseRejectModal';
-import { ResponseLoanModal } from '../../components/hr/ResponseLoanModal';
+// components/hr/ResponseDetails.tsx
+import React, { useEffect, useState, useCallback } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
+import { ChevronLeft, FileText, Clock, User, Calendar, AlertCircle, History, CheckCircle, XCircle } from "lucide-react";
+import { Card, Button, Badge } from "../../components/ui/Common";
+import { useData } from "../../context/DataContext";
+import { ResponsesHistoryModal } from "../../components/hr/ResponsesHistoryModal";
 
-const DetailItem: React.FC<{ label: string; value: string | boolean | undefined }> = ({ label, value }) => (
-  <div className="space-y-1">
-    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{label}</p>
-    <p className="text-sm font-bold text-slate-700 dark:text-slate-200">
-      {typeof value === 'boolean' ? (value ? 'TRUE' : 'FALSE') : (value || '-')}
-    </p>
-  </div>
-);
+type ResponseType = "eos" | "loans" | "leaves" | "requests";
 
 export const ResponseDetails: React.FC = () => {
-  const { type, id } = useParams<{ type: string, id: string }>();
-  const navigate = useNavigate();
   const { t } = useTranslation();
+  const { type, id } = useParams();
+  const navigate = useNavigate();
   const { 
-    endOfServices, 
-    loans, 
-    leaves, 
-    requests, 
-    toggleLoanWorkflow, 
-    toggleLeaveWorkflow, 
-    toggleRequestWorkflow,
-    rejectRequest,
-    rejectLeave,
-    approveEndOfService,
-    rejectEndOfService,
-    updateLoan,
-    rejectLoan
+    responses, 
+    actionHistory, 
+    fetchActionHistory,
+    fetchResponses 
   } = useData();
-  
-  const [isRejectOpen, setIsRejectOpen] = useState(false);
-  const [isLoanOpen, setIsLoanOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [item, setItem] = useState<any>(null);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [selectedHistory, setSelectedHistory] = useState<any[]>([]);
 
-  const item = useMemo(() => {
-    switch (type) {
-      case 'eos': return endOfServices.find(i => i.id === id);
-      case 'loans': return loans.find(i => i.id === id);
-      case 'leaves': return leaves.find(i => i.id === id);
-      case 'requests': return requests.find(i => i.id === id);
-      default: return null;
+  // Helper function to extract ID
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+      if (value._id && typeof value._id === "string") return value._id;
+      if (value.id && typeof value.id === "string") return value.id;
     }
-  }, [type, id, endOfServices, loans, leaves, requests]);
+    return "";
+  }, []);
 
-  if (!item) return <div>Not found</div>;
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        // Fetch responses if not already loaded
+        if (responses.length === 0) {
+          const responseType = type === "eos" ? "end-of-service" : type;
+          await fetchResponses(responseType as any);
+        }
+        await fetchActionHistory();
+        
+        // Find the item by ID
+        const foundItem = responses.find(r => extractId(r) === id);
+        setItem(foundItem);
+      } catch (error) {
+        console.error("Error loading response details:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    if (id && type) {
+      load();
+    }
+  }, [id, type, responses, fetchResponses, fetchActionHistory, extractId]);
 
-  const handleAction = (action: string) => {
-    if (action === 'Rejected') {
-      setIsRejectOpen(true);
-    } else if (action === 'Approved') {
-        if (type === 'loans') toggleLoanWorkflow(id!, 'hr');
-        else if (type === 'leaves') toggleLeaveWorkflow(id!, 'hr');
-        else if (type === 'requests') toggleRequestWorkflow(id!, 'hr');
-        else if (type === 'eos') approveEndOfService(id!);
+  const handleShowHistory = async () => {
+    try {
+      const filteredHistory = actionHistory.filter(h => extractId(h.requestId) === id);
+      setSelectedHistory(filteredHistory);
+      setIsHistoryOpen(true);
+    } catch (error) {
+      console.error("Error fetching history:", error);
     }
   };
 
-  const renderDetails = () => {
-    if (type === 'eos') {
-      const eos = item as any;
-      return (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-y-10 gap-x-6">
-          <DetailItem label="EOS ID" value={eos.id} />
-          <DetailItem label={t('job_title')} value={eos.jobTitle} />
-          <DetailItem label={t('department')} value={eos.department} />
-          <DetailItem label={t('eos_type')} value={eos.eosType} />
-          <DetailItem label={t('start_date')} value={eos.startDate} />
-          <DetailItem label={t('last_working_day')} value={eos.lastWorkingDay} />
-          <DetailItem label={t('years_of_service')} value={eos.yearsOfService} />
-          <div className="space-y-1">
-             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{t('attachment')}</p>
-             <div className="p-2 bg-slate-50 dark:bg-gray-800 rounded-lg w-fit cursor-pointer hover:bg-slate-100 transition-colors">
-                <FileText size={18} className="text-slate-400" onClick={() => eos.attachment && window.open(eos.attachment, '_blank')} />
-             </div>
-          </div>
-          <DetailItem label={t('collect_laptop')} value={eos.collectLaptop === 'true'} />
-          <DetailItem label={t('collect_access_cards')} value={eos.collectAccessCards === 'true'} />
-          <DetailItem label={t('final_settlement_calculation')} value={eos.finalSettlement} />
-          <DetailItem label={t('reason')} value={eos.reason} />
-          {eos.rejected_reason && <DetailItem label={t('rejected_reason')} value={eos.rejected_reason} />}
-        </div>
-      );
-    }
-    if (type === 'loans') {
-       const loan = item as any;
-       return (
-         <div className="grid grid-cols-1 md:grid-cols-4 gap-y-10 gap-x-6">
-            <DetailItem label="Loan ID" value={loan.loanId} />
-            <DetailItem label={t('loan_amount')} value={loan.loanAmount} />
-            <DetailItem label={t('remaining_amount')} value={loan.remainingAmount} />
-            <DetailItem label={t('deduction_type')} value={loan.deductionType} />
-            <DetailItem label={t('installment_amount')} value={loan.installmentAmount} />
-            <DetailItem label={t('start_month')} value={loan.startMonth} />
-            <DetailItem label={t('status')} value={loan.status} />
-            <DetailItem label={t('manager_approval')} value={loan.approved_by_manager} />
-            <DetailItem label={t('hr_approval')} value={loan.approved_by_hr} />
-         </div>
-       );
-    }
+  const getStatusBadge = (status: string) => {
+    const statusMap: Record<string, { variant: "warning" | "success" | "danger" | "info"; label: string; icon: any }> = {
+      Pending: { variant: "warning", label: t("pending"), icon: Clock },
+      Approved: { variant: "success", label: t("approved"), icon: CheckCircle },
+      Rejected: { variant: "danger", label: t("rejected"), icon: XCircle },
+      Submitted: { variant: "info", label: t("submitted"), icon: FileText },
+    };
+    const config = statusMap[status] || { variant: "info", label: status, icon: FileText };
+    const Icon = config.icon;
     return (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-y-10 gap-x-6">
-            <DetailItem label="Request ID" value={(item as any).leavesId || (item as any).requestId} />
-            <DetailItem label={t('request_type')} value={(item as any).leaveType || (item as any).requestType} />
-            <DetailItem label={t('reason')} value={(item as any).reason || (item as any).description} />
-            <DetailItem label={t('date')} value={(item as any).fromDate || (item as any).date} />
-        </div>
+      <Badge variant={config.variant} className="flex items-center gap-1">
+        {Icon && <Icon size={12} />}
+        {config.label}
+      </Badge>
     );
+  };
+
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return "-";
+    try {
+      return new Date(dateStr).toLocaleDateString();
+    } catch {
+      return "-";
+    }
+  };
+
+  const formatDateTime = (dateStr: string) => {
+    if (!dateStr) return "-";
+    try {
+      return new Date(dateStr).toLocaleString();
+    } catch {
+      return "-";
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
+
+  if (!item) {
+    return (
+      <div className="text-center py-12">
+        <FileText size={48} className="mx-auto text-gray-300 mb-4" />
+        <h2 className="text-xl font-semibold text-gray-600">{t("request_not_found")}</h2>
+        <p className="text-gray-400 mt-1">{t("request_not_found_description")}</p>
+        <Button onClick={() => navigate("/hr/responses")} className="mt-6">
+          {t("back_to_responses")}
+        </Button>
+      </div>
+    );
+  }
+
+  // Get the request title based on type
+  const getRequestTitle = () => {
+    switch (type) {
+      case "eos": return t("end_of_service_request");
+      case "loans": return t("loan_request");
+      case "leaves": return t("leave_request");
+      case "requests": return t("general_request");
+      default: return t("request_details");
+    }
   };
 
   return (
     <div className="space-y-6">
-       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-           <div className="flex items-center gap-4">
-               <button onClick={() => navigate('/hr/responses')} className="p-2 bg-white dark:bg-dark-surface border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 transition-colors shadow-sm">
-                   <ChevronLeft size={20} className="text-gray-500" />
-               </button>
-               <div>
-                  <h1 className="text-2xl font-bold dark:text-white">{t('responses')}</h1>
-                  <p className="text-gray-500 dark:text-gray-400 text-sm">{t('manage_responses')}</p>
-               </div>
-           </div>
-           
-           <div className="flex items-center gap-4">
-              <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl">
-                {(['eos', 'loans', 'leaves', 'requests'] as string[]).map((tab) => (
-                  <button
-                      key={tab}
-                      onClick={() => navigate(`/hr/responses`)}
-                      className={`px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${
-                        type === tab 
-                        ? 'bg-primary text-white shadow-lg' 
-                        : 'text-gray-500 opacity-50'
-                      }`}
-                  >
-                      {t(tab === 'eos' ? 'end_of_service' : tab)}
-                  </button>
-                ))}
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => navigate("/hr/responses")}
+            className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+          >
+            <ChevronLeft size={20} className="text-gray-500" />
+          </button>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">{getRequestTitle()}</h1>
+            <p className="text-gray-500 text-sm mt-1">
+              {item.requestNumber || item.id}
+            </p>
+          </div>
+        </div>
+        <Button
+          variant="outline"
+          onClick={handleShowHistory}
+          className="gap-2"
+        >
+          <History size={16} />
+          {t("action_history")}
+        </Button>
+      </div>
+
+      {/* Main Content */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column - Basic Info */}
+        <div className="lg:col-span-2 space-y-6">
+          <Card className="p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+              <FileText size={18} className="text-indigo-600" />
+              {t("request_information")}
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wider">{t("status")}</p>
+                <div className="mt-1">{getStatusBadge(item.status)}</div>
               </div>
-           </div>
-       </div>
-
-       <Card className="p-10 space-y-10 overflow-visible relative">
-          <div className="flex items-center justify-between border-b pb-8">
-             <div className="flex items-center gap-4 p-3 bg-[#D4DBFF] dark:bg-blue-900/30 rounded-2xl border-none min-w-[280px]">
-                <img src={(item as any).avatar} className="w-12 h-12 rounded-xl object-cover shadow-sm" alt="" />
-                <span className="font-bold text-slate-800 dark:text-slate-100">{(item as any).employeeName}</span>
-             </div>
-
-             <div className="relative group">
-                <select 
-                   onChange={(e) => handleAction(e.target.value)}
-                   className="appearance-none bg-white dark:bg-gray-800 border border-slate-300 dark:border-slate-700 py-3 px-8 pr-12 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/20 min-w-[180px] shadow-sm"
-                >
-                   <option value="">Action</option>
-                   <option value="Approved">Approved</option>
-                   <option value="Pending">Pending</option>
-                   <option value="Rejected">Rejected</option>
-                </select>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                   <svg width="14" height="8" viewBox="0 0 14 8" fill="none"><path d="M1 1L7 7L13 1" stroke="#475569" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              <div>
+                <p className="text-xs text-gray-500 uppercase tracking-wider">{t("date")}</p>
+                <p className="text-sm font-medium text-gray-800 mt-1">
+                  {formatDateTime(item.date || item.createdAt || item.requestDate)}
+                </p>
+              </div>
+              {item.employeeName && (
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wider">{t("employee")}</p>
+                  <p className="text-sm font-medium text-gray-800 mt-1">{item.employeeName}</p>
+                  {item.employeeCode && (
+                    <p className="text-xs text-gray-400 mt-0.5">{item.employeeCode}</p>
+                  )}
                 </div>
-             </div>
-          </div>
-
-          <div className="space-y-1">
-             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{t('created_at')}</p>
-             <p className="text-sm font-bold text-slate-700">{(item as any).createdAt || (item as any).date}</p>
-          </div>
-
-          <div className="space-y-8">
-             <h4 className="px-6 py-4 bg-[#F5F7FF] dark:bg-gray-800/50 rounded-xl font-bold text-slate-800 dark:text-slate-100">
-                {t(`details_of_${type === 'eos' ? 'eos' : type.slice(0, -1)}`)}
-             </h4>
-
-             <div className="px-6">
-                {renderDetails()}
-             </div>
-          </div>
-
-          {type === 'loans' && (
-            <div className="flex justify-end pt-8">
-               <Button className="bg-[#4361EE] hover:bg-blue-700" onClick={() => setIsLoanOpen(true)}>
-                  Manage installments
-               </Button>
+              )}
+              {item.type && (
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wider">{t("type")}</p>
+                  <p className="text-sm font-medium text-gray-800 mt-1">{item.type}</p>
+                </div>
+              )}
             </div>
+          </Card>
+
+          {/* Reason Section */}
+          {(item.reason || item.loanDetails) && (
+            <Card className="p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <AlertCircle size={18} className="text-indigo-600" />
+                {t("reason_details")}
+              </h3>
+              <div className="space-y-4">
+                {item.reason && (
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase tracking-wider">{t("reason")}</p>
+                    <p className="text-sm text-gray-700 mt-1">{item.reason}</p>
+                  </div>
+                )}
+                {item.loanDetails && (
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase tracking-wider">{t("loan_details")}</p>
+                    <p className="text-sm text-gray-700 mt-1">{item.loanDetails}</p>
+                  </div>
+                )}
+              </div>
+            </Card>
           )}
-       </Card>
 
-       <ResponseRejectModal 
-         isOpen={isRejectOpen} 
-         onClose={() => setIsRejectOpen(false)} 
-         onSave={(reason) => {
-            if (type === 'requests') rejectRequest(id!, reason);
-            else if (type === 'leaves') rejectLeave(id!, reason);
-            else if (type === 'eos') rejectEndOfService(id!, reason);
-            else if (type === 'loans') rejectLoan(id!, reason);
-         }} 
-       />
+          {/* Rejection Reason */}
+          {item.status === "Rejected" && item.rejectedReason && (
+            <Card className="p-6 border-red-200 bg-red-50">
+              <h3 className="text-lg font-semibold text-red-800 mb-4 flex items-center gap-2">
+                <XCircle size={18} className="text-red-600" />
+                {t("rejection_reason")}
+              </h3>
+              <p className="text-sm text-red-700">{item.rejectedReason}</p>
+            </Card>
+          )}
+        </div>
 
-       {type === 'loans' && (
-         <ResponseLoanModal 
-           isOpen={isLoanOpen} 
-           onClose={() => setIsLoanOpen(false)} 
-           loan={item as any} 
-           onSave={async (updated) => {
-              try {
-                await updateLoan(updated);
-              } catch (e) {
-                console.error(e);
-              }
-           }} 
-         />
-       )}
-    </div >
+        {/* Right Column - Additional Info */}
+        <div className="space-y-6">
+          {/* Financial Info (for loans) */}
+          {item.loanAmount && (
+            <Card className="p-6">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                <DollarSign size={16} className="text-green-600" />
+                {t("financial_details")}
+              </h3>
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-xs text-gray-500">{t("loan_amount")}</span>
+                  <span className="text-sm font-medium">{item.loanAmount?.toLocaleString()} EGP</span>
+                </div>
+                {item.installmentAmount && (
+                  <div className="flex justify-between">
+                    <span className="text-xs text-gray-500">{t("installment_amount")}</span>
+                    <span className="text-sm font-medium">{item.installmentAmount?.toLocaleString()} EGP</span>
+                  </div>
+                )}
+                {item.numberOfInstallments && (
+                  <div className="flex justify-between">
+                    <span className="text-xs text-gray-500">{t("number_of_installments")}</span>
+                    <span className="text-sm font-medium">{item.numberOfInstallments}</span>
+                  </div>
+                )}
+              </div>
+            </Card>
+          )}
+
+          {/* Leave Info (for leaves) */}
+          {item.startDate && item.endDate && (
+            <Card className="p-6">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                <Calendar size={16} className="text-indigo-600" />
+                {t("leave_period")}
+              </h3>
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-xs text-gray-500">{t("start_date")}</span>
+                  <span className="text-sm font-medium">{formatDate(item.startDate)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-xs text-gray-500">{t("end_date")}</span>
+                  <span className="text-sm font-medium">{formatDate(item.endDate)}</span>
+                </div>
+                {item.leaveDays && (
+                  <div className="flex justify-between">
+                    <span className="text-xs text-gray-500">{t("leave_days")}</span>
+                    <span className="text-sm font-medium">{item.leaveDays}</span>
+                  </div>
+                )}
+              </div>
+            </Card>
+          )}
+
+          {/* EOS Info */}
+          {item.endOfServiceDate && (
+            <Card className="p-6">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                <Calendar size={16} className="text-indigo-600" />
+                {t("end_of_service_details")}
+              </h3>
+              <div className="space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-xs text-gray-500">{t("end_of_service_date")}</span>
+                  <span className="text-sm font-medium">{formatDate(item.endOfServiceDate)}</span>
+                </div>
+                {item.lastWorkingDay && (
+                  <div className="flex justify-between">
+                    <span className="text-xs text-gray-500">{t("last_working_day")}</span>
+                    <span className="text-sm font-medium">{formatDate(item.lastWorkingDay)}</span>
+                  </div>
+                )}
+              </div>
+            </Card>
+          )}
+        </div>
+      </div>
+
+      {/* History Modal */}
+      <ResponsesHistoryModal
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        history={selectedHistory}
+      />
+    </div>
   );
 };
+
+// Add missing imports
+import { DollarSign } from "lucide-react";

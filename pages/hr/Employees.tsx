@@ -132,6 +132,15 @@ export const Employees: React.FC = () => {
     }
   };
 
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "object") {
+      return value._id || value.id || "";
+    }
+    return value;
+  }, []);
+
+  // تحديث handleView لتستخدم extractId
   const handleView = useCallback(
     (id: string) => {
       navigate(`/hr/employees/${id}`);

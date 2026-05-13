@@ -11,6 +11,15 @@ export const useRequestModule = (fetchAllDataCentral?: () => Promise<void>) => {
   const [actionHistory, setActionHistory] = useState<ActionHistory[]>([]);
 
   // Leaves
+  const fetchLeaves = useCallback(async () => {
+    try {
+      const data = await hrService.getLeaves();
+      setLeaves(Array.isArray(data) ? data : data?.data || []);
+    } catch (error) {
+      console.error("Error fetching Leaves:", error);
+    }
+  }, []);
+
   const addLeave = useCallback(async (leave: Leave) => {
     await hrService.addLeave(leave);
     if (fetchAllDataCentral) await fetchAllDataCentral();
@@ -36,6 +45,15 @@ export const useRequestModule = (fetchAllDataCentral?: () => Promise<void>) => {
   }, [fetchAllDataCentral]);
 
   // General Requests
+  const fetchRequests = useCallback(async () => {
+    try {
+      const data = await hrService.getRequests();
+      setRequests(Array.isArray(data) ? data : data?.data || []);
+    } catch (error) {
+      console.error("Error fetching Requests:", error);
+    }
+  }, []);
+
   const addRequest = useCallback(async (item: HRRequest) => {
     await hrService.addRequest(item);
     if (fetchAllDataCentral) await fetchAllDataCentral();
@@ -60,6 +78,15 @@ export const useRequestModule = (fetchAllDataCentral?: () => Promise<void>) => {
   }, [fetchAllDataCentral]);
 
   // End of Service
+  const fetchEndOfServices= useCallback(async () => {
+    try {
+      const data = await hrService.getEndOfServices();
+      setEndOfServices(Array.isArray(data) ? data : data?.data || []);
+    } catch (error) {
+      console.error("Error fetching End Of Services:", error);
+    }
+  }, []);
+
   const addEndOfService = useCallback(async (eos: EndOfService) => {
     await hrService.addEndOfService(eos);
     if (fetchAllDataCentral) await fetchAllDataCentral();
@@ -126,13 +153,13 @@ export const useRequestModule = (fetchAllDataCentral?: () => Promise<void>) => {
     responses, setResponses, fetchResponses,
     actionHistory, setActionHistory, fetchActionHistory,
     fetchRequestData,
-    addLeave, updateLeave, deleteLeave, toggleLeaveWorkflow, rejectLeave,
-    addRequest, updateRequest, deleteRequest, toggleRequestWorkflow, rejectRequest,
-    addEndOfService, updateEndOfService, deleteEndOfService, approveEndOfService, rejectEndOfService
+    addLeave, updateLeave, deleteLeave, toggleLeaveWorkflow, rejectLeave, fetchLeaves,
+    addRequest, updateRequest, deleteRequest, fetchRequests, toggleRequestWorkflow, rejectRequest,
+    addEndOfService, updateEndOfService, deleteEndOfService, fetchEndOfServices, approveEndOfService, rejectEndOfService
   }), [
     leaves, requests, endOfServices, responses, fetchResponses, actionHistory, fetchActionHistory,
-    addLeave, updateLeave, deleteLeave, toggleLeaveWorkflow, rejectLeave,
-    addRequest, updateRequest, deleteRequest, toggleRequestWorkflow, rejectRequest,
-    addEndOfService, updateEndOfService, deleteEndOfService, approveEndOfService, rejectEndOfService
+    addLeave, updateLeave, deleteLeave, toggleLeaveWorkflow, rejectLeave, fetchLeaves,
+    addRequest, updateRequest, deleteRequest, fetchRequests, toggleRequestWorkflow, rejectRequest,
+    addEndOfService, updateEndOfService, deleteEndOfService, fetchEndOfServices, approveEndOfService, rejectEndOfService
   ]);
 };

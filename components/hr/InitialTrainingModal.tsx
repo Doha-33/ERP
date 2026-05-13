@@ -1,6 +1,15 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Edit2, User, Calendar, BookOpen, Users, Award, Clock } from "lucide-react";
+import {
+  Plus,
+  Edit2,
+  User,
+  Calendar,
+  BookOpen,
+  Users,
+  Award,
+  Clock,
+} from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
 import { Button, Input, Select, TextArea } from "../../components/ui/Common";
 import { InitialTraining } from "../../types";
@@ -39,24 +48,34 @@ export const InitialTrainingModal: React.FC<InitialTrainingModalProps> = ({
 
   const isAdmin = user?.role === "admin";
 
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+      if (value._id && typeof value._id === "string") return value._id;
+      if (value.id && typeof value.id === "string") return value.id;
+    }
+    return "";
+  }, []);
+
   useEffect(() => {
     if (trainingToEdit && isOpen) {
-      const employeeId = typeof trainingToEdit.employeeInfo === "object"
-        ? (trainingToEdit.employeeInfo as any)?._id
-        : trainingToEdit.employeeInfo || trainingToEdit.employeeId;
-      const departmentId = typeof trainingToEdit.department === "object"
-        ? (trainingToEdit.department as any)?._id
-        : trainingToEdit.department;
+      const employeeId = extractId(trainingToEdit.employeeInfo);
+      const departmentId = extractId(trainingToEdit.department);
 
       setFormData({
         employeeInfo: employeeId || "",
-        trainingType: trainingToEdit.trainingType || trainingToEdit.trainingName || "",
+        trainingType:
+          trainingToEdit.trainingType || trainingToEdit.trainingName || "",
         trainer: trainingToEdit.trainer || "",
         department: departmentId || "",
         doneBy: trainingToEdit.doneBy || "",
-        doneAt: trainingToEdit.doneAt || trainingToEdit.trainingDate
-          ? new Date(trainingToEdit.doneAt || trainingToEdit.trainingDate).toISOString().split("T")[0]
-          : new Date().toISOString().split("T")[0],
+        doneAt:
+          trainingToEdit.doneAt || trainingToEdit.trainingDate
+            ? new Date(trainingToEdit.doneAt || trainingToEdit.trainingDate)
+                .toISOString()
+                .split("T")[0]
+            : new Date().toISOString().split("T")[0],
         status: trainingToEdit.status || "Pending",
         notes: trainingToEdit.notes || "",
       });
@@ -72,40 +91,51 @@ export const InitialTrainingModal: React.FC<InitialTrainingModalProps> = ({
         notes: "",
       });
     }
-  }, [trainingToEdit, isOpen, isAdmin, user]);
+  }, [trainingToEdit, isOpen, isAdmin, user, extractId]);
 
   const trainingTypeOptions = [
     { value: "Safety Training", label: t("safety_training"), icon: Award },
-    { value: "Technical Training", label: t("technical_training"), icon: BookOpen },
+    {
+      value: "Technical Training",
+      label: t("technical_training"),
+      icon: BookOpen,
+    },
     { value: "Soft Skills", label: t("soft_skills"), icon: Users },
-    { value: "Compliance Training", label: t("compliance_training"), icon: Award },
+    {
+      value: "Compliance Training",
+      label: t("compliance_training"),
+      icon: Award,
+    },
     { value: "Onboarding", label: t("onboarding"), icon: BookOpen },
   ];
 
   const statusOptions = [
     { value: "Pending", label: t("pending") },
-    { value: "Completed", label: t("completed") },
-    { value: "Failed", label: t("failed") },
+    { value: "Done", label: t("done") },
+    { value: "Canceled", label: t("canceled") },
+    { value: "Paid", label: t("paid") },
+    { value: "Unpaid", label: t("unpaid") },
   ];
 
-  const employeeOptions = employees.map(emp => ({
-    value: emp._id || emp.id,
+  const employeeOptions = employees.map((emp) => ({
+    value: extractId(emp),
     label: `${emp.fullName} (${emp.employeeCode})`,
   }));
 
-  const departmentOptions = departments.map(dept => ({
-    value: dept._id || dept.id,
+  const departmentOptions = departments.map((dept) => ({
+    value: extractId(dept),
     label: dept.departmentName,
   }));
-
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
+
     try {
       // Get selected employee for empCode
-      const selectedEmployee = employees.find(e => (e._id || e.id) === formData.employeeInfo);
-      
+      const selectedEmployee = employees.find(
+        (e) => (e._id || e.id) === formData.employeeInfo,
+      );
+
       await onSave({
         ...formData,
         empCode: selectedEmployee?.employeeCode || "",
@@ -119,7 +149,7 @@ export const InitialTrainingModal: React.FC<InitialTrainingModalProps> = ({
   };
 
   const handleChange = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   return (
@@ -129,7 +159,9 @@ export const InitialTrainingModal: React.FC<InitialTrainingModalProps> = ({
       title={
         <div className="flex items-center gap-2">
           {trainingToEdit ? <Edit2 size={20} /> : <Plus size={20} />}
-          {trainingToEdit ? t("edit_initial_training") : t("add_initial_training")}
+          {trainingToEdit
+            ? t("edit_initial_training")
+            : t("add_initial_training")}
         </div>
       }
       size="4xl"
@@ -252,7 +284,11 @@ export const InitialTrainingModal: React.FC<InitialTrainingModalProps> = ({
         </div>
 
         <div className="flex justify-end gap-3 mt-8">
-          <Button variant="secondary" onClick={onClose} disabled={isSubmitting || isLoading}>
+          <Button
+            variant="secondary"
+            onClick={onClose}
+            disabled={isSubmitting || isLoading}
+          >
             {t("cancel")}
           </Button>
           <Button

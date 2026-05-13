@@ -21,7 +21,8 @@ export const Payroll: React.FC = () => {
     updatePayroll, 
     deletePayroll, 
     employees, 
-    currentUserEmployee 
+    currentUserEmployee,
+    fetchPayrolls 
   } = useData();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -35,30 +36,78 @@ export const Payroll: React.FC = () => {
 
   const isAdmin = user?.role === 'admin';
 
+  // Helper function to extract ID
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+      if (value._id && typeof value._id === "string") return value._id;
+      if (value.id && typeof value.id === "string") return value.id;
+    }
+    return "";
+  }, []);
+
   const handleSave = async (record: Partial<PayrollType>) => {
     try {
       setIsLoading(true);
+      
       if (editingRecord) {
-        await updatePayroll({ ...record, _id: editingRecord._id } as PayrollType);
+        // IMPORTANT: Get the ID from editingRecord
+        const recordId = extractId(editingRecord);
+        
+        if (!recordId) {
+          toast.error(t('payroll_id_missing'));
+          return;
+        }
+        
+        // Create update data with the correct ID
+        const updateData = {
+          ...record,
+          _id: recordId,
+          id: recordId
+        } as PayrollType;
+        
+        console.log("Updating payroll with ID:", recordId, updateData);
+        await updatePayroll(updateData);
         toast.success(t('payroll_updated_successfully'));
       } else {
         await addPayroll(record as PayrollType);
         toast.success(t('payroll_created_successfully'));
       }
+      
+      await fetchPayrolls();
       setIsModalOpen(false);
       setEditingRecord(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving payroll:", error);
-      toast.error(t('failed_to_save_payroll'));
+      const message = error?.response?.data?.message || error?.message || t('failed_to_save_payroll');
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleEdit = useCallback((record: PayrollType) => {
-    setEditingRecord(record);
+    // Extract the ID correctly from the record
+    const recordId = extractId(record);
+    
+    if (!recordId) {
+      console.error("Payroll record ID not found", record);
+      toast.error(t('payroll_id_not_found'));
+      return;
+    }
+    
+    // Create a clean record object with proper ID
+    const recordToEdit: PayrollType = {
+      ...record,
+      _id: recordId,
+      id: recordId,
+    };
+    
+    console.log("Editing payroll record:", recordToEdit);
+    setEditingRecord(recordToEdit);
     setIsModalOpen(true);
-  }, []);
+  }, [extractId, t]);
 
   const handleDelete = useCallback((id: string) => {
     setDeleteId(id);
@@ -70,37 +119,61 @@ export const Payroll: React.FC = () => {
         await deletePayroll(deleteId);
         toast.success(t('payroll_deleted_successfully'));
         setDeleteId(null);
+        await fetchPayrolls();
       } catch (error) {
         toast.error(t('failed_to_delete_payroll'));
       }
     }
-  }, [deleteId, deletePayroll, t]);
+  }, [deleteId, deletePayroll, fetchPayrolls, t]);
 
-  const getEmployeeName = (record: PayrollType) => {
+  // Safe function to get employee name
+  const getEmployeeName = useCallback((record: PayrollType): string => {
+    if (!record.employeeId) return '-';
+    
     if (typeof record.employeeId === 'object' && record.employeeId !== null) {
-      return (record.employeeId as any).fullName || '-';
+      const emp = record.employeeId as any;
+      return emp.fullName || emp.name || '-';
     }
-    const emp = employees.find(e => (e._id || e.id) === record.employeeId);
-    return emp?.fullName || '-';
-  };
+    
+    const emp = employees.find(e => extractId(e) === record.employeeId);
+    return emp?.fullName || emp?.name || '-';
+  }, [employees, extractId]);
 
-  const getEmployeePhoto = (record: PayrollType) => {
+  // Safe function to get employee code
+  const getEmployeeCode = useCallback((record: PayrollType): string => {
+    if (!record.employeeId) return '-';
+    
     if (typeof record.employeeId === 'object' && record.employeeId !== null) {
-      return (record.employeeId as any).photo;
+      const emp = record.employeeId as any;
+      return emp.employeeCode || emp.code || '-';
     }
-    const emp = employees.find(e => (e._id || e.id) === record.employeeId);
+    
+    const emp = employees.find(e => extractId(e) === record.employeeId);
+    return emp?.employeeCode || '-';
+  }, [employees, extractId]);
+
+  // Safe function to get employee photo
+  const getEmployeePhoto = useCallback((record: PayrollType): string | undefined => {
+    if (!record.employeeId) return undefined;
+    
+    if (typeof record.employeeId === 'object' && record.employeeId !== null) {
+      const emp = record.employeeId as any;
+      return emp.photo;
+    }
+    
+    const emp = employees.find(e => extractId(e) === record.employeeId);
     return emp?.photo;
-  };
+  }, [employees, extractId]);
 
   // Filter records based on access
   const accessibleRecords = useMemo(() => {
     if (isAdmin) return payrolls;
-    const currentId = currentUserEmployee?._id || currentUserEmployee?.id;
+    const currentId = extractId(currentUserEmployee);
     return payrolls.filter(r => {
-      const empId = typeof r.employeeId === 'object' ? (r.employeeId as any)._id : r.employeeId;
+      const empId = extractId(r.employeeId);
       return empId === currentId;
     });
-  }, [isAdmin, payrolls, currentUserEmployee]);
+  }, [isAdmin, payrolls, currentUserEmployee, extractId]);
 
   // Apply filters
   const filteredRecords = useMemo(() => {
@@ -114,7 +187,7 @@ export const Payroll: React.FC = () => {
       
       return matchesSearch && matchesMonth && matchesYear && matchesStatus;
     });
-  }, [accessibleRecords, searchTerm, monthFilter, yearFilter, statusFilter]);
+  }, [accessibleRecords, searchTerm, monthFilter, yearFilter, statusFilter, getEmployeeName]);
 
   // Calculate summary statistics
   const totalPayroll = filteredRecords.reduce((sum, r) => sum + (r.netSalary || 0), 0);
@@ -134,12 +207,22 @@ export const Payroll: React.FC = () => {
     return `${amount?.toLocaleString() || 0} EGP`;
   };
 
+  const getMonthName = (month: number) => {
+    const months = [
+      'january', 'february', 'march', 'april', 'may', 'june',
+      'july', 'august', 'september', 'october', 'november', 'december'
+    ];
+    return t(months[month - 1] || 'january');
+  };
+
   const columns: Column<PayrollType>[] = useMemo(() => [
     {
       header: t('employee'),
       render: (r) => {
         const name = getEmployeeName(r);
+        const code = getEmployeeCode(r);
         const photo = getEmployeePhoto(r);
+        const initial = name.charAt(0).toUpperCase();
         return (
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center overflow-hidden">
@@ -147,15 +230,13 @@ export const Payroll: React.FC = () => {
                 <img src={photo} alt={name} className="w-full h-full object-cover" />
               ) : (
                 <span className="text-indigo-600 font-medium text-sm">
-                  {name.charAt(0).toUpperCase()}
+                  {initial || '?'}
                 </span>
               )}
             </div>
             <div className="flex flex-col">
               <span className="font-medium text-gray-900">{name}</span>
-              <span className="text-xs text-gray-500">
-                {typeof r.employeeId === 'object' && (r.employeeId as any).employeeCode}
-              </span>
+              <span className="text-xs text-gray-500">{code}</span>
             </div>
           </div>
         );
@@ -167,7 +248,7 @@ export const Payroll: React.FC = () => {
         <div className="flex items-center gap-1.5">
           <Calendar size={14} className="text-gray-400" />
           <span className="text-sm text-gray-600">
-            {t(`month_${r.payrollMonth}`)} {r.payrollYear}
+            {getMonthName(r.payrollMonth)} {r.payrollYear}
           </span>
         </div>
       )
@@ -209,37 +290,33 @@ export const Payroll: React.FC = () => {
     {
       header: t('actions'),
       className: 'text-center',
-      render: (r) => (
-        <div className="flex items-center justify-center gap-2">
-          <button
-            onClick={() => navigate(`/hr/payroll/payslip/${r._id || r.id}`)}
-            className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
-            title={t('view_payslip')}
-          >
-            <Eye size={16} />
-          </button>
-          {isAdmin && (
-            <>
-              <button
-                onClick={() => handleEdit(r)}
-                className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
-                title={t('edit')}
-              >
-                <Edit2 size={16} />
-              </button>
-              <button
-                onClick={() => handleDelete(r._id || r.id)}
-                className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
-                title={t('delete')}
-              >
-                <Trash2 size={16} />
-              </button>
-            </>
-          )}
-        </div>
-      )
+      render: (r) => {
+        const recordId = extractId(r);
+        return (
+          <div className="flex items-center justify-center gap-2">
+            {isAdmin && (
+              <>
+                <button
+                  onClick={() => handleEdit(r)}
+                  className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+                  title={t('edit')}
+                >
+                  <Edit2 size={16} />
+                </button>
+                <button
+                  onClick={() => handleDelete(recordId)}
+                  className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+                  title={t('delete')}
+                >
+                  <Trash2 size={16} />
+                </button>
+              </>
+            )}
+          </div>
+        );
+      }
     }
-  ], [t, handleEdit, handleDelete, navigate, isAdmin]);
+  ], [t, handleEdit, handleDelete, navigate, isAdmin, getEmployeeName, getEmployeeCode, getEmployeePhoto, extractId]);
 
   const monthOptions = [
     { value: "", label: t("all_months") },
@@ -271,6 +348,11 @@ export const Payroll: React.FC = () => {
     { value: "DRAFT", label: t("draft") },
     { value: "PAID", label: t("paid") },
   ];
+
+  const getKeyExtractor = useCallback((item: PayrollType) => {
+    const id = extractId(item);
+    return id || Math.random().toString();
+  }, [extractId]);
 
   return (
     <div className="space-y-6">
@@ -399,7 +481,7 @@ export const Payroll: React.FC = () => {
           ))}
         </select>
 
-        {(monthFilter || yearFilter || statusFilter || searchTerm) && (
+        {(monthFilter || yearFilter || statusFilter !== 'all' || searchTerm) && (
           <button
             onClick={() => {
               setMonthFilter('');
@@ -415,13 +497,13 @@ export const Payroll: React.FC = () => {
       </div>
 
       {/* Table */}
-        <Table
-          data={filteredRecords}
-          columns={columns}
-          keyExtractor={(item) => item._id || item.id}
-          isLoading={isLoading}
-          selectable={isAdmin}
-        />
+      <Table
+        data={filteredRecords}
+        columns={columns}
+        keyExtractor={getKeyExtractor}
+        isLoading={isLoading}
+        selectable={isAdmin}
+      />
 
       {/* Modal */}
       <PayrollModal

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Search, Edit2, Trash2, Building2, MapPin, Mail, Filter, X, ChevronDown } from "lucide-react";
+import { Plus, Search, Edit2, Trash2, Building2, MapPin, Mail, Filter, X, ChevronDown, Phone } from "lucide-react";
 import { Card, Button, Input, Badge, ExportDropdown } from "../../components/ui/Common";
 import { Table, Column } from "../../components/ui/Table";
 import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
@@ -11,7 +11,7 @@ import { toast } from "sonner";
 
 export const BranchPage: React.FC = () => {
   const { t } = useTranslation();
-  const { branches, companies, addBranch, updateBranch, deleteBranch } = useData();
+  const { branches, companies, addBranch, updateBranch, deleteBranch, fetchBranches } = useData();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
@@ -22,38 +22,78 @@ export const BranchPage: React.FC = () => {
   const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSave = async (branch: Partial<Branch>) => {
-  try {
-    setIsLoading(true);
-    if (editingBranch) {
-      // تأكد من أن لدينا _id صالح
-      const branchId = editingBranch._id;
-      if (!branchId) {
-        toast.error(t("invalid_branch_id"));
-        return;
+  // Helper function to extract ID
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+      if (value._id && typeof value._id === "string") return value._id;
+      if (value.id && typeof value.id === "string") return value.id;
+      if (value.toString && typeof value.toString === "function") {
+        const str = value.toString();
+        if (str && !str.includes('Object')) return str;
       }
-      console.log("Updating branch with ID:", branchId);
-      await updateBranch({ ...editingBranch, ...branch, _id: branchId } as Branch);
-      toast.success(t("branch_updated_successfully"));
-    } else {
-      await addBranch(branch as Branch);
-      toast.success(t("branch_created_successfully"));
     }
-    setIsModalOpen(false);
-    setEditingBranch(null);
-    // إعادة تحميل البيانات بعد التحديث
-  } catch (error) {
-    console.error("Error saving branch:", error);
-    toast.error(t("failed_to_save_branch"));
-  } finally {
-    setIsLoading(false);
-  }
-};
+    return "";
+  }, []);
+
+  const handleSave = async (branchData: Partial<Branch>) => {
+    try {
+      setIsLoading(true);
+      
+      if (editingBranch) {
+        const branchId = extractId(editingBranch);
+        
+        if (!branchId) {
+          toast.error(t("branch_id_missing"));
+          return;
+        }
+        
+        const updateData = {
+          ...branchData,
+          _id: branchId,
+          id: branchId
+        } as Branch;
+        
+        console.log("Updating branch with ID:", branchId, updateData);
+        await updateBranch(updateData);
+        toast.success(t("branch_updated_successfully"));
+      } else {
+        await addBranch(branchData as Branch);
+        toast.success(t("branch_created_successfully"));
+      }
+      
+      await fetchBranches();
+      setIsModalOpen(false);
+      setEditingBranch(null);
+    } catch (error: any) {
+      console.error("Error saving branch:", error);
+      const message = error?.response?.data?.message || error?.message || t("failed_to_save_branch");
+      toast.error(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleEdit = useCallback((branch: Branch) => {
-    setEditingBranch(branch);
+    const branchId = extractId(branch);
+    
+    if (!branchId) {
+      console.error("Branch ID not found", branch);
+      toast.error(t("branch_id_not_found"));
+      return;
+    }
+    
+    const branchToEdit: Branch = {
+      ...branch,
+      _id: branchId,
+      id: branchId,
+    };
+    
+    console.log("Editing branch:", branchToEdit);
+    setEditingBranch(branchToEdit);
     setIsModalOpen(true);
-  }, []);
+  }, [extractId, t]);
 
   const handleDelete = useCallback((id: string) => {
     setDeleteId(id);
@@ -66,19 +106,26 @@ export const BranchPage: React.FC = () => {
         toast.success(t("branch_deleted_successfully"));
         setDeleteId(null);
         setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+        await fetchBranches();
       } catch (error) {
         toast.error(t("failed_to_delete_branch"));
       }
     }
-  }, [deleteId, deleteBranch, t]);
+  }, [deleteId, deleteBranch, fetchBranches, t]);
 
   const handleBulkDelete = async () => {
     try {
       setIsLoading(true);
-      await Promise.all(selectedIds.map(id => deleteBranch(id)));
-      toast.success(t("branches_deleted_successfully", { count: selectedIds.length }));
+      const validIds = selectedIds.filter(id => id && typeof id === 'string');
+      if (validIds.length === 0) {
+        toast.error(t("no_valid_ids_selected"));
+        return;
+      }
+      await Promise.all(validIds.map(id => deleteBranch(id)));
+      toast.success(t("branches_deleted_successfully", { count: validIds.length }));
       setSelectedIds([]);
       setIsBulkConfirmOpen(false);
+      await fetchBranches();
     } catch (error) {
       console.error("Bulk delete failed", error);
       toast.error(t("failed_to_delete_branches"));
@@ -93,15 +140,12 @@ export const BranchPage: React.FC = () => {
     if (typeof branch.companyId === "object") {
       return (branch.companyId as any)?.name || "-";
     }
-    const company = companies.find(c => (c._id || c.id) === branch.companyId);
+    const company = companies.find(c => extractId(c) === branch.companyId);
     return company?.name || "-";
   };
 
-  const getCompanyId = (branch: Branch): string => {
-    if (typeof branch.companyId === "object") {
-      return (branch.companyId as any)?._id || "";
-    }
-    return branch.companyId || "";
+  const getCompanyIdFromBranch = (branch: Branch): string => {
+    return extractId(branch.companyId);
   };
 
   // Apply filters
@@ -114,7 +158,7 @@ export const BranchPage: React.FC = () => {
         b.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         b.address?.toLowerCase().includes(searchTerm.toLowerCase());
       
-      const matchesCompany = !companyFilter || getCompanyId(b) === companyFilter;
+      const matchesCompany = !companyFilter || getCompanyIdFromBranch(b) === companyFilter;
       
       return matchesSearch && matchesCompany;
     });
@@ -135,7 +179,7 @@ export const BranchPage: React.FC = () => {
   const companyOptions = [
     { value: "", label: t("all_companies") },
     ...companies.map(c => ({ 
-      value: c._id || c.id, 
+      value: extractId(c), 
       label: c.name 
     }))
   ];
@@ -144,17 +188,20 @@ export const BranchPage: React.FC = () => {
     () => [
       {
         header: t("branch_info"),
-        render: (b) => (
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center">
-              <Building2 size={18} className="text-indigo-600" />
+        render: (b) => {
+          const branchId = extractId(b);
+          return (
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center">
+                <Building2 size={18} className="text-indigo-600" />
+              </div>
+              <div className="flex flex-col">
+                <span className="font-medium text-gray-900">{b.name}</span>
+                <span className="text-xs text-gray-500">{getCompanyName(b)}</span>
+              </div>
             </div>
-            <div className="flex flex-col">
-              <span className="font-medium text-gray-900">{b.name}</span>
-              <span className="text-xs text-gray-500">{getCompanyName(b)}</span>
-            </div>
-          </div>
-        )
+          );
+        }
       },
       {
         header: t("contact"),
@@ -191,28 +238,36 @@ export const BranchPage: React.FC = () => {
       {
         header: t("actions"),
         className: "text-center",
-        render: (b) => (
-          <div className="flex items-center justify-center gap-2">
-            <button
-              onClick={() => handleEdit(b)}
-              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("edit")}
-            >
-              <Edit2 size={16} />
-            </button>
-            <button
-              onClick={() => handleDelete(b._id || b.id)}
-              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("delete")}
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-        )
+        render: (b) => {
+          const branchId = extractId(b);
+          return (
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => handleEdit(b)}
+                className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("edit")}
+              >
+                <Edit2 size={16} />
+              </button>
+              <button
+                onClick={() => handleDelete(branchId)}
+                className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("delete")}
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          );
+        }
       }
     ],
-    [t, handleEdit, handleDelete]
+    [t, handleEdit, handleDelete, extractId]
   );
+
+  const getKeyExtractor = useCallback((item: Branch) => {
+    const id = extractId(item);
+    return id || Math.random().toString();
+  }, [extractId]);
 
   return (
     <div className="space-y-6">
@@ -317,15 +372,15 @@ export const BranchPage: React.FC = () => {
       </div>
 
       {/* Table */}
-        <Table
-          data={filteredBranches}
-          columns={columns}
-          keyExtractor={(item) => item._id || item.id}
-          isLoading={isLoading}
-          selectable
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-        />
+      <Table
+        data={filteredBranches}
+        columns={columns}
+        keyExtractor={getKeyExtractor}
+        isLoading={isLoading}
+        selectable
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+      />
 
       {/* Modal */}
       <BranchModal
@@ -359,6 +414,3 @@ export const BranchPage: React.FC = () => {
     </div>
   );
 };
-
-// Add missing import
-import { Phone } from "lucide-react";

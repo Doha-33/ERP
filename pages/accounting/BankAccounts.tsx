@@ -298,7 +298,7 @@ export const BankAccounts: React.FC = () => {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-4 items-center">
+      <div className="p-4 flex flex-wrap gap-4 items-center bg-white rounded-lg border border-gray-100">
         <div className="relative max-w-md">
           <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input

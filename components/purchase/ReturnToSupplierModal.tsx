@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus, Edit2, Package, Building2, Warehouse, Hash, FileText, X, Trash2 } from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
 import { Button, Input, Select, TextArea } from "../../components/ui/Common";
 import { ReturnToSupplier } from "../../types";
 import { useData } from "../../context/DataContext";
+import { toast } from "sonner";
 
 interface ReturnToSupplierModalProps {
   isOpen: boolean;
@@ -30,7 +31,7 @@ export const ReturnToSupplierModal: React.FC<ReturnToSupplierModalProps> = ({
   isLoading = false,
 }) => {
   const { t } = useTranslation();
-  const { suppliers, products, warehouses, goodsReceipts, branches } = useData();
+  const { suppliers, products, warehouses, goodsReceipts, branches, companies } = useData();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     returnNumber: "",
@@ -46,20 +47,39 @@ export const ReturnToSupplierModal: React.FC<ReturnToSupplierModalProps> = ({
     { productId: "", sku: "", receivedQuantity: 0, returnQuantity: 0, reasonForReturn: "" }
   ]);
 
+  // Helper function to extract ID
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "object") {
+      return value._id || value.id || "";
+    }
+    return value;
+  }, []);
+
+  // Filter warehouses based on selected branch
+  const filteredWarehouses = useMemo(() => {
+    if (!formData.branchId) return warehouses;
+    return warehouses.filter(warehouse => {
+      const warehouseBranchId = extractId(warehouse.branchId);
+      return warehouseBranchId === formData.branchId;
+    });
+  }, [warehouses, formData.branchId, extractId]);
+
+  // Filter goods receipts based on selected supplier
+  const filteredGoodsReceipts = useMemo(() => {
+    if (!formData.supplierId) return goodsReceipts;
+    return goodsReceipts.filter(gr => {
+      const grSupplierId = extractId(gr.supplierId);
+      return grSupplierId === formData.supplierId;
+    });
+  }, [goodsReceipts, formData.supplierId, extractId]);
+
   useEffect(() => {
     if (returnToEdit && isOpen) {
-      const supplierId = typeof returnToEdit.supplierId === "object"
-        ? (returnToEdit.supplierId as any)?._id
-        : returnToEdit.supplierId;
-      const goodsReceiptId = typeof returnToEdit.goodsReceiptId === "object"
-        ? (returnToEdit.goodsReceiptId as any)?._id
-        : returnToEdit.goodsReceiptId;
-      const warehouseId = typeof returnToEdit.warehouseId === "object"
-        ? (returnToEdit.warehouseId as any)?._id
-        : returnToEdit.warehouseId;
-      const branchId = typeof returnToEdit.branchId === "object"
-        ? (returnToEdit.branchId as any)?._id
-        : returnToEdit.branchId;
+      const supplierId = extractId(returnToEdit.supplierId);
+      const goodsReceiptId = extractId(returnToEdit.goodsReceiptId);
+      const warehouseId = extractId(returnToEdit.warehouseId);
+      const branchId = extractId(returnToEdit.branchId);
 
       setFormData({
         returnNumber: returnToEdit.returnNumber || `RET-${Date.now()}`,
@@ -73,7 +93,7 @@ export const ReturnToSupplierModal: React.FC<ReturnToSupplierModalProps> = ({
       
       if (returnToEdit.items && returnToEdit.items.length > 0) {
         setItems(returnToEdit.items.map(item => ({
-          productId: typeof item.productId === "object" ? (item.productId as any)?._id || "" : item.productId || "",
+          productId: extractId(item.productId),
           sku: item.sku || "",
           receivedQuantity: item.receivedQuantity || 0,
           returnQuantity: item.returnQuantity || 0,
@@ -81,9 +101,9 @@ export const ReturnToSupplierModal: React.FC<ReturnToSupplierModalProps> = ({
         })));
       }
     } else if (!returnToEdit && isOpen) {
-      const randomNum = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+      const randomNum = Math.floor(Math.random() * 100000).toString().padStart(5, '0');
       setFormData({
-        returnNumber: `RET-${randomNum}`,
+        returnNumber: `PRT-${randomNum}`,
         supplierId: "",
         goodsReceiptId: "",
         warehouseId: "",
@@ -93,19 +113,33 @@ export const ReturnToSupplierModal: React.FC<ReturnToSupplierModalProps> = ({
       });
       setItems([{ productId: "", sku: "", receivedQuantity: 0, returnQuantity: 0, reasonForReturn: "" }]);
     }
-  }, [returnToEdit, isOpen]);
+  }, [returnToEdit, isOpen, extractId]);
 
   // Load GR items when goods receipt is selected
   const handleGoodsReceiptChange = (grId: string) => {
-    const selectedGR = goodsReceipts.find(gr => (gr._id || gr.id) === grId);
+    const selectedGR = goodsReceipts.find(gr => extractId(gr) === grId);
     if (selectedGR && selectedGR.items) {
-      setItems(selectedGR.items.map(item => ({
-        productId: typeof item.productId === "object" ? (item.productId as any)?._id || "" : item.productId || "",
+      setItems(selectedGR.items.map((item: any) => ({
+        productId: extractId(item.productId),
         sku: item.sku || "",
         receivedQuantity: item.acceptedQuantity || item.receivedQuantity || 0,
         returnQuantity: 0,
         reasonForReturn: "",
       })));
+      
+      // Auto-fill warehouse and branch from GR
+      if (selectedGR.warehouseId) {
+        setFormData(prev => ({
+          ...prev,
+          warehouseId: extractId(selectedGR.warehouseId),
+        }));
+      }
+      if (selectedGR.branchId) {
+        setFormData(prev => ({
+          ...prev,
+          branchId: extractId(selectedGR.branchId),
+        }));
+      }
     }
   };
 
@@ -116,42 +150,79 @@ export const ReturnToSupplierModal: React.FC<ReturnToSupplierModalProps> = ({
   ];
 
   const supplierOptions = suppliers.map(s => ({
-    value: s._id || s.id,
+    value: extractId(s),
     label: s.supplierName,
   }));
 
-  const goodsReceiptOptions = goodsReceipts.map(gr => ({
-    value: gr._id || gr.id,
+  const goodsReceiptOptions = filteredGoodsReceipts.map(gr => ({
+    value: extractId(gr),
     label: gr.grnNumber,
   }));
 
-  const warehouseOptions = warehouses.map(w => ({
-    value: w._id || w.id,
+  const warehouseOptions = filteredWarehouses.map(w => ({
+    value: extractId(w),
     label: w.warehouseName,
   }));
 
   const branchOptions = branches.map(b => ({
-    value: b._id || b.id,
+    value: extractId(b),
     label: b.name,
   }));
 
   const productOptions = products.map(p => ({
-    value: p._id || p.id,
+    value: extractId(p),
     label: `${p.productName} (${p.sku})`,
   }));
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    
+    // Validation
+    if (!formData.returnNumber) {
+      toast.error(t("return_number_required"));
+      return;
+    }
+    if (!formData.supplierId) {
+      toast.error(t("supplier_required"));
+      return;
+    }
+    if (!formData.goodsReceiptId) {
+      toast.error(t("goods_receipt_required"));
+      return;
+    }
+    if (!formData.warehouseId) {
+      toast.error(t("warehouse_required"));
+      return;
+    }
+    
+    // Filter items with return quantity > 0
+    const itemsToReturn = items.filter(item => item.returnQuantity > 0);
+    if (itemsToReturn.length === 0) {
+      toast.error(t("at_least_one_item_required"));
+      return;
+    }
+    
     setIsSubmitting(true);
     
     try {
-      await onSave({
+      const saveData = {
         ...formData,
-        items: items.filter(item => item.returnQuantity > 0),
-      });
+        items: itemsToReturn.map(item => ({
+          productId: item.productId,
+          sku: item.sku,
+          receivedQuantity: item.receivedQuantity,
+          returnQuantity: item.returnQuantity,
+          reasonForReturn: item.reasonForReturn,
+        })),
+        returnDate: new Date().toISOString(),
+      };
+      
+      console.log("Saving return to supplier:", saveData);
+      await onSave(saveData);
       onClose();
     } catch (error) {
       console.error("Error in form submission:", error);
+      toast.error(t("failed_to_save_return"));
     } finally {
       setIsSubmitting(false);
     }
@@ -159,6 +230,11 @@ export const ReturnToSupplierModal: React.FC<ReturnToSupplierModalProps> = ({
 
   const handleChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    // Reset goods receipt when supplier changes
+    if (field === "supplierId") {
+      setFormData(prev => ({ ...prev, goodsReceiptId: "" }));
+      setItems([{ productId: "", sku: "", receivedQuantity: 0, returnQuantity: 0, reasonForReturn: "" }]);
+    }
   };
 
   const handleItemChange = (index: number, field: keyof ReturnItem, value: any) => {
@@ -170,6 +246,7 @@ export const ReturnToSupplierModal: React.FC<ReturnToSupplierModalProps> = ({
       const maxReturn = newItems[index].receivedQuantity;
       if (value > maxReturn) {
         newItems[index].returnQuantity = maxReturn;
+        toast.warning(t("max_return_qty_warning", { max: maxReturn }));
       }
     }
     
@@ -207,13 +284,18 @@ export const ReturnToSupplierModal: React.FC<ReturnToSupplierModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("return_number")} <span className="text-red-500">*</span>
             </label>
-            <Input
-              value={formData.returnNumber}
-              onChange={(e) => handleChange("returnNumber", e.target.value)}
-              placeholder="RET-001"
-              required
-              fullWidth
-            />
+            <div className="relative">
+              <FileText size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Input
+                value={formData.returnNumber}
+                onChange={(e) => handleChange("returnNumber", e.target.value)}
+                placeholder="PRT-001"
+                required
+                fullWidth
+                className="pl-10"
+                disabled={!!returnToEdit}
+              />
+            </div>
           </div>
 
           {/* Supplier */}
@@ -221,14 +303,18 @@ export const ReturnToSupplierModal: React.FC<ReturnToSupplierModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("supplier")} <span className="text-red-500">*</span>
             </label>
-            <Select
-              value={formData.supplierId}
-              onChange={(e) => handleChange("supplierId", e.target.value)}
-              options={supplierOptions}
-              placeholder={t("select_supplier")}
-              required
-              fullWidth
-            />
+            <div className="relative">
+              <Building2 size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Select
+                value={formData.supplierId}
+                onChange={(e) => handleChange("supplierId", e.target.value)}
+                options={supplierOptions}
+                placeholder={t("select_supplier")}
+                required
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
 
           {/* Goods Receipt */}
@@ -236,17 +322,25 @@ export const ReturnToSupplierModal: React.FC<ReturnToSupplierModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("goods_receipt")} <span className="text-red-500">*</span>
             </label>
-            <Select
-              value={formData.goodsReceiptId}
-              onChange={(e) => {
-                handleChange("goodsReceiptId", e.target.value);
-                handleGoodsReceiptChange(e.target.value);
-              }}
-              options={goodsReceiptOptions}
-              placeholder={t("select_goods_receipt")}
-              required
-              fullWidth
-            />
+            <div className="relative">
+              <FileText size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Select
+                value={formData.goodsReceiptId}
+                onChange={(e) => {
+                  handleChange("goodsReceiptId", e.target.value);
+                  handleGoodsReceiptChange(e.target.value);
+                }}
+                options={goodsReceiptOptions}
+                placeholder={formData.supplierId ? t("select_goods_receipt") : t("select_supplier_first")}
+                required
+                fullWidth
+                className="pl-10"
+                disabled={!formData.supplierId}
+              />
+            </div>
+            {formData.supplierId && goodsReceiptOptions.length === 0 && (
+              <p className="text-xs text-amber-600 mt-1">{t("no_goods_receipts_for_supplier")}</p>
+            )}
           </div>
 
           {/* Warehouse */}
@@ -254,14 +348,18 @@ export const ReturnToSupplierModal: React.FC<ReturnToSupplierModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("warehouse")} <span className="text-red-500">*</span>
             </label>
-            <Select
-              value={formData.warehouseId}
-              onChange={(e) => handleChange("warehouseId", e.target.value)}
-              options={warehouseOptions}
-              placeholder={t("select_warehouse")}
-              required
-              fullWidth
-            />
+            <div className="relative">
+              <Warehouse size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Select
+                value={formData.warehouseId}
+                onChange={(e) => handleChange("warehouseId", e.target.value)}
+                options={warehouseOptions}
+                placeholder={t("select_warehouse")}
+                required
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
 
           {/* Branch */}
@@ -269,13 +367,17 @@ export const ReturnToSupplierModal: React.FC<ReturnToSupplierModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("branch")}
             </label>
-            <Select
-              value={formData.branchId}
-              onChange={(e) => handleChange("branchId", e.target.value)}
-              options={branchOptions}
-              placeholder={t("select_branch")}
-              fullWidth
-            />
+            <div className="relative">
+              <Building2 size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Select
+                value={formData.branchId}
+                onChange={(e) => handleChange("branchId", e.target.value)}
+                options={branchOptions}
+                placeholder={t("select_branch")}
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
 
           {/* Status (only for edit) */}
@@ -289,6 +391,7 @@ export const ReturnToSupplierModal: React.FC<ReturnToSupplierModalProps> = ({
                 onChange={(e) => handleChange("status", e.target.value)}
                 options={statusOptions}
                 required
+                fullWidth
               />
             </div>
           )}
@@ -328,6 +431,7 @@ export const ReturnToSupplierModal: React.FC<ReturnToSupplierModalProps> = ({
                     placeholder={t("select_product")}
                     required
                     fullWidth
+                    disabled={!!formData.goodsReceiptId}
                   />
                 </div>
                 <div className="md:col-span-2">

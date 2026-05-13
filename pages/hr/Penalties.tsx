@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Search, Edit2, Trash2, Calendar, AlertCircle, Filter, X, History, DollarSign } from "lucide-react";
+import { Plus, Search, Edit2, Trash2, Calendar, AlertCircle, Filter, X, History, DollarSign, Clock, CheckCircle, XCircle } from "lucide-react";
 import { Card, Button, Input, Badge, ExportDropdown } from "../../components/ui/Common";
 import { Table, Column } from "../../components/ui/Table";
 import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
@@ -12,7 +12,7 @@ import { toast } from "sonner";
 
 export const Penalties: React.FC = () => {
   const { t } = useTranslation();
-  const { penalties, addPenalty, updatePenalty, deletePenalty, actionHistory, fetchActionHistory } = useData();
+  const { penalties, addPenalty, updatePenalty, deletePenalty, actionHistory, fetchActionHistory, fetchPenalties } = useData();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPenalty, setEditingPenalty] = useState<Penalty | null>(null);
@@ -27,30 +27,74 @@ export const Penalties: React.FC = () => {
   const [selectedHistory, setSelectedHistory] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSave = async (penalty: Partial<Penalty>) => {
+  // Helper function to extract ID
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+      if (value._id && typeof value._id === "string") return value._id;
+      if (value.id && typeof value.id === "string") return value.id;
+    }
+    return "";
+  }, []);
+
+  const handleSave = async (penaltyData: Partial<Penalty>) => {
     try {
       setIsLoading(true);
+      
       if (editingPenalty) {
-        await updatePenalty({ ...penalty, _id: editingPenalty._id, id: editingPenalty.id } as Penalty);
+        const penaltyId = extractId(editingPenalty);
+        
+        if (!penaltyId) {
+          toast.error(t("penalty_id_missing"));
+          return;
+        }
+        
+        const updateData = {
+          ...penaltyData,
+          _id: penaltyId,
+          id: penaltyId
+        } as Penalty;
+        
+        console.log("Updating penalty with ID:", penaltyId, updateData);
+        await updatePenalty(updateData);
         toast.success(t("penalty_updated_successfully"));
       } else {
-        await addPenalty(penalty as Penalty);
+        await addPenalty(penaltyData as Penalty);
         toast.success(t("penalty_created_successfully"));
       }
+      
+      await fetchPenalties();
       setIsModalOpen(false);
       setEditingPenalty(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving penalty:", error);
-      toast.error(t("failed_to_save_penalty"));
+      const message = error?.response?.data?.message || error?.message || t("failed_to_save_penalty");
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleEdit = useCallback((penalty: Penalty) => {
-    setEditingPenalty(penalty);
+    const penaltyId = extractId(penalty);
+    
+    if (!penaltyId) {
+      console.error("Penalty ID not found", penalty);
+      toast.error(t("penalty_id_not_found"));
+      return;
+    }
+    
+    const penaltyToEdit: Penalty = {
+      ...penalty,
+      _id: penaltyId,
+      id: penaltyId,
+    };
+    
+    console.log("Editing penalty:", penaltyToEdit);
+    setEditingPenalty(penaltyToEdit);
     setIsModalOpen(true);
-  }, []);
+  }, [extractId, t]);
 
   const handleDelete = useCallback((id: string) => {
     setDeleteId(id);
@@ -63,19 +107,26 @@ export const Penalties: React.FC = () => {
         toast.success(t("penalty_deleted_successfully"));
         setDeleteId(null);
         setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+        await fetchPenalties();
       } catch (error) {
         toast.error(t("failed_to_delete_penalty"));
       }
     }
-  }, [deleteId, deletePenalty, t]);
+  }, [deleteId, deletePenalty, fetchPenalties, t]);
 
   const handleBulkDelete = async () => {
     try {
       setIsLoading(true);
-      await Promise.all(selectedIds.map(id => deletePenalty(id)));
-      toast.success(t("penalties_deleted_successfully", { count: selectedIds.length }));
+      const validIds = selectedIds.filter(id => id && typeof id === 'string');
+      if (validIds.length === 0) {
+        toast.error(t("no_valid_ids_selected"));
+        return;
+      }
+      await Promise.all(validIds.map(id => deletePenalty(id)));
+      toast.success(t("penalties_deleted_successfully", { count: validIds.length }));
       setSelectedIds([]);
       setIsBulkConfirmOpen(false);
+      await fetchPenalties();
     } catch (error) {
       console.error("Bulk delete failed", error);
       toast.error(t("failed_to_delete_penalties"));
@@ -86,7 +137,7 @@ export const Penalties: React.FC = () => {
 
   const handleShowHistory = async (id: string) => {
     await fetchActionHistory();
-    const filteredHistory = actionHistory.filter(h => h.requestId === id);
+    const filteredHistory = actionHistory.filter(h => extractId(h.requestId) === id);
     setSelectedHistory(filteredHistory);
     setIsHistoryOpen(true);
   };
@@ -140,7 +191,11 @@ export const Penalties: React.FC = () => {
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "-";
-    return new Date(dateStr).toLocaleDateString();
+    try {
+      return new Date(dateStr).toLocaleDateString();
+    } catch {
+      return "-";
+    }
   };
 
   const statusOptions = [
@@ -154,17 +209,22 @@ export const Penalties: React.FC = () => {
     () => [
       {
         header: t("employee"),
-        render: (p) => (
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-              <AlertCircle size={18} className="text-red-600" />
+        render: (p) => {
+          const employeeName = getEmployeeName(p);
+          const employeeCode = getEmployeeCode(p);
+          const initial = employeeName.charAt(0).toUpperCase();
+          return (
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                <AlertCircle size={18} className="text-red-600" />
+              </div>
+              <div className="flex flex-col">
+                <span className="font-medium text-gray-900">{employeeName}</span>
+                <span className="text-xs text-gray-500">{employeeCode}</span>
+              </div>
             </div>
-            <div className="flex flex-col">
-              <span className="font-medium text-gray-900">{getEmployeeName(p)}</span>
-              <span className="text-xs text-gray-500">{getEmployeeCode(p)}</span>
-            </div>
-          </div>
-        )
+          );
+        }
       },
       {
         header: t("penalty_info"),
@@ -197,35 +257,43 @@ export const Penalties: React.FC = () => {
       {
         header: t("actions"),
         className: "text-center",
-        render: (p) => (
-          <div className="flex items-center justify-center gap-2">
-            <button
-              onClick={() => handleShowHistory(p._id || p.id)}
-              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("history")}
-            >
-              <History size={16} />
-            </button>
-            <button
-              onClick={() => handleEdit(p)}
-              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("edit")}
-            >
-              <Edit2 size={16} />
-            </button>
-            <button
-              onClick={() => handleDelete(p._id || p.id)}
-              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("delete")}
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-        )
+        render: (p) => {
+          const penaltyId = extractId(p);
+          return (
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => handleShowHistory(penaltyId)}
+                className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("history")}
+              >
+                <History size={16} />
+              </button>
+              <button
+                onClick={() => handleEdit(p)}
+                className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("edit")}
+              >
+                <Edit2 size={16} />
+              </button>
+              <button
+                onClick={() => handleDelete(penaltyId)}
+                className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("delete")}
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          );
+        }
       }
     ],
-    [t, handleEdit, handleDelete, handleShowHistory]
+    [t, handleEdit, handleDelete, handleShowHistory, extractId]
   );
+
+  const getKeyExtractor = useCallback((item: Penalty) => {
+    const id = extractId(item);
+    return id || Math.random().toString();
+  }, [extractId]);
 
   return (
     <div className="space-y-6">
@@ -345,15 +413,15 @@ export const Penalties: React.FC = () => {
       </div>
 
       {/* Table */}
-        <Table
-          data={filteredPenalties}
-          columns={columns}
-          keyExtractor={(item) => item._id || item.id}
-          isLoading={isLoading}
-          selectable
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-        />
+      <Table
+        data={filteredPenalties}
+        columns={columns}
+        keyExtractor={getKeyExtractor}
+        isLoading={isLoading}
+        selectable
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+      />
 
       {/* Modals */}
       <PenaltyModal
@@ -391,6 +459,3 @@ export const Penalties: React.FC = () => {
     </div>
   );
 };
-
-// Add missing imports
-import { Clock, CheckCircle, XCircle } from "lucide-react";

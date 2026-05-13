@@ -11,7 +11,7 @@ import { toast } from "sonner";
 
 export const SupplierRatings: React.FC = () => {
   const { t } = useTranslation();
-  const { supplierRatings, addSupplierRating, updateSupplierRating, deleteSupplierRating, suppliers } = useData();
+  const { supplierRatings, addSupplierRating, updateSupplierRating, deleteSupplierRating, fetchSupplierRatings, suppliers } = useData();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRating, setEditingRating] = useState<SupplierRating | null>(null);
@@ -22,30 +22,76 @@ export const SupplierRatings: React.FC = () => {
   const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSave = async (rating: Partial<SupplierRating>) => {
+  // Helper function to extract ID
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "object") {
+      return value._id || value.id || "";
+    }
+    return value;
+  }, []);
+
+  const handleSave = async (ratingData: Partial<SupplierRating>) => {
     try {
       setIsLoading(true);
+      
       if (editingRating) {
-        await updateSupplierRating({ ...rating, id: editingRating._id || editingRating.id } as SupplierRating);
+        // Get the ID from editingRating
+        const ratingId = extractId(editingRating);
+        
+        if (!ratingId) {
+          toast.error(t("supplier_rating_id_missing"));
+          return;
+        }
+        
+        // Create update data with ID
+        const updateData = {
+          ...ratingData,
+          _id: ratingId,
+          id: ratingId
+        } as SupplierRating;
+        
+        console.log("Updating supplier rating with ID:", ratingId, updateData);
+        await updateSupplierRating(updateData);
         toast.success(t("supplier_rating_updated_successfully"));
       } else {
-        await addSupplierRating(rating as SupplierRating);
+        await addSupplierRating(ratingData as SupplierRating);
         toast.success(t("supplier_rating_created_successfully"));
       }
+      
+      await fetchSupplierRatings(); // Refresh list
       setIsModalOpen(false);
       setEditingRating(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving supplier rating:", error);
-      toast.error(t("failed_to_save_supplier_rating"));
+      const message = error?.response?.data?.message || error?.message || t("failed_to_save_supplier_rating");
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleEdit = useCallback((rating: SupplierRating) => {
-    setEditingRating(rating);
+    // Extract ID correctly from the rating object
+    const ratingId = extractId(rating);
+    
+    if (!ratingId) {
+      console.error("Supplier rating ID not found", rating);
+      toast.error(t("supplier_rating_id_not_found"));
+      return;
+    }
+    
+    // Create a clean rating object with proper ID
+    const ratingToEdit: SupplierRating = {
+      ...rating,
+      _id: ratingId,
+      id: ratingId,
+    };
+    
+    console.log("Editing supplier rating:", ratingToEdit);
+    setEditingRating(ratingToEdit);
     setIsModalOpen(true);
-  }, []);
+  }, [extractId, t]);
 
   const handleDelete = useCallback((id: string) => {
     setDeleteId(id);
@@ -58,11 +104,12 @@ export const SupplierRatings: React.FC = () => {
         toast.success(t("supplier_rating_deleted_successfully"));
         setDeleteId(null);
         setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+        await fetchSupplierRatings();
       } catch (error) {
         toast.error(t("failed_to_delete_supplier_rating"));
       }
     }
-  }, [deleteId, deleteSupplierRating, t]);
+  }, [deleteId, deleteSupplierRating, fetchSupplierRatings, t]);
 
   const handleBulkDelete = async () => {
     try {
@@ -71,6 +118,7 @@ export const SupplierRatings: React.FC = () => {
       toast.success(t("supplier_ratings_deleted_successfully", { count: selectedIds.length }));
       setSelectedIds([]);
       setIsBulkConfirmOpen(false);
+      await fetchSupplierRatings();
     } catch (error) {
       console.error("Bulk delete failed", error);
       toast.error(t("failed_to_delete_supplier_ratings"));
@@ -83,7 +131,7 @@ export const SupplierRatings: React.FC = () => {
     if (typeof rating.supplierId === "object" && rating.supplierId !== null) {
       return (rating.supplierId as any)?.supplierName || "-";
     }
-    const supplier = suppliers.find(s => (s._id || s.id) === rating.supplierId);
+    const supplier = suppliers.find(s => extractId(s) === rating.supplierId);
     return supplier?.supplierName || "-";
   };
 
@@ -112,16 +160,16 @@ export const SupplierRatings: React.FC = () => {
   // Statistics
   const totalRatings = filteredRatings.length;
   const avgQuality = totalRatings > 0 
-    ? Math.round(filteredRatings.reduce((sum, r) => sum + (r.quality || 0), 0) / totalRatings)
+    ? Number((filteredRatings.reduce((sum, r) => sum + (r.quality || 0), 0) / totalRatings).toFixed(1))
     : 0;
   const avgDelivery = totalRatings > 0 
-    ? Math.round(filteredRatings.reduce((sum, r) => sum + (r.delivery || 0), 0) / totalRatings)
+    ? Number((filteredRatings.reduce((sum, r) => sum + (r.delivery || 0), 0) / totalRatings).toFixed(1))
     : 0;
   const avgService = totalRatings > 0 
-    ? Math.round(filteredRatings.reduce((sum, r) => sum + (r.service || 0), 0) / totalRatings)
+    ? Number((filteredRatings.reduce((sum, r) => sum + (r.service || 0), 0) / totalRatings).toFixed(1))
     : 0;
   const avgOverall = totalRatings > 0 
-    ? Math.round(filteredRatings.reduce((sum, r) => sum + (r.overallRating || 0), 0) / totalRatings)
+    ? Number((filteredRatings.reduce((sum, r) => sum + (r.overallRating || 0), 0) / totalRatings).toFixed(1))
     : 0;
 
   const ratingOptions = [
@@ -178,34 +226,37 @@ export const SupplierRatings: React.FC = () => {
         header: t("date"),
         render: (r) => (
           <span className="text-sm text-gray-500">
-            {new Date(r.createdAt).toLocaleDateString()}
+            {new Date(r.createdAt || r.createdAt).toLocaleDateString()}
           </span>
         )
       },
       {
         header: t("actions"),
         className: "text-center",
-        render: (r) => (
-          <div className="flex items-center justify-center gap-2">
-            <button
-              onClick={() => handleEdit(r)}
-              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("edit")}
-            >
-              <Edit2 size={16} />
-            </button>
-            <button
-              onClick={() => handleDelete(r._id || r.id)}
-              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("delete")}
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-        )
+        render: (r) => {
+          const ratingId = extractId(r);
+          return (
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => handleEdit(r)}
+                className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("edit")}
+              >
+                <Edit2 size={16} />
+              </button>
+              <button
+                onClick={() => handleDelete(ratingId)}
+                className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("delete")}
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          );
+        }
       }
     ],
-    [t, handleEdit, handleDelete]
+    [t, handleEdit, handleDelete, extractId]
   );
 
   return (
@@ -324,15 +375,15 @@ export const SupplierRatings: React.FC = () => {
       </div>
 
       {/* Table */}
-        <Table
-          data={filteredRatings}
-          columns={columns}
-          keyExtractor={(item) => item._id || item.id}
-          isLoading={isLoading}
-          selectable
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-        />
+      <Table
+        data={filteredRatings}
+        columns={columns}
+        keyExtractor={(item) => extractId(item)}
+        isLoading={isLoading}
+        selectable
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+      />
 
       {/* Modal */}
       <SupplierRatingModal

@@ -25,7 +25,8 @@ export const Request: React.FC = () => {
     deleteRequest, 
     toggleRequestWorkflow, 
     rejectRequest, 
-    currentUserEmployee 
+    currentUserEmployee,
+    fetchRequests
   } = useData();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -43,30 +44,74 @@ export const Request: React.FC = () => {
 
   const isAdmin = user?.role === 'admin';
 
+  // Helper function to extract ID
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+      if (value._id && typeof value._id === "string") return value._id;
+      if (value.id && typeof value.id === "string") return value.id;
+    }
+    return "";
+  }, []);
+
   const handleSave = async (record: Partial<RequestRecord>) => {
     try {
       setIsLoading(true);
+      
       if (editingRecord) {
-        await updateRequest({ ...record, _id: editingRecord._id, id: editingRecord.id } as HRRequest);
+        const recordId = extractId(editingRecord);
+        
+        if (!recordId) {
+          toast.error(t('request_id_missing'));
+          return;
+        }
+        
+        const updateData = {
+          ...record,
+          _id: recordId,
+          id: recordId
+        } as RequestRecord;
+        
+        console.log("Updating request with ID:", recordId, updateData);
+        await updateRequest(updateData);
         toast.success(t('request_updated_successfully'));
       } else {
-        await addRequest(record as HRRequest);
+        await addRequest(record as RequestRecord);
         toast.success(t('request_created_successfully'));
       }
+      
+      await fetchRequests();
       setIsModalOpen(false);
       setEditingRecord(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving request:", error);
-      toast.error(t('failed_to_save_request'));
+      const message = error?.response?.data?.message || error?.message || t('failed_to_save_request');
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleEdit = useCallback((record: RequestRecord) => {
-    setEditingRecord(record);
+    const recordId = extractId(record);
+    
+    if (!recordId) {
+      console.error("Request record ID not found", record);
+      toast.error(t('request_id_not_found'));
+      return;
+    }
+    
+    const recordToEdit: RequestRecord = {
+      ...record,
+      _id: recordId,
+      id: recordId,
+    };
+    
+    console.log("Editing request record:", recordToEdit);
+    setEditingRecord(recordToEdit);
     setIsModalOpen(true);
-  }, []);
+  }, [extractId, t]);
 
   const handleDelete = useCallback((id: string) => {
     setDeleteId(id);
@@ -79,11 +124,12 @@ export const Request: React.FC = () => {
         toast.success(t('request_deleted_successfully'));
         setDeleteId(null);
         setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+        await fetchRequests();
       } catch (error) {
         toast.error(t('failed_to_delete_request'));
       }
     }
-  }, [deleteId, deleteRequest, t]);
+  }, [deleteId, deleteRequest, fetchRequests, t]);
 
   const handleReject = useCallback((id: string) => {
     setRejectId(id);
@@ -97,26 +143,28 @@ export const Request: React.FC = () => {
         toast.success(t('request_rejected_successfully'));
         setRejectId(null);
         setIsRejectModalOpen(false);
+        await fetchRequests();
       } catch (error) {
         toast.error(t('failed_to_reject_request'));
       }
     }
-  }, [rejectId, rejectRequest, t]);
+  }, [rejectId, rejectRequest, fetchRequests, t]);
 
   const handleApprove = useCallback(async (id: string) => {
     try {
       await toggleRequestWorkflow(id, 'hr');
       toast.success(t('request_approved_successfully'));
+      await fetchRequests();
     } catch (error) {
       toast.error(t('failed_to_approve_request'));
     }
-  }, [toggleRequestWorkflow, t]);
+  }, [toggleRequestWorkflow, fetchRequests, t]);
 
   const getEmployeeName = (request: RequestRecord) => {
     if (typeof request.employeeId === 'object' && request.employeeId !== null) {
       return (request.employeeId as any).fullName || '-';
     }
-    const emp = employees.find(e => (e._id || e.id) === request.employeeId);
+    const emp = employees.find(e => extractId(e) === request.employeeId);
     return emp?.fullName || '-';
   };
 
@@ -124,7 +172,7 @@ export const Request: React.FC = () => {
     if (typeof request.employeeId === 'object' && request.employeeId !== null) {
       return (request.employeeId as any).photo;
     }
-    const emp = employees.find(e => (e._id || e.id) === request.employeeId);
+    const emp = employees.find(e => extractId(e) === request.employeeId);
     return emp?.photo;
   };
 
@@ -132,19 +180,19 @@ export const Request: React.FC = () => {
     if (typeof request.employeeId === 'object' && request.employeeId !== null) {
       return (request.employeeId as any).employeeCode;
     }
-    const emp = employees.find(e => (e._id || e.id) === request.employeeId);
+    const emp = employees.find(e => extractId(e) === request.employeeId);
     return emp?.employeeCode;
   };
 
   // Filter records based on access
   const accessibleRequests = useMemo(() => {
     if (isAdmin) return requests;
-    const currentId = currentUserEmployee?._id || currentUserEmployee?.id;
+    const currentId = extractId(currentUserEmployee);
     return requests.filter(r => {
-      const empId = typeof r.employeeId === 'object' ? (r.employeeId as any)._id : r.employeeId;
+      const empId = extractId(r.employeeId);
       return empId === currentId;
     });
-  }, [isAdmin, requests, currentUserEmployee]);
+  }, [isAdmin, requests, currentUserEmployee, extractId]);
 
   // Apply filters
   const filteredRequests = useMemo(() => {
@@ -205,7 +253,11 @@ export const Request: React.FC = () => {
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '-';
-    return new Date(dateStr).toLocaleDateString();
+    try {
+      return new Date(dateStr).toLocaleDateString();
+    } catch {
+      return '-';
+    }
   };
 
   const handleViewAttachment = (attachment?: string) => {
@@ -217,12 +269,15 @@ export const Request: React.FC = () => {
   const columns: Column<RequestRecord>[] = useMemo(() => [
     {
       header: t('request_info'),
-      render: (r) => (
-        <div className="flex flex-col">
-          <span className="text-xs font-mono text-gray-500">{r.requestNumber || r._id?.slice(-8)}</span>
-          <span className="text-xs text-gray-400">{r.requestDate || r.createdAt}</span>
-        </div>
-      )
+      render: (r) => {
+        const requestId = extractId(r);
+        return (
+          <div className="flex flex-col">
+            <span className="text-xs font-mono text-gray-500">{r.requestNumber || requestId.slice(-8)}</span>
+            <span className="text-xs text-gray-400">{formatDate(r.createdAt || r.requestDate)}</span>
+          </div>
+        );
+      }
     },
     {
       header: t('employee'),
@@ -289,44 +344,47 @@ export const Request: React.FC = () => {
     {
       header: t('actions'),
       className: 'text-center',
-      render: (r) => (
-        <div className="flex items-center justify-center gap-2">
-          {isAdmin && r.status === 'PENDING' && (
-            <>
-              <button
-                onClick={() => handleApprove(r._id || r.id)}
-                className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg border border-green-200 transition-colors"
-                title={t('approve')}
-              >
-                <CheckCircle size={16} />
-              </button>
-              <button
-                onClick={() => handleReject(r._id || r.id)}
-                className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg border border-red-200 transition-colors"
-                title={t('reject')}
-              >
-                <XCircle size={16} />
-              </button>
-            </>
-          )}
-          <button
-            onClick={() => handleEdit(r)}
-            className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
-            title={t('edit')}
-          >
-            <Edit2 size={16} />
-          </button>
-          <button
-            onClick={() => handleDelete(r._id || r.id)}
-            className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
-            title={t('delete')}
-          >
-            <Trash2 size={16} />
-          </button>
-        </div>
-      )
+      render: (r) => {
+        const requestId = extractId(r);
+        return (
+          <div className="flex items-center justify-center gap-2">
+            {isAdmin && r.status === 'PENDING' && (
+              <>
+                <button
+                  onClick={() => handleApprove(requestId)}
+                  className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg border border-green-200 transition-colors"
+                  title={t('approve')}
+                >
+                  <CheckCircle size={16} />
+                </button>
+                <button
+                  onClick={() => handleReject(requestId)}
+                  className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg border border-red-200 transition-colors"
+                  title={t('reject')}
+                >
+                  <XCircle size={16} />
+                </button>
+              </>
+            )}
+            <button
+              onClick={() => handleEdit(r)}
+              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+              title={t('edit')}
+            >
+              <Edit2 size={16} />
+            </button>
+            <button
+              onClick={() => handleDelete(requestId)}
+              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+              title={t('delete')}
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
+        );
+      }
     }
-  ], [t, handleEdit, handleDelete, handleApprove, handleReject, isAdmin]);
+  ], [t, handleEdit, handleDelete, handleApprove, handleReject, isAdmin, extractId]);
 
   const typeOptions = [
     { value: "", label: t("all_types") },
@@ -354,6 +412,11 @@ export const Request: React.FC = () => {
     { value: "HIGH", label: t("high") },
     { value: "URGENT", label: t("urgent") },
   ];
+
+  const getKeyExtractor = useCallback((item: RequestRecord) => {
+    const id = extractId(item);
+    return id || Math.random().toString();
+  }, [extractId]);
 
   return (
     <div className="space-y-6">
@@ -482,15 +545,15 @@ export const Request: React.FC = () => {
       </div>
 
       {/* Table */}
-        <Table
-          data={filteredRequests}
-          columns={columns}
-          keyExtractor={(item) => item._id || item.id}
-          isLoading={isLoading}
-          selectable={isAdmin}
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-        />
+      <Table
+        data={filteredRequests}
+        columns={columns}
+        keyExtractor={getKeyExtractor}
+        isLoading={isLoading}
+        selectable={isAdmin}
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+      />
 
       {/* Modals */}
       <RequestModal
@@ -534,6 +597,7 @@ export const Request: React.FC = () => {
             toast.success(t('requests_deleted_successfully', { count: selectedIds.length }));
             setSelectedIds([]);
             setIsBulkConfirmOpen(false);
+            await fetchRequests();
           } catch (error) {
             toast.error(t('failed_to_delete_requests'));
           } finally {

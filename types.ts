@@ -347,9 +347,9 @@ export interface Contract {
   startDate: string;
   endDate: string;
   workingHours: string;
-  allowances: string | number;
+  allowances: number;
   // Comment above fix: Renamed basic_salary to basicSalary to resolve type mismatch errors in components
-  basicSalary: string | number;
+  basicSalary: number;
   state: 'Active' | 'Expired' | 'Under Renewal' | 'Pending' | string;
 }
 
@@ -621,6 +621,8 @@ export interface EndOfService {
   approved_by_manager?: boolean;
   approved_by_hr?: boolean;
   rejected_reason?: string;
+  companyId:string;
+  branchId:string;
 }
 
 export interface Customer {
@@ -966,12 +968,12 @@ export interface GoodsReceipt {
   id: string;
   _id?: string;
   grnNumber: string;
+  branchId:string;
   purchaseOrderId: any;
   receiptDate: string;
   warehouseId: any;
   supplierId: any;
   companyId: any;
-  branchId: any;
   items: {
     productId: any;
     sku?: string;
@@ -1051,11 +1053,20 @@ export interface SupplierRating {
   service: number;
   compliance: number;
   overallRating: number;
+  _id:string;
+  supplierId:string;
+  ratingCode:string;
+  createdAt:string;
 }
 
 export interface ReturnToSupplier {
   id: string;
   rtsNumber: string;
+  returnNumber:string;
+  branchId:string;
+  warehouseId:string;
+  goodsReceiptId:string;
+  supplierId:string;
   supplier: string;
   date: string;
   status: 'Approval' | 'Pending' | 'Rejected';
@@ -1064,6 +1075,12 @@ export interface ReturnToSupplier {
   receivedQty: number;
   createdBy: string;
   returnQty: number;
+  items:ReturnToSupplier[];
+  notes:string;
+  productId:string;
+  sku:string;
+  receivedQuantity:number;
+  returnQuantity:number;
 }
 
 export interface Product {
@@ -1100,9 +1117,13 @@ export interface Product {
 
 export interface Stock {
   id: string;
+  _id?: string;
   sku: string;
   productName: string;
   warehouse: string;
+  warehouseName?: string;
+  warehouseId?: any;
+  productId?: any;
   inStockQty: number;
   reservedQty: number;
   unit: string;

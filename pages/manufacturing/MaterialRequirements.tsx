@@ -1,18 +1,18 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { 
-  Package, 
-  Search, 
-  Edit2, 
-  Trash2, 
-  ShoppingCart, 
-  AlertTriangle, 
-  CheckCircle2, 
+import {
+  Package,
+  Search,
+  Edit2,
+  Trash2,
+  ShoppingCart,
+  AlertTriangle,
+  CheckCircle2,
   ArrowRight,
   FileText,
   Plus,
   Box,
-  AlertCircle
+  AlertCircle,
 } from "lucide-react";
 import {
   Button,
@@ -23,7 +23,7 @@ import {
 import { Table, Column } from "../../components/ui/Table";
 import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
 import { MaterialRequirementFormModal } from "../../components/manufacturing/MaterialRequirementFormModal";
-import {manufacturingService} from "../../services/manufacturing.service";
+import { manufacturingService } from "../../services/manufacturing.service";
 import { MaterialRequirement as MRType } from "../../types";
 import { toast } from "sonner";
 
@@ -33,8 +33,12 @@ export const MaterialRequirements: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [selectedRequirement, setSelectedRequirement] = useState<MRType | null>(null);
-  const [requirementIdToDelete, setRequirementIdToDelete] = useState<string | null>(null);
+  const [selectedRequirement, setSelectedRequirement] = useState<MRType | null>(
+    null,
+  );
+  const [requirementIdToDelete, setRequirementIdToDelete] = useState<
+    string | null
+  >(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
@@ -55,10 +59,24 @@ export const MaterialRequirements: React.FC = () => {
     fetchRequirements();
   }, []);
 
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "object") {
+      return value._id || value.id || "";
+    }
+    return value;
+  }, []);
+
+  // تحديث handleSave
   const handleSave = async (data: Partial<MRType>) => {
     try {
       if (selectedRequirement) {
-        await manufacturingService.updateMaterialRequirement(selectedRequirement._id, data);
+        const reqId = extractId(selectedRequirement);
+        if (!reqId) {
+          toast.error(t("material_requirement_id_missing"));
+          return;
+        }
+        await manufacturingService.updateMaterialRequirement(reqId, data);
         toast.success(t("mr_updated_successfully"));
       } else {
         await manufacturingService.createMaterialRequirement(data);
@@ -76,7 +94,9 @@ export const MaterialRequirements: React.FC = () => {
   const handleDelete = async () => {
     if (!requirementIdToDelete) return;
     try {
-      await manufacturingService.deleteMaterialRequirement(requirementIdToDelete);
+      await manufacturingService.deleteMaterialRequirement(
+        requirementIdToDelete,
+      );
       setIsDeleteModalOpen(false);
       setRequirementIdToDelete(null);
       toast.success(t("mr_deleted_successfully"));
@@ -91,17 +111,30 @@ export const MaterialRequirements: React.FC = () => {
     toast.info(t("purchase_order_created", { material: item.material }));
   };
 
-  const filteredRequirements = requirements.filter((req) =>
-    req.material?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    req.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    req.source?.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredRequirements = requirements.filter(
+    (req) =>
+      req.material?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      req.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      req.source?.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   // Summary statistics
-  const totalAvailable = requirements.reduce((acc, curr) => acc + (curr.available_qty || 0), 0);
-  const totalRequired = requirements.reduce((acc, curr) => acc + (curr.required_qty || 0), 0);
-  const totalShortage = requirements.reduce((acc, curr) => acc + Math.max(0, (curr.required_qty || 0) - (curr.available_qty || 0)), 0);
-  const materialsWithShortage = requirements.filter(req => (req.required_qty || 0) > (req.available_qty || 0)).length;
+  const totalAvailable = requirements.reduce(
+    (acc, curr) => acc + (curr.available_qty || 0),
+    0,
+  );
+  const totalRequired = requirements.reduce(
+    (acc, curr) => acc + (curr.required_qty || 0),
+    0,
+  );
+  const totalShortage = requirements.reduce(
+    (acc, curr) =>
+      acc + Math.max(0, (curr.required_qty || 0) - (curr.available_qty || 0)),
+    0,
+  );
+  const materialsWithShortage = requirements.filter(
+    (req) => (req.required_qty || 0) > (req.available_qty || 0),
+  ).length;
 
   const columns: Column<MRType>[] = [
     {
@@ -113,7 +146,9 @@ export const MaterialRequirements: React.FC = () => {
             <Package size={14} className="text-indigo-600" />
           </div>
           <div className="flex flex-col">
-            <span className="font-medium text-sm text-gray-900">{item.material}</span>
+            <span className="font-medium text-sm text-gray-900">
+              {item.material}
+            </span>
             <span className="text-xs text-gray-500">{item.unit}</span>
           </div>
         </div>
@@ -134,24 +169,33 @@ export const MaterialRequirements: React.FC = () => {
     {
       header: t("quantity"),
       render: (item) => {
-        const shortage = Math.max(0, (item.required_qty || 0) - (item.available_qty || 0));
+        const shortage = Math.max(
+          0,
+          (item.required_qty || 0) - (item.available_qty || 0),
+        );
         const isShortage = shortage > 0;
         return (
           <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
               <span className="text-sm text-gray-500">{t("required")}:</span>
-              <span className="text-sm font-medium">{item.required_qty?.toLocaleString()}</span>
+              <span className="text-sm font-medium">
+                {item.required_qty?.toLocaleString()}
+              </span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-sm text-gray-500">{t("available")}:</span>
-              <span className={`text-sm font-medium ${isShortage ? 'text-red-500' : 'text-green-600'}`}>
+              <span
+                className={`text-sm font-medium ${isShortage ? "text-red-500" : "text-green-600"}`}
+              >
                 {item.available_qty?.toLocaleString()}
               </span>
             </div>
             {isShortage && (
               <div className="flex items-center gap-2">
                 <span className="text-sm text-gray-500">{t("shortage")}:</span>
-                <span className="text-sm font-bold text-red-600">{shortage.toLocaleString()}</span>
+                <span className="text-sm font-bold text-red-600">
+                  {shortage.toLocaleString()}
+                </span>
               </div>
             )}
           </div>
@@ -168,35 +212,18 @@ export const MaterialRequirements: React.FC = () => {
       ),
     },
     {
-      header: t("status"),
-      render: (item) => {
-        const shortage = Math.max(0, (item.required_qty || 0) - (item.available_qty || 0));
-        if (shortage === 0) {
-          return (
-            <Badge variant="success" className="flex items-center gap-1 w-fit">
-              <CheckCircle2 size={12} />
-              {t("sufficient")}
-            </Badge>
-          );
-        }
-        return (
-          <Badge variant="danger" className="flex items-center gap-1 w-fit">
-            <AlertCircle size={12} />
-            {t("shortage")}
-          </Badge>
-        );
-      },
-    },
-    {
       header: t("actions"),
       render: (item) => {
-        const shortage = Math.max(0, (item.required_qty || 0) - (item.available_qty || 0));
+        const shortage = Math.max(
+          0,
+          (item.required_qty || 0) - (item.available_qty || 0),
+        );
         return (
           <div className="flex items-center gap-2">
             {shortage > 0 && (
-              <Button 
-                variant="secondary" 
-                size="sm" 
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => handlePurchase(item)}
                 className="text-indigo-600 border-indigo-200 hover:bg-indigo-50"
               >
@@ -237,9 +264,13 @@ export const MaterialRequirements: React.FC = () => {
   const getFilteredItems = () => {
     if (statusFilter === "all") return filteredRequirements;
     if (statusFilter === "shortage") {
-      return filteredRequirements.filter(req => (req.required_qty || 0) > (req.available_qty || 0));
+      return filteredRequirements.filter(
+        (req) => (req.required_qty || 0) > (req.available_qty || 0),
+      );
     }
-    return filteredRequirements.filter(req => (req.required_qty || 0) <= (req.available_qty || 0));
+    return filteredRequirements.filter(
+      (req) => (req.required_qty || 0) <= (req.available_qty || 0),
+    );
   };
 
   return (
@@ -250,12 +281,13 @@ export const MaterialRequirements: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-900">
             {t("material_requirements")}
           </h1>
-          <p className="text-gray-500 mt-1">
-            {t("manage_mfg_materials")}
-          </p>
+          <p className="text-gray-500 mt-1">{t("manage_mfg_materials")}</p>
         </div>
         <div className="flex gap-3">
-          <ExportDropdown data={requirements} filename="material-requirements" />
+          <ExportDropdown
+            data={requirements}
+            filename="material-requirements"
+          />
           <Button
             variant="primary"
             onClick={() => {
@@ -279,7 +311,9 @@ export const MaterialRequirements: React.FC = () => {
             </div>
             <div>
               <p className="text-xs text-gray-500">{t("total_available")}</p>
-              <p className="text-xl font-bold text-gray-900">{totalAvailable.toLocaleString()}</p>
+              <p className="text-xl font-bold text-gray-900">
+                {totalAvailable.toLocaleString()}
+              </p>
             </div>
           </div>
         </div>
@@ -290,7 +324,9 @@ export const MaterialRequirements: React.FC = () => {
             </div>
             <div>
               <p className="text-xs text-gray-500">{t("total_required")}</p>
-              <p className="text-xl font-bold text-gray-900">{totalRequired.toLocaleString()}</p>
+              <p className="text-xl font-bold text-gray-900">
+                {totalRequired.toLocaleString()}
+              </p>
             </div>
           </div>
         </div>
@@ -301,7 +337,9 @@ export const MaterialRequirements: React.FC = () => {
             </div>
             <div>
               <p className="text-xs text-gray-500">{t("total_shortage")}</p>
-              <p className="text-xl font-bold text-red-600">{totalShortage.toLocaleString()}</p>
+              <p className="text-xl font-bold text-red-600">
+                {totalShortage.toLocaleString()}
+              </p>
             </div>
           </div>
         </div>
@@ -311,8 +349,12 @@ export const MaterialRequirements: React.FC = () => {
               <Box size={18} className="text-purple-600" />
             </div>
             <div>
-              <p className="text-xs text-gray-500">{t("materials_with_shortage")}</p>
-              <p className="text-xl font-bold text-gray-900">{materialsWithShortage}</p>
+              <p className="text-xs text-gray-500">
+                {t("materials_with_shortage")}
+              </p>
+              <p className="text-xl font-bold text-gray-900">
+                {materialsWithShortage}
+              </p>
             </div>
           </div>
         </div>
@@ -345,7 +387,7 @@ export const MaterialRequirements: React.FC = () => {
       <Table
         columns={columns}
         data={getFilteredItems()}
-        keyExtractor={(item) => item._id}
+        keyExtractor={(item) => extractId(item)}
         isLoading={loading}
         selectable
       />

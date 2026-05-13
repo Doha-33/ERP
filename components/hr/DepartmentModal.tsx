@@ -28,7 +28,6 @@ export const DepartmentModal: React.FC<DepartmentModalProps> = ({
     companyId: "",
     departmentName: "",
     managerName: "",
-    description: "",
     state: "ACTIVE",
   });
 
@@ -42,7 +41,6 @@ export const DepartmentModal: React.FC<DepartmentModalProps> = ({
         companyId: companyId || "",
         departmentName: departmentToEdit.departmentName || "",
         managerName: departmentToEdit.managerName || "",
-        description: (departmentToEdit as any).description || "",
         state: departmentToEdit.state || "ACTIVE",
       });
     } else if (!departmentToEdit && isOpen) {
@@ -51,7 +49,6 @@ export const DepartmentModal: React.FC<DepartmentModalProps> = ({
         companyId: defaultCompanyId,
         departmentName: "",
         managerName: "",
-        description: "",
         state: "ACTIVE",
       });
     }
@@ -158,19 +155,6 @@ export const DepartmentModal: React.FC<DepartmentModalProps> = ({
             </div>
           )}
 
-          {/* Description */}
-          <div className="col-span-2 space-y-1">
-            <label className="text-sm font-medium text-gray-700">
-              {t("description")}
-            </label>
-            <TextArea
-              value={formData.description}
-              onChange={(e) => handleChange("description", e.target.value)}
-              placeholder={t("enter_description")}
-              rows={3}
-              fullWidth
-            />
-          </div>
         </div>
 
         <div className="flex justify-end gap-3 mt-8">

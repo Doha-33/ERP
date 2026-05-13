@@ -9,6 +9,16 @@ export const useHRFinanceModule = (fetchAllData?: () => Promise<void>) => {
   const [deductionRecords, setDeductionRecords] = useState<DeductionRecord[]>([]);
   const [loans, setLoans] = useState<Loan[]>([]);
 
+
+  const fetchPayrolls = useCallback(async () => {
+    try {
+      const data = await hrService.getPayrolls();
+      setPayrollRecords(Array.isArray(data) ? data : data?.data || []);
+    } catch (error) {
+      console.error("Error fetching Payroll Records:", error);
+    }
+  }, []);
+
   const addPayrollRecord = useCallback(async (record: Payroll) => {
     try {
       await hrService.addPayroll(record);
@@ -46,6 +56,15 @@ export const useHRFinanceModule = (fetchAllData?: () => Promise<void>) => {
   }, [fetchAllData]);
 
   // --- Deductions ---
+  const fetchDeductionRecords = useCallback(async () => {
+    try {
+      const data = await hrService.getDeductions();
+      setDeductionRecords(Array.isArray(data) ? data : data?.data || []);
+    } catch (error) {
+      console.error("Error fetching Deductions:", error);
+    }
+  }, []);
+
   const addDeductionRecord = useCallback(async (record: any) => {
     try {
       await hrService.addDeduction(record);
@@ -68,6 +87,15 @@ export const useHRFinanceModule = (fetchAllData?: () => Promise<void>) => {
   }, [fetchAllData]);
 
   // --- Loans ---
+  const fetchLoans = useCallback(async () => {
+      try {
+        const data = await hrService.getLoans();
+        setLoans(Array.isArray(data) ? data : data?.data || []);
+      } catch (error) {
+        console.error("Error fetching Loans:", error);
+      }
+    }, []);
+
   const addLoan = useCallback(async (loan: Loan) => {
     try {
       await hrService.addLoan(loan);
@@ -132,14 +160,15 @@ export const useHRFinanceModule = (fetchAllData?: () => Promise<void>) => {
     updatePayroll: updatePayrollRecord, // alias
     deletePayrollRecord,
     deletePayroll: deletePayrollRecord, // alias
+    fetchPayrolls,
     generatePayroll,
-    addDeductionRecord, updateDeductionRecord, deleteDeductionRecord,
-    addLoan, updateLoan, deleteLoan, toggleLoanWorkflow, rejectLoan
+    addDeductionRecord, updateDeductionRecord, deleteDeductionRecord, fetchDeductionRecords,
+    addLoan, updateLoan, deleteLoan, fetchLoans, toggleLoanWorkflow, rejectLoan
   }), [
     payrollRecords, payrollLogs, deductionRecords, loans,
-    addPayrollRecord, updatePayrollRecord, deletePayrollRecord, generatePayroll,
-    addDeductionRecord, updateDeductionRecord, deleteDeductionRecord,
-    addLoan, updateLoan, deleteLoan, toggleLoanWorkflow, rejectLoan
+    addPayrollRecord, updatePayrollRecord, fetchPayrolls, deletePayrollRecord, generatePayroll,
+    addDeductionRecord, updateDeductionRecord, deleteDeductionRecord, fetchDeductionRecords,
+    addLoan, updateLoan, deleteLoan, fetchLoans, toggleLoanWorkflow, rejectLoan
   ]);
 };
     

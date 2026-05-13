@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Search, Edit2, Trash2, CreditCard, User, Calendar, UserCheck, Filter, X, ChevronDown } from "lucide-react";
+import { Plus, Search, Edit2, Trash2, CreditCard, User, Calendar, UserCheck, Filter, X, ChevronDown, CheckCircle, Clock } from "lucide-react";
 import { Card, Button, Input, Badge, ExportDropdown } from "../../components/ui/Common";
 import { Table, Column } from "../../components/ui/Table";
 import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
@@ -11,7 +11,7 @@ import { toast } from "sonner";
 
 export const AccessCardsPage: React.FC = () => {
   const { t } = useTranslation();
-  const { accessCards, addAccessCard, updateAccessCard, deleteAccessCard } = useData();
+  const { accessCards, addAccessCard, updateAccessCard, deleteAccessCard, fetchAccessCards } = useData();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<AccessCard | null>(null);
@@ -22,30 +22,74 @@ export const AccessCardsPage: React.FC = () => {
   const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSave = async (card: Partial<AccessCard>) => {
+  // Helper function to extract ID
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+      if (value._id && typeof value._id === "string") return value._id;
+      if (value.id && typeof value.id === "string") return value.id;
+    }
+    return "";
+  }, []);
+
+  const handleSave = async (cardData: Partial<AccessCard>) => {
     try {
       setIsLoading(true);
+      
       if (editingCard) {
-        await updateAccessCard({ ...card, _id: editingCard._id, id: editingCard.id } as AccessCard);
+        const cardId = extractId(editingCard);
+        
+        if (!cardId) {
+          toast.error(t("access_card_id_missing"));
+          return;
+        }
+        
+        const updateData = {
+          ...cardData,
+          _id: cardId,
+          id: cardId
+        } as AccessCard;
+        
+        console.log("Updating access card with ID:", cardId, updateData);
+        await updateAccessCard(updateData);
         toast.success(t("access_card_updated_successfully"));
       } else {
-        await addAccessCard(card as AccessCard);
+        await addAccessCard(cardData as AccessCard);
         toast.success(t("access_card_created_successfully"));
       }
+      
+      await fetchAccessCards();
       setIsModalOpen(false);
       setEditingCard(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving access card:", error);
-      toast.error(t("failed_to_save_access_card"));
+      const message = error?.response?.data?.message || error?.message || t("failed_to_save_access_card");
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleEdit = useCallback((card: AccessCard) => {
-    setEditingCard(card);
+    const cardId = extractId(card);
+    
+    if (!cardId) {
+      console.error("Access card ID not found", card);
+      toast.error(t("access_card_id_not_found"));
+      return;
+    }
+    
+    const cardToEdit: AccessCard = {
+      ...card,
+      _id: cardId,
+      id: cardId,
+    };
+    
+    console.log("Editing access card:", cardToEdit);
+    setEditingCard(cardToEdit);
     setIsModalOpen(true);
-  }, []);
+  }, [extractId, t]);
 
   const handleDelete = useCallback((id: string) => {
     setDeleteId(id);
@@ -58,19 +102,26 @@ export const AccessCardsPage: React.FC = () => {
         toast.success(t("access_card_deleted_successfully"));
         setDeleteId(null);
         setSelectedIds(prev => prev.filter(sid => sid !== deleteId));
+        await fetchAccessCards();
       } catch (error) {
         toast.error(t("failed_to_delete_access_card"));
       }
     }
-  }, [deleteId, deleteAccessCard, t]);
+  }, [deleteId, deleteAccessCard, fetchAccessCards, t]);
 
   const handleBulkDelete = async () => {
     try {
       setIsLoading(true);
-      await Promise.all(selectedIds.map(id => deleteAccessCard(id)));
-      toast.success(t("access_cards_deleted_successfully", { count: selectedIds.length }));
+      const validIds = selectedIds.filter(id => id && typeof id === 'string');
+      if (validIds.length === 0) {
+        toast.error(t("no_valid_ids_selected"));
+        return;
+      }
+      await Promise.all(validIds.map(id => deleteAccessCard(id)));
+      toast.success(t("access_cards_deleted_successfully", { count: validIds.length }));
       setSelectedIds([]);
       setIsBulkConfirmOpen(false);
+      await fetchAccessCards();
     } catch (error) {
       console.error("Bulk delete failed", error);
       toast.error(t("failed_to_delete_access_cards"));
@@ -125,7 +176,11 @@ export const AccessCardsPage: React.FC = () => {
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "-";
-    return new Date(dateStr).toLocaleDateString();
+    try {
+      return new Date(dateStr).toLocaleDateString();
+    } catch {
+      return "-";
+    }
   };
 
   const statusOptions = [
@@ -181,28 +236,36 @@ export const AccessCardsPage: React.FC = () => {
       {
         header: t("actions"),
         className: "text-center",
-        render: (c) => (
-          <div className="flex items-center justify-center gap-2">
-            <button
-              onClick={() => handleEdit(c)}
-              className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("edit")}
-            >
-              <Edit2 size={16} />
-            </button>
-            <button
-              onClick={() => handleDelete(c._id || c.id)}
-              className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
-              title={t("delete")}
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-        )
+        render: (c) => {
+          const cardId = extractId(c);
+          return (
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={() => handleEdit(c)}
+                className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("edit")}
+              >
+                <Edit2 size={16} />
+              </button>
+              <button
+                onClick={() => handleDelete(cardId)}
+                className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg border border-gray-200 transition-colors"
+                title={t("delete")}
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          );
+        }
       }
     ],
-    [t, handleEdit, handleDelete]
+    [t, handleEdit, handleDelete, extractId]
   );
+
+  const getKeyExtractor = useCallback((item: AccessCard) => {
+    const id = extractId(item);
+    return id || Math.random().toString();
+  }, [extractId]);
 
   return (
     <div className="space-y-6">
@@ -306,15 +369,15 @@ export const AccessCardsPage: React.FC = () => {
       </div>
 
       {/* Table */}
-        <Table
-          data={filteredCards}
-          columns={columns}
-          keyExtractor={(item) => item._id || item.id}
-          isLoading={isLoading}
-          selectable
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-        />
+      <Table
+        data={filteredCards}
+        columns={columns}
+        keyExtractor={getKeyExtractor}
+        isLoading={isLoading}
+        selectable
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+      />
 
       {/* Modal */}
       <AccessCardModal
@@ -348,6 +411,3 @@ export const AccessCardsPage: React.FC = () => {
     </div>
   );
 };
-
-// Add missing imports
-import { CheckCircle, Clock } from "lucide-react";

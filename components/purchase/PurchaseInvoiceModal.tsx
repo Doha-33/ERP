@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Edit2, Trash2, Package, DollarSign, Calendar, Building2, Users, Hash, Truck, CreditCard, Warehouse } from "lucide-react";
+import { Plus, Edit2, Trash2, Package, DollarSign, Calendar, Building2, Users, Hash, Truck, CreditCard, Warehouse, FileText } from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
 import { Button, Input, Select, TextArea } from "../../components/ui/Common";
 import { PurchaseInvoice } from "../../types";
 import { useData } from "../../context/DataContext";
+import { toast } from "sonner";
 
 interface PurchaseInvoiceModalProps {
   isOpen: boolean;
@@ -52,6 +53,24 @@ export const PurchaseInvoiceModal: React.FC<PurchaseInvoiceModalProps> = ({
     { productId: "", sku: "", quantity: 1, unitCost: 0, tax: 0, total: 0 }
   ]);
 
+  // Helper function to extract ID
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "object") {
+      return value._id || value.id || "";
+    }
+    return value;
+  }, []);
+
+  // Filter branches based on selected company
+  const filteredBranches = useMemo(() => {
+    if (!formData.companyId) return [];
+    return branches.filter(branch => {
+      const branchCompanyId = extractId(branch.companyId);
+      return branchCompanyId === formData.companyId;
+    });
+  }, [branches, formData.companyId, extractId]);
+
   // Calculate totals
   const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.unitCost), 0);
   const taxAmount = items.reduce((sum, item) => sum + (item.tax || 0), 0);
@@ -59,21 +78,11 @@ export const PurchaseInvoiceModal: React.FC<PurchaseInvoiceModalProps> = ({
 
   useEffect(() => {
     if (invoiceToEdit && isOpen) {
-      const supplierId = typeof invoiceToEdit.supplierId === "object" 
-        ? (invoiceToEdit.supplierId as any)?._id 
-        : invoiceToEdit.supplierId;
-      const poId = typeof invoiceToEdit.purchaseOrderId === "object" 
-        ? (invoiceToEdit.purchaseOrderId as any)?._id 
-        : invoiceToEdit.purchaseOrderId;
-      const companyId = typeof invoiceToEdit.companyId === "object" 
-        ? (invoiceToEdit.companyId as any)?._id 
-        : invoiceToEdit.companyId;
-      const branchId = typeof invoiceToEdit.branchId === "object" 
-        ? (invoiceToEdit.branchId as any)?._id 
-        : invoiceToEdit.branchId;
-      const warehouseId = typeof invoiceToEdit.warehouseId === "object" 
-        ? (invoiceToEdit.warehouseId as any)?._id 
-        : invoiceToEdit.warehouseId;
+      const supplierId = extractId(invoiceToEdit.supplierId);
+      const poId = extractId(invoiceToEdit.purchaseOrderId);
+      const companyId = extractId(invoiceToEdit.companyId);
+      const branchId = extractId(invoiceToEdit.branchId);
+      const warehouseId = extractId(invoiceToEdit.warehouseId);
 
       setFormData({
         invoiceNo: invoiceToEdit.invoiceNo || "",
@@ -96,7 +105,7 @@ export const PurchaseInvoiceModal: React.FC<PurchaseInvoiceModalProps> = ({
       
       if (invoiceToEdit.items && invoiceToEdit.items.length > 0) {
         setItems(invoiceToEdit.items.map(item => ({
-          productId: typeof item.productId === "object" ? (item.productId as any)?._id || "" : item.productId || "",
+          productId: extractId(item.productId),
           sku: item.sku || "",
           quantity: item.quantity,
           unitCost: item.unitCost,
@@ -122,28 +131,22 @@ export const PurchaseInvoiceModal: React.FC<PurchaseInvoiceModalProps> = ({
       });
       setItems([{ productId: "", sku: "", quantity: 1, unitCost: 0, tax: 0, total: 0 }]);
     }
-  }, [invoiceToEdit, isOpen]);
+  }, [invoiceToEdit, isOpen, extractId]);
 
   // Update items when PO is selected
   const onPOChange = (poId: string) => {
-    const selectedPO = purchaseOrders.find(po => (po._id || po.id) === poId);
+    const selectedPO = purchaseOrders.find(po => extractId(po) === poId);
     if (selectedPO) {
       setFormData(prev => ({
         ...prev,
-        supplierId: typeof selectedPO.supplierId === "object" 
-          ? (selectedPO.supplierId as any)?._id 
-          : selectedPO.supplierId || "",
-        companyId: typeof selectedPO.companyId === "object" 
-          ? (selectedPO.companyId as any)?._id 
-          : selectedPO.companyId || "",
-        branchId: typeof selectedPO.branchId === "object" 
-          ? (selectedPO.branchId as any)?._id 
-          : selectedPO.branchId || "",
+        supplierId: extractId(selectedPO.supplierId),
+        companyId: extractId(selectedPO.companyId),
+        branchId: extractId(selectedPO.branchId),
       }));
       
       if (selectedPO.items && selectedPO.items.length > 0) {
         setItems(selectedPO.items.map(item => ({
-          productId: typeof item.productId === "object" ? (item.productId as any)?._id || "" : item.productId || "",
+          productId: extractId(item.productId),
           sku: item.sku || "",
           quantity: item.quantity,
           unitCost: item.unitCost,
@@ -156,10 +159,29 @@ export const PurchaseInvoiceModal: React.FC<PurchaseInvoiceModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    
+    // Validation
+    if (!formData.invoiceNo) {
+      toast.error(t("invoice_number_required"));
+      return;
+    }
+    if (!formData.supplierId) {
+      toast.error(t("supplier_required"));
+      return;
+    }
+    if (!formData.companyId) {
+      toast.error(t("company_required"));
+      return;
+    }
+    if (!formData.branchId) {
+      toast.error(t("branch_required"));
+      return;
+    }
+    
     setIsSubmitting(true);
     
     try {
-      await onSave({
+      const saveData = {
         ...formData,
         items: items.map(item => ({
           productId: item.productId,
@@ -172,17 +194,30 @@ export const PurchaseInvoiceModal: React.FC<PurchaseInvoiceModalProps> = ({
         subtotal,
         taxAmount,
         totalAmount,
-      });
+      };
+      
+      console.log("Saving purchase invoice:", saveData);
+      await onSave(saveData);
       onClose();
     } catch (error) {
       console.error("Error in form submission:", error);
+      toast.error(t("failed_to_save_purchase_invoice"));
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleChange = (field: string, value: any) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    // Reset branch when company changes
+    if (field === "companyId") {
+      setFormData(prev => ({ 
+        ...prev, 
+        companyId: value,
+        branchId: "" // Reset branch selection
+      }));
+    } else {
+      setFormData(prev => ({ ...prev, [field]: value }));
+    }
   };
 
   const handleItemChange = (index: number, field: keyof InvoiceItem, value: any) => {
@@ -191,7 +226,7 @@ export const PurchaseInvoiceModal: React.FC<PurchaseInvoiceModalProps> = ({
     
     // If product is selected, auto-fill SKU and unit cost
     if (field === "productId" && value) {
-      const selectedProduct = products.find(p => (p._id || p.id) === value);
+      const selectedProduct = products.find(p => extractId(p) === value);
       if (selectedProduct) {
         newItems[index].sku = selectedProduct.sku;
         newItems[index].unitCost = selectedProduct.cost;
@@ -215,34 +250,34 @@ export const PurchaseInvoiceModal: React.FC<PurchaseInvoiceModalProps> = ({
   };
 
   const supplierOptions = suppliers.map(s => ({ 
-    value: s._id || s.id, 
+    value: extractId(s), 
     label: s.supplierName 
   }));
 
   const companyOptions = companies.map(c => ({ 
-    value: c._id || c.id, 
+    value: extractId(c), 
     label: c.name 
   }));
 
-  const branchOptions = branches.map(b => ({ 
-    value: b._id || b.id, 
+  const branchOptions = filteredBranches.map(b => ({ 
+    value: extractId(b), 
     label: b.name 
   }));
 
   const warehouseOptions = warehouses.map(w => ({ 
-    value: w._id || w.id, 
+    value: extractId(w), 
     label: w.warehouseName 
   }));
 
   const productOptions = products.map(p => ({ 
-    value: p._id || p.id, 
+    value: extractId(p), 
     label: `${p.productName} (${p.sku})` 
   }));
 
   const poOptions = [
     { value: "", label: t("select_po") },
     ...purchaseOrders.map(po => ({ 
-      value: po._id || po.id, 
+      value: extractId(po), 
       label: po.referenceNo 
     }))
   ];
@@ -347,9 +382,10 @@ export const PurchaseInvoiceModal: React.FC<PurchaseInvoiceModalProps> = ({
               value={formData.branchId}
               onChange={(e) => handleChange("branchId", e.target.value)}
               options={branchOptions}
-              placeholder={t("select_branch")}
+              placeholder={formData.companyId ? t("select_branch") : t("select_company_first")}
               required
               fullWidth
+              disabled={!formData.companyId}
             />
           </div>
         </div>
@@ -526,6 +562,3 @@ export const PurchaseInvoiceModal: React.FC<PurchaseInvoiceModalProps> = ({
     </Modal>
   );
 };
-
-// Add this import at the top
-import { FileText } from "lucide-react";
