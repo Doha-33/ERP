@@ -79,7 +79,6 @@ const COLORS = {
   warning: "#F59E0B",
   danger: "#EF4444",
   info: "#3B82F6",
-  dark: "#1E293B",
   light: "#94A3B8",
 };
 
@@ -93,8 +92,6 @@ const PIE_COLORS = [
 export const Dashboard: React.FC = () => {
   const { t } = useTranslation();
   const { employees, payrollRecords, isDataLoading } = useData();
-  const { theme } = useTheme();
-  const isDarkMode = theme === "dark";
   const [selectedPeriod, setSelectedPeriod] = useState<
     "weekly" | "monthly" | "yearly"
   >("monthly");
@@ -369,14 +366,14 @@ export const Dashboard: React.FC = () => {
                 <CartesianGrid
                   strokeDasharray="3 3"
                   vertical={false}
-                  stroke={isDarkMode ? "#334155" : "#E2E8F0"}
+                  stroke= "#E2E8F0"
                 />
                 <XAxis
                   dataKey="name"
                   axisLine={false}
                   tickLine={false}
                   tick={{
-                    fill: isDarkMode ? "#94A3B8" : "#64748B",
+                    fill: "#64748B",
                     fontSize: 12,
                   }}
                   dy={10}
@@ -385,7 +382,7 @@ export const Dashboard: React.FC = () => {
                   axisLine={false}
                   tickLine={false}
                   tick={{
-                    fill: isDarkMode ? "#94A3B8" : "#64748B",
+                    fill: "#64748B",
                     fontSize: 12,
                   }}
                   tickFormatter={(value) => `$${value.toLocaleString()}`}
@@ -439,14 +436,14 @@ export const Dashboard: React.FC = () => {
                 <CartesianGrid
                   strokeDasharray="3 3"
                   vertical={false}
-                  stroke={isDarkMode ? "#334155" : "#E2E8F0"}
+                  stroke= "#E2E8F0"
                 />
                 <XAxis
                   dataKey="name"
                   axisLine={false}
                   tickLine={false}
                   tick={{
-                    fill: isDarkMode ? "#94A3B8" : "#64748B",
+                    fill: "#64748B",
                     fontSize: 12,
                   }}
                   dy={10}
@@ -455,7 +452,7 @@ export const Dashboard: React.FC = () => {
                   axisLine={false}
                   tickLine={false}
                   tick={{
-                    fill: isDarkMode ? "#94A3B8" : "#64748B",
+                    fill: "#64748B",
                     fontSize: 12,
                   }}
                   tickFormatter={(value) => `$${value.toLocaleString()}`}

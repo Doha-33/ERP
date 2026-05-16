@@ -117,7 +117,7 @@ export const AllocationFormModal: React.FC<AllocationFormModalProps> = ({
 
           {/* Usage Purpose Dropdown */}
           <div className="space-y-1">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label className="text-sm font-medium text-gray-700">
               {t("usage_purpose")} <span className="text-red-500">*</span>
             </label>
             <Select
@@ -132,7 +132,7 @@ export const AllocationFormModal: React.FC<AllocationFormModalProps> = ({
 
           {/* Start Date */}
           <div className="space-y-1">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label className="text-sm font-medium text-gray-700">
               {t("start_date")} <span className="text-red-500">*</span>
             </label>
             <Input
@@ -152,7 +152,7 @@ export const AllocationFormModal: React.FC<AllocationFormModalProps> = ({
 
           {/* End Date */}
           <div className="space-y-1">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label className="text-sm font-medium text-gray-700">
               {t("end_date")} <span className="text-red-500">*</span>
             </label>
             <Input

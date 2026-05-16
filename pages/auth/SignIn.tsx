@@ -22,7 +22,7 @@ type LoginFormInputs = z.infer<typeof loginSchema>;
 export const SignIn: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { lang, toggleLang, theme, toggleTheme } = useTheme();
+  const { lang, toggleLang } = useTheme();
   const { login } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState('');

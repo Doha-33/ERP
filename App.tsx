@@ -6,7 +6,6 @@ import {
   Navigate,
   useLocation,
 } from "react-router-dom";
-import { ThemeProvider } from "./context/ThemeContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { DataProvider } from "./context/DataContext";
 import { MainLayout } from "./components/layout/MainLayout";
@@ -218,7 +217,6 @@ const AdminRoute = ({ children }: { children?: React.ReactNode }) => {
 const App: React.FC = () => {
   return (
     <Router>
-      <ThemeProvider>
         <AuthProvider>
           <ErrorBoundary>
             <DataProvider>
@@ -1531,7 +1529,6 @@ const App: React.FC = () => {
             </DataProvider>
           </ErrorBoundary>
         </AuthProvider>
-      </ThemeProvider>
     </Router>
   );
 };

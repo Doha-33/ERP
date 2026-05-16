@@ -42,7 +42,7 @@ type SignUpFormInputs = z.infer<typeof signUpSchema>;
 export const SignUp: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { lang, toggleLang, theme, toggleTheme } = useTheme();
+  const { lang, toggleLang } = useTheme();
   const { login } = useAuth();
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
