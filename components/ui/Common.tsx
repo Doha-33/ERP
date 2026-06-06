@@ -9,6 +9,9 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import * as XLSX from "xlsx";
+import { saveAs } from "file-saver";
+import { toast } from "sonner";
 
 // --- Card ---
 export const Card: React.FC<{
@@ -164,118 +167,292 @@ export const Dropdown: React.FC<DropdownProps> = ({
 };
 
 // --- Export Dropdown Component ---
-export const ExportDropdown: React.FC<{ data?: any[]; filename?: string }> = ({
+interface ExportDropdownProps {
+  data?: any[];
+  filename?: string;
+}
+
+export const ExportDropdown: React.FC<ExportDropdownProps> = ({
   data,
   filename = "export",
 }) => {
   const { t } = useTranslation();
 
+  // Helper function to flatten nested objects
+  const flattenObject = (obj: any, parentKey = ""): any => {
+    let result: any = {};
+
+    for (const key in obj) {
+      if (obj.hasOwnProperty(key)) {
+        const newKey = parentKey ? `${parentKey}_${key}` : key;
+        const value = obj[key];
+
+        // Skip avatar, image, and other large binary fields
+        if (
+          key.toLowerCase().includes("avatar") ||
+          key.toLowerCase().includes("image")
+        ) {
+          continue;
+        }
+
+        if (
+          value &&
+          typeof value === "object" &&
+          !Array.isArray(value) &&
+          value !== null
+        ) {
+          // Check if it's a Date object
+          if (value instanceof Date) {
+            result[newKey] = value.toLocaleDateString();
+          }
+          // Recursively flatten nested objects
+          const flattened = flattenObject(value, newKey);
+          result = { ...result, ...flattened };
+        } else if (Array.isArray(value)) {
+          // For arrays, convert to JSON string
+          result[newKey] = JSON.stringify(value);
+        } else {
+          result[newKey] = value;
+        }
+      }
+    }
+    return result;
+  };
+
+  // Export to Excel (.xlsx)
+  const exportToExcel = () => {
+    if (!data || data.length === 0) {
+      console.warn("No data to export");
+      toast.warning(t("no_data_to_export") || "No data to export");
+      return;
+    }
+
+    try {
+      // Flatten all data objects to handle nested structures
+      const flattenedData = data.map((item) => flattenObject(item));
+
+      // Create worksheet from flattened data
+      const worksheet = XLSX.utils.json_to_sheet(flattenedData);
+
+      // Auto-size columns (optional - sets approximate width)
+      const maxWidth = 50;
+      const colWidths: { [key: string]: number } = {};
+
+      flattenedData.forEach((row) => {
+        Object.keys(row).forEach((key) => {
+          const cellValue = row[key]?.toString() || "";
+          const width = Math.min(cellValue.length, maxWidth);
+          if (!colWidths[key] || width > colWidths[key]) {
+            colWidths[key] = width;
+          }
+        });
+      });
+
+      // Set column widths
+      worksheet["!cols"] = Object.keys(colWidths).map((key) => ({
+        wch: Math.max(colWidths[key] + 2, 10), // Minimum width of 10
+      }));
+
+      // Create workbook
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
+
+      // Generate Excel file
+      const excelBuffer = XLSX.write(workbook, {
+        bookType: "xlsx",
+        type: "array",
+      });
+      
+      const blob = new Blob([excelBuffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+
+      // Download file using file-saver
+      saveAs(
+        blob,
+        `${filename}_${new Date().toISOString().split("T")[0]}.xlsx`
+      );
+      
+      console.log("Excel exported successfully");
+    } catch (error) {
+      console.error("Error exporting to Excel:", error);
+    }
+  };
+
+  // Export to CSV (fallback)
   const exportToCSV = () => {
     if (!data || data.length === 0) return;
 
-    // Get headers from the first object, exclude complex objects/avatars
-    const headers = Object.keys(data[0]).filter(
-      (key) =>
-        typeof data[0][key] !== "object" &&
-        !key.toLowerCase().includes("avatar") &&
-        !key.toLowerCase().includes("image"),
-    );
+    try {
+      // Flatten data for CSV
+      const flattenedData = data.map((item) => flattenObject(item));
 
-    const csvRows = [];
-    csvRows.push(headers.join(","));
+      // Get headers from the first flattened object
+      const headers = Object.keys(flattenedData[0]);
 
-    for (const row of data) {
-      const values = headers.map((header) => {
-        const val =
-          row[header] === null || row[header] === undefined ? "" : row[header];
-        const escaped = ("" + val).replace(/"/g, '""');
-        return `"${escaped}"`;
+      const csvRows = [];
+      csvRows.push(headers.join(","));
+
+      for (const row of flattenedData) {
+        const values = headers.map((header) => {
+          let val = row[header];
+          if (val === null || val === undefined) val = "";
+          if (typeof val === "object") val = JSON.stringify(val);
+          const escaped = String(val).replace(/"/g, '""');
+          return `"${escaped}"`;
+        });
+        csvRows.push(values.join(","));
+      }
+
+      const csvString = csvRows.join("\n");
+      const blob = new Blob(["\ufeff" + csvString], {
+        type: "text/csv;charset=utf-8;",
       });
-      csvRows.push(values.join(","));
+      
+      saveAs(
+        blob,
+        `${filename}_${new Date().toISOString().split("T")[0]}.csv`
+      );
+    } catch (error) {
+      console.error("Error exporting to CSV:", error);
     }
-
-    const csvString = csvRows.join("\n");
-    // Add UTF-8 BOM for Excel Arabic support
-    const blob = new Blob(["\ufeff" + csvString], {
-      type: "text/csv;charset=utf-8;",
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute(
-      "download",
-      `${filename}_${new Date().toISOString().split("T")[0]}.csv`,
-    );
-    link.style.visibility = "hidden";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
   };
 
   const exportToPDF = () => {
     if (!data || data.length === 0) return;
 
-    const headers = Object.keys(data[0]).filter(
-      (key) =>
-        typeof data[0][key] !== "object" &&
-        !key.toLowerCase().includes("avatar") &&
-        !key.toLowerCase().includes("image"),
-    );
+    try {
+      // Flatten data for PDF
+      const flattenedData = data.map((item) => flattenObject(item));
+      const headers = Object.keys(flattenedData[0]);
 
-    const printWindow = window.open("", "_blank");
-    if (!printWindow) return;
+      const printWindow = window.open("", "_blank");
+      if (!printWindow) return;
 
-    const isRtl = document.documentElement.dir === "rtl";
+      const isRtl = document.documentElement.dir === "rtl";
 
-    const html = `
-      <html>
-        <head>
-          <title>${filename}</title>
-          <style>
-            body { font-family: 'Inter', 'Cairo', sans-serif; padding: 20px; direction: ${isRtl ? "rtl" : "ltr"}; }
-            h1 { text-align: center; color: #4361EE; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            th, td { border: 1px solid #E2E8F0; padding: 10px; text-align: ${isRtl ? "right" : "left"}; font-size: 12px; }
-            th { background-color: #F8FAFC; font-weight: bold; }
-            .footer { margin-top: 30px; text-align: center; font-size: 10px; color: #94A3B8; }
-          </style>
-        </head>
-        <body>
-          <h1>${(filename || "Report").toString().toUpperCase()} REPORT</h1>
-          <table>
-            <thead>
-              <tr>${headers.map((h) => `<th>${(h || "").toString().replace(/_/g, " ").toUpperCase()}</th>`).join("")}</tr>
-            </thead>
-            <tbody>
-              ${data
-                .map(
-                  (row) => `
-                <tr>${headers.map((h) => `<td>${row[h] || "-"}</td>`).join("")}</tr>
-              `,
-                )
-                .join("")}
-            </tbody>
-          </table>
-          <div class="footer">Generated by CodeSoft ERP System on ${new Date().toLocaleString()}</div>
-          <script>
-            window.onload = function() { window.print(); setTimeout(window.close, 500); };
-          </script>
-        </body>
-      </html>
-    `;
+      const html = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>${filename}</title>
+            <meta charset="UTF-8">
+            <style>
+              * { margin: 0; padding: 0; box-sizing: border-box; }
+              body { 
+                font-family: 'Inter', 'Cairo', 'Segoe UI', sans-serif; 
+                padding: 20px; 
+                direction: ${isRtl ? "rtl" : "ltr"}; 
+                background: white;
+              }
+              h1 { 
+                text-align: center; 
+                color: #4361EE; 
+                margin-bottom: 20px;
+                font-size: 24px;
+              }
+              .info {
+                text-align: center;
+                margin-bottom: 20px;
+                color: #64748B;
+                font-size: 12px;
+              }
+              table { 
+                width: 100%; 
+                border-collapse: collapse; 
+                margin-top: 20px; 
+                font-size: 11px;
+              }
+              th, td { 
+                border: 1px solid #E2E8F0; 
+                padding: 8px 10px; 
+                text-align: ${isRtl ? "right" : "left"}; 
+                vertical-align: top;
+              }
+              th { 
+                background-color: #F1F5F9; 
+                font-weight: bold;
+                position: sticky;
+                top: 0;
+              }
+              tr:nth-child(even) { background-color: #F8FAFC; }
+              .footer { 
+                margin-top: 30px; 
+                text-align: center; 
+                font-size: 10px; 
+                color: #94A3B8;
+                border-top: 1px solid #E2E8F0;
+                padding-top: 15px;
+              }
+              @media print {
+                body { margin: 0; padding: 15px; }
+                th { background-color: #E2E8F0; }
+              }
+            </style>
+          </head>
+          <body>
+            <h1>${(filename || "Report").toString().toUpperCase()} REPORT</h1>
+            <div class="info">
+              Generated: ${new Date().toLocaleString()} | Total Records: ${data.length}
+            </div>
+            <div style="overflow-x: auto;">
+              <table>
+                <thead>
+                  <tr>${headers.map((h) => `<th>${(h || "").toString().replace(/_/g, " ").toUpperCase()}</th>`).join("")}</tr>
+                </thead>
+                <tbody>
+                  ${flattenedData
+                    .map(
+                      (row) => `
+                      <tr>${headers
+                        .map((h) => {
+                          let value = row[h];
+                          if (value === null || value === undefined)
+                            value = "-";
+                          if (typeof value === "object")
+                            value = JSON.stringify(value);
+                          return `<td style="max-width: 300px; word-wrap: break-word;">${String(value).substring(0, 200)}</td>`;
+                        })
+                        .join("")}</tr>
+                    `,
+                    )
+                    .join("")}
+                </tbody>
+              </table>
+            </div>
+            <div class="footer">
+              Generated by CodeSoft ERP System • Confidential
+            </div>
+            <script>
+              window.onload = function() { 
+                window.print(); 
+                setTimeout(function() { window.close(); }, 500);
+              };
+            </script>
+          </body>
+        </html>
+      `;
 
-    printWindow.document.write(html);
-    printWindow.document.close();
+      printWindow.document.write(html);
+      printWindow.document.close();
+    } catch (error) {
+      console.error("Error exporting to PDF:", error);
+    }
   };
 
   const exportItems: DropdownItem[] = [
     {
-      label: "Excel (.csv)",
+      label: t("excel_format") || "Excel (.xlsx)",
       icon: <FileSpreadsheet size={18} className="text-green-600" />,
+      onClick: exportToExcel,
+    },
+    {
+      label: t("csv_format") || "CSV (.csv)",
+      icon: <FileSpreadsheet size={18} className="text-blue-500" />,
       onClick: exportToCSV,
     },
     {
-      label: "PDF (Print)",
+      label: t("pdf_format") || "PDF (Print)",
       icon: <FilePdf size={18} className="text-red-500" />,
       onClick: exportToPDF,
     },
@@ -288,14 +465,13 @@ export const ExportDropdown: React.FC<{ data?: any[]; filename?: string }> = ({
           variant="outline"
           className="text-primary border-primary bg-blue-50 hover:bg-blue-100"
         >
-          {t("export")} <ChevronDown size={16} />
+          {t("export") || "Export"} <ChevronDown size={16} />
         </Button>
       }
       items={exportItems}
     />
   );
 };
-
 // --- Input ---
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: any;

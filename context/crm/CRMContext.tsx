@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { CRMContact, CRMDeal, CRMLead, CRMPipeline, CRMProject, CRMTask } from '../../types';
+import { CRMContact, CRMDeal, CRMLead, CRMPipeline, CRMProject, CRMTask, CRMGroup, CRMPricelist } from '../../types';
 import crmService from '../../services/crm.service';
 
 interface CRMContextType {
@@ -9,6 +9,8 @@ interface CRMContextType {
   pipelines: CRMPipeline[];
   projects: CRMProject[];
   tasks: CRMTask[];
+  groups: CRMGroup[];
+  pricelists: CRMPricelist[];
   loading: boolean;
   refreshContacts: () => Promise<void>;
   refreshDeals: () => Promise<void>;
@@ -16,7 +18,10 @@ interface CRMContextType {
   refreshPipelines: () => Promise<void>;
   refreshProjects: () => Promise<void>;
   refreshTasks: () => Promise<void>;
+  refreshGroups: () => Promise<void>;
+  refreshPricelists: () => Promise<void>;
   addContact: (data: Partial<CRMContact>) => Promise<void>;
+  fetchContacts: () => Promise<void>;
   updateContact: (id: string, data: Partial<CRMContact>) => Promise<void>;
   deleteContact: (id: string) => Promise<void>;
   addDeal: (data: Partial<CRMDeal>) => Promise<void>;
@@ -34,6 +39,12 @@ interface CRMContextType {
   addTask: (data: Partial<CRMTask>) => Promise<void>;
   updateTask: (id: string, data: Partial<CRMTask>) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
+  addGroup: (data: Partial<CRMGroup>) => Promise<void>;
+  updateGroup: (id: string, data: Partial<CRMGroup>) => Promise<void>;
+  deleteGroup: (id: string) => Promise<void>;
+  addPricelist: (data: Partial<CRMPricelist>) => Promise<void>;
+  updatePricelist: (id: string, data: Partial<CRMPricelist>) => Promise<void>;
+  deletePricelist: (id: string) => Promise<void>;
 }
 
 const CRMContext = createContext<CRMContextType | undefined>(undefined);
@@ -45,12 +56,33 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [pipelines, setPipelines] = useState<CRMPipeline[]>([]);
   const [projects, setProjects] = useState<CRMProject[]>([]);
   const [tasks, setTasks] = useState<CRMTask[]>([]);
+  const [groups, setGroups] = useState<CRMGroup[]>([]);
+  const [pricelists, setPricelists] = useState<CRMPricelist[]>([]);
   const [loading, setLoading] = useState(false);
 
   const refreshContacts = useCallback(async () => {
     try {
-      const data = await crmService.getContacts();
-      setContacts(data);
+      const firstRes = await crmService.getContactsFull({ page: 1, limit: 100 });
+      const firstPageData = firstRes?.data || [];
+      const pagination = firstRes?.pagination;
+      
+      if (pagination && pagination.pages > 1) {
+        const totalPages = pagination.pages;
+        const promises = [];
+        for (let p = 2; p <= totalPages; p++) {
+          promises.push(crmService.getContactsFull({ page: p, limit: 100 }));
+        }
+        const responses = await Promise.all(promises);
+        let allContacts = [...firstPageData];
+        responses.forEach(res => {
+          if (res?.data) {
+            allContacts = [...allContacts, ...res.data];
+          }
+        });
+        setContacts(allContacts);
+      } else {
+        setContacts(firstPageData);
+      }
     } catch (error) {
       console.error('Failed to fetch CRM contacts:', error);
     }
@@ -101,6 +133,24 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
+  const refreshGroups = useCallback(async () => {
+    try {
+      const data = await crmService.getGroups();
+      setGroups(data || []);
+    } catch (error) {
+      console.error('Failed to fetch CRM groups:', error);
+    }
+  }, []);
+
+  const refreshPricelists = useCallback(async () => {
+    try {
+      const data = await crmService.getPricelists();
+      setPricelists(data || []);
+    } catch (error) {
+      console.error('Failed to fetch CRM pricelists:', error);
+    }
+  }, []);
+
   useEffect(() => {
     setLoading(true);
     Promise.all([
@@ -109,110 +159,148 @@ export const CRMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       refreshLeads(),
       refreshPipelines(),
       refreshProjects(),
-      refreshTasks()
+      refreshTasks(),
+      refreshGroups(),
+      refreshPricelists()
     ]).finally(() => setLoading(false));
-  }, [refreshContacts, refreshDeals, refreshLeads, refreshPipelines, refreshProjects, refreshTasks]);
+  }, [refreshContacts, refreshDeals, refreshLeads, refreshPipelines, refreshProjects, refreshTasks, refreshGroups, refreshPricelists]);
 
-  const addContact = async (data: Partial<CRMContact>) => {
+  const fetchContacts = useCallback(async () => {
+    await refreshContacts();
+  }, [refreshContacts]);
+
+  const addContact = useCallback(async (data: Partial<CRMContact>) => {
     await crmService.addContact(data);
     await refreshContacts();
-  };
+  }, [refreshContacts]);
 
-  const updateContact = async (id: string, data: Partial<CRMContact>) => {
+  const updateContact = useCallback(async (id: string, data: Partial<CRMContact>) => {
     await crmService.updateContact(id, data);
     await refreshContacts();
-  };
+  }, [refreshContacts]);
 
-  const deleteContact = async (id: string) => {
+  const deleteContact = useCallback(async (id: string) => {
     await crmService.deleteContact(id);
     await refreshContacts();
-  };
+  }, [refreshContacts]);
 
-  const addDeal = async (data: Partial<CRMDeal>) => {
+  const addDeal = useCallback(async (data: Partial<CRMDeal>) => {
     await crmService.addDeal(data);
     await refreshDeals();
-  };
+  }, [refreshDeals]);
 
-  const updateDeal = async (id: string, data: Partial<CRMDeal>) => {
+  const updateDeal = useCallback(async (id: string, data: Partial<CRMDeal>) => {
     await crmService.updateDeal(id, data);
     await refreshDeals();
-  };
+  }, [refreshDeals]);
 
-  const deleteDeal = async (id: string) => {
+  const deleteDeal = useCallback(async (id: string) => {
     await crmService.deleteDeal(id);
     await refreshDeals();
-  };
+  }, [refreshDeals]);
 
-  const addLead = async (data: Partial<CRMLead>) => {
+  const addLead = useCallback(async (data: Partial<CRMLead>) => {
     await crmService.addLead(data);
     await refreshLeads();
-  };
+  }, [refreshLeads]);
 
-  const updateLead = async (id: string, data: Partial<CRMLead>) => {
+  const updateLead = useCallback(async (id: string, data: Partial<CRMLead>) => {
     await crmService.updateLead(id, data);
     await refreshLeads();
-  };
+  }, [refreshLeads]);
 
-  const deleteLead = async (id: string) => {
+  const deleteLead = useCallback(async (id: string) => {
     await crmService.deleteLead(id);
     await refreshLeads();
-  };
+  }, [refreshLeads]);
 
-  const addPipeline = async (data: Partial<CRMPipeline>) => {
+  const addPipeline = useCallback(async (data: Partial<CRMPipeline>) => {
     await crmService.addPipeline(data);
     await refreshPipelines();
-  };
+  }, [refreshPipelines]);
 
-  const updatePipeline = async (id: string, data: Partial<CRMPipeline>) => {
+  const updatePipeline = useCallback(async (id: string, data: Partial<CRMPipeline>) => {
     await crmService.updatePipeline(id, data);
     await refreshPipelines();
-  };
+  }, [refreshPipelines]);
 
-  const deletePipeline = async (id: string) => {
+  const deletePipeline = useCallback(async (id: string) => {
     await crmService.deletePipeline(id);
     await refreshPipelines();
-  };
+  }, [refreshPipelines]);
 
-  const addProject = async (data: Partial<CRMProject>) => {
+  const addProject = useCallback(async (data: Partial<CRMProject>) => {
     await crmService.addProject(data);
     await refreshProjects();
-  };
+  }, [refreshProjects]);
 
-  const updateProject = async (id: string, data: Partial<CRMProject>) => {
+  const updateProject = useCallback(async (id: string, data: Partial<CRMProject>) => {
     await crmService.updateProject(id, data);
     await refreshProjects();
-  };
+  }, [refreshProjects]);
 
-  const deleteProject = async (id: string) => {
+  const deleteProject = useCallback(async (id: string) => {
     await crmService.deleteProject(id);
     await refreshProjects();
-  };
+  }, [refreshProjects]);
 
-  const addTask = async (data: Partial<CRMTask>) => {
+  const addTask = useCallback(async (data: Partial<CRMTask>) => {
     await crmService.addTask(data);
     await refreshTasks();
-  };
+  }, [refreshTasks]);
 
-  const updateTask = async (id: string, data: Partial<CRMTask>) => {
+  const updateTask = useCallback(async (id: string, data: Partial<CRMTask>) => {
     await crmService.updateTask(id, data);
     await refreshTasks();
-  };
+  }, [refreshTasks]);
 
-  const deleteTask = async (id: string) => {
+  const deleteTask = useCallback(async (id: string) => {
     await crmService.deleteTask(id);
     await refreshTasks();
-  };
+  }, [refreshTasks]);
+
+  const addGroup = useCallback(async (data: Partial<CRMGroup>) => {
+    await crmService.addGroup(data);
+    await refreshGroups();
+  }, [refreshGroups]);
+
+  const updateGroup = useCallback(async (id: string, data: Partial<CRMGroup>) => {
+    await crmService.updateGroup(id, data);
+    await refreshGroups();
+  }, [refreshGroups]);
+
+  const deleteGroup = useCallback(async (id: string) => {
+    await crmService.deleteGroup(id);
+    await refreshGroups();
+  }, [refreshGroups]);
+
+  const addPricelist = useCallback(async (data: Partial<CRMPricelist>) => {
+    await crmService.addPricelist(data);
+    await refreshPricelists();
+  }, [refreshPricelists]);
+
+  const updatePricelist = useCallback(async (id: string, data: Partial<CRMPricelist>) => {
+    await crmService.updatePricelist(id, data);
+    await refreshPricelists();
+  }, [refreshPricelists]);
+
+  const deletePricelist = useCallback(async (id: string) => {
+    await crmService.deletePricelist(id);
+    await refreshPricelists();
+  }, [refreshPricelists]);
 
   return (
     <CRMContext.Provider value={{
-      contacts, deals, leads, pipelines, projects, tasks, loading,
-      refreshContacts, refreshDeals, refreshLeads, refreshPipelines, refreshProjects, refreshTasks,
-      addContact, updateContact, deleteContact,
+      contacts, deals, leads, pipelines, projects, tasks, groups, pricelists, loading,
+      refreshContacts, refreshDeals, refreshLeads, refreshPipelines, refreshProjects, refreshTasks, refreshGroups, refreshPricelists,
+      addContact, updateContact, deleteContact, fetchContacts,
       addDeal, updateDeal, deleteDeal,
       addLead, updateLead, deleteLead,
       addPipeline, updatePipeline, deletePipeline,
       addProject, updateProject, deleteProject,
-      addTask, updateTask, deleteTask
+      addTask, updateTask, deleteTask,
+      addGroup, updateGroup, deleteGroup,
+      addPricelist, updatePricelist, deletePricelist
     }}>
       {children}
     </CRMContext.Provider>

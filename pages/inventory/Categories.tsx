@@ -1,17 +1,17 @@
 import React, { useState, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Search, Edit2, Trash2, Tag, Filter, X } from "lucide-react";
+import { Plus, Search, Edit2, Trash2, Tag, Filter, X, TrendingUp, TrendingDown, Package, DollarSign } from "lucide-react";
 import { Card, Button, Input, Badge, ExportDropdown } from "../../components/ui/Common";
 import { Table, Column } from "../../components/ui/Table";
 import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
 import { CategoryModal } from "../../components/inventory/CategoryModal";
 import { useData } from "../../context/DataContext";
-import { Category } from "../../types";
+import { Category, Account } from "../../types";
 import { toast } from "sonner";
 
 export const Categories: React.FC = () => {
   const { t } = useTranslation();
-  const { categories, addCategory, updateCategory, deleteCategory, fetchCategories } = useData();
+  const { categories, accounts, addCategory, updateCategory, deleteCategory, fetchCategories } = useData();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
@@ -31,12 +31,31 @@ export const Categories: React.FC = () => {
     return value;
   }, []);
 
+  // Helper to get account display name
+  const getAccountDisplay = useCallback((accountId: any): string => {
+    if (!accountId) return "-";
+    
+    // If accountId is an object with account details
+    if (typeof accountId === "object" && accountId !== null) {
+      return `${accountId.accountCode} - ${accountId.accountName}`;
+    }
+    
+    // If it's a string ID, find from accounts list
+    const accountIdStr = typeof accountId === "string" ? accountId : extractId(accountId);
+    const account = accounts.find(a => a._id === accountIdStr);
+    
+    if (account) {
+      return `${account.accountCode} - ${account.accountName}`;
+    }
+    
+    return "-";
+  }, [accounts, extractId]);
+
   const handleSave = async (categoryData: Partial<Category>) => {
     try {
       setIsLoading(true);
       
       if (editingCategory) {
-        // Get the ID from editingCategory
         const categoryId = extractId(editingCategory);
         
         if (!categoryId) {
@@ -44,14 +63,11 @@ export const Categories: React.FC = () => {
           return;
         }
         
-        // Create update data with ID
         const updateData = {
           ...categoryData,
           _id: categoryId,
-          id: categoryId
         } as Category;
         
-        console.log("Updating category with ID:", categoryId, updateData);
         await updateCategory(updateData);
         toast.success(t("category_updated_successfully"));
       } else {
@@ -59,7 +75,7 @@ export const Categories: React.FC = () => {
         toast.success(t("category_created_successfully"));
       }
       
-      await fetchCategories(); // Refresh list
+      await fetchCategories();
       setIsModalOpen(false);
       setEditingCategory(null);
     } catch (error: any) {
@@ -72,7 +88,6 @@ export const Categories: React.FC = () => {
   };
 
   const handleEdit = useCallback((category: Category) => {
-    // Extract ID correctly from the category object
     const categoryId = extractId(category);
     
     if (!categoryId) {
@@ -81,14 +96,11 @@ export const Categories: React.FC = () => {
       return;
     }
     
-    // Create a clean category object with proper ID
     const categoryToEdit: Category = {
       ...category,
       _id: categoryId,
-      id: categoryId,
     };
     
-    console.log("Editing category:", categoryToEdit);
     setEditingCategory(categoryToEdit);
     setIsModalOpen(true);
   }, [extractId, t]);
@@ -148,7 +160,7 @@ export const Categories: React.FC = () => {
         c.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         c.description?.toLowerCase().includes(searchTerm.toLowerCase());
       
-      const matchesStatus = !statusFilter || (c.status || c.state || '').toUpperCase() === statusFilter.toUpperCase();
+      const matchesStatus = !statusFilter || (c.status || '').toUpperCase() === statusFilter.toUpperCase();
       
       return matchesSearch && matchesStatus;
     });
@@ -156,8 +168,8 @@ export const Categories: React.FC = () => {
 
   // Statistics
   const totalCategories = filteredCategories.length;
-  const activeCategories = filteredCategories.filter(c => (c.status || c.state || '').toUpperCase() === "ACTIVE").length;
-  const inactiveCategories = filteredCategories.filter(c => (c.status || c.state || '').toUpperCase() === "INACTIVE").length;
+  const activeCategories = filteredCategories.filter(c => (c.status || '').toUpperCase() === "ACTIVE").length;
+  const inactiveCategories = filteredCategories.filter(c => (c.status || '').toUpperCase() === "INACTIVE").length;
 
   const statusOptions = [
     { value: "", label: t("all_statuses") },
@@ -170,7 +182,6 @@ export const Categories: React.FC = () => {
       {
         header: t("category_info"),
         render: (c) => {
-          const categoryId = extractId(c);
           return (
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center">
@@ -185,9 +196,30 @@ export const Categories: React.FC = () => {
         }
       },
       {
-        header: t("description"),
+        header: t("income_account"),
         render: (c) => (
-          <span className="text-sm text-gray-600 max-w-xs truncate">{c.description || "-"}</span>
+          <div className="flex items-center gap-1 text-sm">
+            <TrendingUp size={14} className="text-green-600" />
+            <span className="text-gray-600">{getAccountDisplay(c.incomeAccountId)}</span>
+          </div>
+        )
+      },
+      {
+        header: t("expense_account"),
+        render: (c) => (
+          <div className="flex items-center gap-1 text-sm">
+            <TrendingDown size={14} className="text-red-600" />
+            <span className="text-gray-600">{getAccountDisplay(c.expenseAccountId)}</span>
+          </div>
+        )
+      },
+      {
+        header: t("inventory_account"),
+        render: (c) => (
+          <div className="flex items-center gap-1 text-sm">
+            <Package size={14} className="text-blue-600" />
+            <span className="text-gray-600">{getAccountDisplay(c.inventoryValuationAccountId)}</span>
+          </div>
         )
       },
       {
@@ -198,7 +230,7 @@ export const Categories: React.FC = () => {
       },
       {
         header: t("status"),
-        render: (c) => getStatusBadge(c.status || c.state)
+        render: (c) => getStatusBadge(c.status)
       },
       {
         header: t("actions"),
@@ -226,7 +258,7 @@ export const Categories: React.FC = () => {
         }
       }
     ],
-    [t, handleEdit, handleDelete, extractId]
+    [t, handleEdit, handleDelete, extractId, getAccountDisplay]
   );
 
   return (
@@ -362,6 +394,7 @@ export const Categories: React.FC = () => {
         }}
         onSave={handleSave}
         categoryToEdit={editingCategory}
+        accounts={accounts}
         isLoading={isLoading}
       />
 

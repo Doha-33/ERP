@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Edit2, Trash2, Search } from "lucide-react";
+import { Plus, Edit2, Trash2, Search, FolderTree } from "lucide-react";
 import {
   Button,
   Badge,
@@ -20,26 +20,17 @@ export const ChartOfAccounts: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
-  const [accountIdToDelete, setAccountIdToDelete] = useState<string | null>(
-    null,
-  );
+  const [accountIdToDelete, setAccountIdToDelete] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
   const isRTL = i18n.language === 'ar';
 
-  // Function to get parent account name from ID or object
+  // Get parent account name - now parentAccountId is always a string ID
   const getParentAccountName = (account: Account): string => {
     if (!account.parentAccountId) return "-";
     
-    // If parentAccountId is an object with name property
-    if (typeof account.parentAccountId === 'object' && account.parentAccountId !== null) {
-      const parent = account.parentAccountId as any;
-      return `${parent.accountCode || ''} - ${parent.accountName || ''}`.replace(/^- /, '');
-    }
-    
-    // If parentAccountId is a string ID, find the parent account from accounts list
     const parentId = account.parentAccountId as string;
-    const parentAccount = accounts.find(a => a._id === parentId || a.id === parentId);
+    const parentAccount = accounts.find(a => a._id === parentId);
     
     if (parentAccount) {
       return `${parentAccount.accountCode} - ${parentAccount.accountName}`;
@@ -59,6 +50,12 @@ export const ChartOfAccounts: React.FC = () => {
         ) ||
         (account.accountType?.toLowerCase() || "").includes(
           searchTerm.toLowerCase(),
+        ) ||
+        (account.accountCategory?.toLowerCase() || "").includes(
+          searchTerm.toLowerCase(),
+        ) ||
+        (account.paymentMethod?.toLowerCase() || "").includes(
+          searchTerm.toLowerCase(),
         ),
     );
   }, [accounts, searchTerm]);
@@ -66,13 +63,14 @@ export const ChartOfAccounts: React.FC = () => {
   const handleSave = async (data: any) => {
     try {
       if (selectedAccount) {
-        await updateAccount(selectedAccount._id || selectedAccount.id, data);
+        await updateAccount(selectedAccount._id, data);
         toast.success(t("account_updated_successfully"));
       } else {
         await addAccount(data);
         toast.success(t("account_added_successfully"));
       }
       setIsModalOpen(false);
+      setSelectedAccount(null);
     } catch (error) {
       console.error("Failed to save account:", error);
       toast.error(t("failed_to_save_account"));
@@ -92,24 +90,38 @@ export const ChartOfAccounts: React.FC = () => {
     }
   };
 
+  // Get category badge color
+  const getCategoryBadge = (category: string) => {
+    const categoryColors: Record<string, string> = {
+      CASH: 'success',
+      BANK: 'info',
+      RECEIVABLE: 'warning',
+      PAYABLE: 'danger',
+      INVENTORY: 'primary',
+      SALES: 'success',
+      COGS: 'danger',
+      EXPENSE: 'warning',
+      EQUITY: 'purple',
+      OTHER: 'secondary'
+    };
+    return categoryColors[category] || 'secondary';
+  };
+
   const columns: Column<Account>[] = [
     { 
       header: t("account_code"), 
       accessorKey: "accountCode",
-      render: (item: Account) => (
-        <span className="font-mono text-sm">{item.accountCode}</span>
-      )
+      render: (item: Account) => <span>{item.accountCode}</span>
     },
     { 
       header: t("account_name"), 
       accessorKey: "accountName",
-      render: (item: Account) => (
-        <span className="font-medium">{item.accountName}</span>
-      )
+      render: (item: Account) => <span>{item.accountName}</span>
     },
     {
       header: t("account_type"),
-      render: (item) => {
+      accessorKey: "accountType",
+      render: (item: Account) => {
         const typeColors: Record<string, string> = {
           ASSET: 'success',
           LIABILITY: 'warning',
@@ -118,32 +130,61 @@ export const ChartOfAccounts: React.FC = () => {
           EXPENSE: 'danger'
         };
         return (
-          <Badge status={typeColors[item.accountType] || 'info'}>
+          <Badge variant={typeColors[item.accountType] as any}>
             {t(item.accountType.toLowerCase())}
           </Badge>
         );
       },
     },
     {
+      header: t("account_category"),
+      accessorKey: "accountCategory",
+      render: (item: Account) => {
+        if (!item.accountCategory) return <span>-</span>;
+        return (
+          <Badge variant={getCategoryBadge(item.accountCategory) as any}>
+            {t(`account_category_${item.accountCategory.toLowerCase()}`)}
+          </Badge>
+        );
+      }
+    },
+    {
+      header: t("payment_method"),
+      accessorKey: "paymentMethod",
+      render: (item: Account) => {
+        if (!item.paymentMethod) return <span>-</span>;
+        const methodColors: Record<string, string> = {
+          CASH: 'success',
+          BANK: 'info',
+          NONE: 'secondary'
+        };
+        return (
+          <Badge variant={methodColors[item.paymentMethod] as any}>
+            {t(`payment_method_${item.paymentMethod.toLowerCase()}`)}
+          </Badge>
+        );
+      }
+    },
+    {
       header: t("parent_account"),
-      render: (item) => getParentAccountName(item),
+      render: (item: Account) => <span>{getParentAccountName(item)}</span>,
     },
     {
       header: t("level"),
-      render: (item) => item.level || 0,
+      render: (item: Account) => <span>{item.level || 0}</span>,
     },
     {
       header: t("status"),
-      render: (item) => (
-        <Badge status={item.isActive ? "success" : "danger"}>
+      render: (item: Account) => (
+        <Badge variant={item.isActive ? 'success' : 'secondary'}>
           {item.isActive ? t("active") : t("inactive")}
         </Badge>
       ),
     },
     {
       header: t("actions"),
-      render: (item) => (
-        <div className="flex items-center gap-2">
+      render: (item: Account) => (
+        <div className="flex gap-2" dir="ltr">
           <button
             onClick={() => {
               setSelectedAccount(item);
@@ -155,7 +196,7 @@ export const ChartOfAccounts: React.FC = () => {
           </button>
           <button
             onClick={() => {
-              setAccountIdToDelete(item._id || item.id);
+              setAccountIdToDelete(item._id);
               setIsDeleteModalOpen(true);
             }}
             className="p-1.5 text-gray-500 hover:text-red-600 transition-colors border border-gray-300 rounded-lg"
@@ -168,38 +209,29 @@ export const ChartOfAccounts: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-6" dir={isRTL ? "rtl" : "ltr"}>
+    <div className="p-4 sm:p-6 space-y-6">
       {/* Header Section */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div className="w-full sm:w-auto">
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
-            {t("chart_of_accounts")}
-          </h1>
-          <p className="text-sm sm:text-base text-gray-500">
-            {t("manage_your_accounts_structure")}
-          </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">{t("chart_of_accounts")}</h1>
+          <p className="text-gray-500 mt-1">{t("manage_your_accounts_structure")}</p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-          <div className="w-full sm:w-auto">
-            <ExportDropdown data={accounts} filename="chart_of_accounts" />
-          </div>
-          <Button
-            onClick={() => {
-              setSelectedAccount(null);
-              setIsModalOpen(true);
-            }}
-            className="w-full sm:w-auto justify-center"
-          >
-            <Plus size={20} /> {t("add_account")}
-          </Button>
-        </div>
+        <Button
+          onClick={() => {
+            setSelectedAccount(null);
+            setIsModalOpen(true);
+          }}
+          className="w-full sm:w-auto justify-center"
+        >
+          <Plus size={18} className="ml-2" />
+          {t("add_account")}
+        </Button>
       </div>
 
       {/* Search Section */}
-      <div className="p-4 flex flex-col sm:flex-row gap-4 items-stretch sm:items-center bg-white rounded-lg border border-gray-200">
+      <div className="flex flex-col sm:flex-row gap-4 sm:items-center sm:justify-between">
         <Input
           placeholder={t("search_accounts")}
-          icon={<Search size={18} />}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="w-full sm:max-w-md"
@@ -210,25 +242,25 @@ export const ChartOfAccounts: React.FC = () => {
         </div>
       </div>
 
-      {/* Table Section - Responsive with horizontal scroll */}
-      <div className="overflow-x-auto -mx-4 sm:mx-0">
-        <div className="min-w-full inline-block align-middle">
-          <Table
-            data={filteredAccounts}
-            columns={columns}
-            keyExtractor={(item) => item._id || item.id || ""}
-            selectable
-          />
-        </div>
+      {/* Table Section */}
+      <div className="overflow-x-auto">
+        <Table
+          data={filteredAccounts}
+          columns={columns}
+          keyExtractor={(item) => item._id}
+          selectable
+        />
       </div>
 
       {/* Modals */}
       <AccountModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => {
+          setIsModalOpen(false);
+          setSelectedAccount(null);
+        }}
         onSave={handleSave}
         accountToEdit={selectedAccount}
-        parentAccounts={accounts}
       />
 
       <ConfirmationModal

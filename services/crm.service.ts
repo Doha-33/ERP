@@ -1,11 +1,15 @@
 import apiClient from '../client/apiClient';
-import { CRMContact, CRMDeal, CRMLead, CRMPipeline, CRMProject, CRMTask } from '../types';
+import { CRMContact, CRMDeal, CRMLead, CRMPipeline, CRMProject, CRMTask, CRMGroup, CRMPricelist } from '../types';
 
 const crmService = {
   // Contacts
-  async getContacts() {
-    const res = await apiClient.get('/crm/contacts/list');
+  async getContacts(params?: any) {
+    const res = await apiClient.get('/crm/contacts/list', { params });
     return res.data.data;
+  },
+  async getContactsFull(params?: any) {
+    const res = await apiClient.get('/crm/contacts/list', { params });
+    return res.data;
   },
   async getContactById(id: string) {
     const res = await apiClient.get(`/crm/contacts/${id}`);
@@ -22,6 +26,16 @@ const crmService = {
   async deleteContact(id: string) {
     const res = await apiClient.delete(`/crm/contacts/delete/${id}`);
     return res.data.data;
+  },
+  async importContacts(file: File) {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await apiClient.post('/crm/contacts/import', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return res.data;
   },
 
   // Deals
@@ -131,6 +145,50 @@ const crmService = {
   },
   async deleteTask(id: string) {
     const res = await apiClient.delete(`/crm/tasks/delete/${id}`);
+    return res.data.data;
+  },
+
+  // Groups
+  async getGroups() {
+    const res = await apiClient.get('/crm/groups/list');
+    return res.data.data;
+  },
+  async getGroupById(id: string) {
+    const res = await apiClient.get(`/crm/groups/${id}`);
+    return res.data.data;
+  },
+  async addGroup(data: Partial<CRMGroup>) {
+    const res = await apiClient.post('/crm/groups/create', data);
+    return res.data.data;
+  },
+  async updateGroup(id: string, data: Partial<CRMGroup>) {
+    const res = await apiClient.patch(`/crm/groups/update/${id}`, data);
+    return res.data.data;
+  },
+  async deleteGroup(id: string) {
+    const res = await apiClient.delete(`/crm/groups/delete/${id}`);
+    return res.data.data;
+  },
+
+  // Price Lists
+  async getPricelists() {
+    const res = await apiClient.get('/crm/pricelists/list');
+    return res.data.data;
+  },
+  async getPricelistById(id: string) {
+    const res = await apiClient.get(`/crm/pricelists/${id}`);
+    return res.data.data;
+  },
+  async addPricelist(data: Partial<CRMPricelist>) {
+    const res = await apiClient.post('/crm/pricelists/create', data);
+    return res.data.data;
+  },
+  async updatePricelist(id: string, data: Partial<CRMPricelist>) {
+    const res = await apiClient.patch(`/crm/pricelists/update/${id}`, data);
+    return res.data.data;
+  },
+  async deletePricelist(id: string) {
+    const res = await apiClient.delete(`/crm/pricelists/delete/${id}`);
     return res.data.data;
   },
 };

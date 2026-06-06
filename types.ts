@@ -1,12 +1,11 @@
-
-import React from 'react';
+import React from "react";
 
 export interface User {
   id: string;
   username: string;
   fullName?: string;
   email: string;
-  role: 'ADMIN' | 'USER' | 'MANAGER' | string;
+  role: "ADMIN" | "USER" | "MANAGER" | string;
   avatar?: string;
   state?: string;
   lastLoginAt?: string;
@@ -43,7 +42,7 @@ export interface UserRecord {
   full_name: string;
   role_id: string;
   branch_id?: string | null;
-  status: 'Active' | 'Inactive';
+  status: "Active" | "Inactive";
   created_at: string;
   image_url?: string | null;
   Role: UserRole;
@@ -64,7 +63,7 @@ export interface Order {
   variants: string;
   category: string;
   price: number;
-  status: 'Delivered' | 'Pending' | 'Canceled';
+  status: "Delivered" | "Pending" | "Canceled";
   image: string;
 }
 
@@ -80,12 +79,18 @@ export interface Employee {
   nationality: string;
   gosiId: string;
   dob: string;
-  gender: 'Male' | 'Female' | string;
-  maritalStatus: 'Single' | 'Married' | 'Divorced' | 'Widowed' | string;
+  gender: "Male" | "Female" | string;
+  maritalStatus: "Single" | "Married" | "Divorced" | "Widowed" | string;
   phoneNumber: string;
   email: string;
   address: string;
-  employeeStatus: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED' | 'RESIGNED' | 'CONTRACT_ENDED' | string;
+  employeeStatus:
+    | "ACTIVE"
+    | "INACTIVE"
+    | "SUSPENDED"
+    | "RESIGNED"
+    | "CONTRACT_ENDED"
+    | string;
   code?: string; // Legacy
   avatar?: string; // Legacy
   phone?: string; // Legacy
@@ -103,7 +108,7 @@ export interface Employee {
   directManagerId: any; // populated
   terminationDate?: string | null;
   hireDate: string;
-  contractType: 'Full-Time' | 'Part-Time' | 'Temporary' | string;
+  contractType: "Full-Time" | "Part-Time" | "Temporary" | string;
   internalId: string;
   jobGrade: string;
   bankInfo: {
@@ -131,7 +136,7 @@ export interface ActionHistory {
   role: string;
   date: string;
   time: string;
-  action: 'Pending' | 'Approved' | 'Rejected' | string;
+  action: "Pending" | "Approved" | "Rejected" | string;
   rejectedReason?: string | null;
 }
 
@@ -154,7 +159,7 @@ export interface Loan {
   avatar?: string;
   loanId?: string;
   remainingAmount?: string | number;
-  deductionType?: 'SINGLE' | 'INSTALLMENTS' | string | null;
+  deductionType?: "SINGLE" | "INSTALLMENTS" | string | null;
   installmentAmount?: string | number | null;
   numberOfInstallments?: string | number | null;
   startMonth?: string | null;
@@ -168,7 +173,13 @@ export interface DocumentRecord {
   id: string;
   employeeId: string;
   employeeName?: string;
-  type: 'ID' | 'Passport' | 'Work_Permit' | 'Medical_Insurance' | 'Certificates' | string;
+  type:
+    | "ID"
+    | "Passport"
+    | "Work_Permit"
+    | "Medical_Insurance"
+    | "Certificates"
+    | string;
   fileUrl: string;
   expiryDate: string;
   uploadedBy?: string | null;
@@ -182,13 +193,13 @@ export interface Attendance {
   date: string;
   checkInTime: string;
   checkOutTime: string;
-  shiftType: 'MORNING' | 'NIGHT' | 'EVENING'| string;
+  shiftType: "MORNING" | "NIGHT" | "EVENING" | string;
   breakDuration: number;
   workingHours: number;
   overtimeHours: number;
   lateMinutes: number;
   earlyLeaveMinutes: string | number;
-  status: 'PRESENT' | 'ABSENT' | 'LEAVE' | 'LATE' | 'PERMISSION' | string;
+  status: "PRESENT" | "ABSENT" | "LEAVE" | "LATE" | "PERMISSION" | string;
   notes?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -222,7 +233,7 @@ export interface Payroll {
   employeeName?: string; // Legacy
   overtime?: number; // Legacy
   totals?: number; // Legacy
-  status: 'DRAFT' | 'PAID' | string;
+  status: "DRAFT" | "PAID" | string;
   notes?: string;
   deductions: {
     absence: number;
@@ -243,7 +254,7 @@ export interface PayrollRule {
   ruleCode: string;
   ruleName: string;
   value: string;
-  state: 'Active' | 'Inactive';
+  state: "Active" | "Inactive";
 }
 
 export interface Deduction {
@@ -290,15 +301,22 @@ export interface Leave {
   _id: string;
   leaveId: string;
   employeeId: any; // populated
-  leaveType: 'ANNUAL' | 'SICK' | 'UNPAID' | 'EMERGENCY' | 'MATERNITY' | 'OTHER' | string;
+  leaveType:
+    | "ANNUAL"
+    | "SICK"
+    | "UNPAID"
+    | "EMERGENCY"
+    | "MATERNITY"
+    | "OTHER"
+    | string;
   fromDate: string;
   toDate: string;
   days: number;
   remainingBalance: number;
   reason: string;
   attachment?: string;
-  workflowStatus: 'PENDING_MANAGER' | 'APPROVED' | 'REJECTED' | string;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | string;
+  workflowStatus: "PENDING_MANAGER" | "APPROVED" | "REJECTED" | string;
+  status: "PENDING" | "APPROVED" | "REJECTED" | string;
   approverId?: string | null;
   createdAt?: string;
   updatedAt?: string;
@@ -311,13 +329,13 @@ export interface HRRequest {
   _id: string;
   requestNumber: string;
   employeeId: any; // populated
-  requestType: 'LEAVE' | 'ALLOWANCE' | 'CLEARANCE' | string;
+  requestType: "LEAVE" | "ALLOWANCE" | "CLEARANCE" | string;
   dueDate: string;
   description: string;
   approvedBy?: string | null;
   approvalDate?: string | null;
-  priority: 'LOW' | 'MEDIUM' | 'HIGH' | string;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | string;
+  priority: "LOW" | "MEDIUM" | "HIGH" | string;
+  status: "PENDING" | "APPROVED" | "REJECTED" | string;
   notes?: string;
   attachment?: string;
   requestDate: string;
@@ -350,7 +368,7 @@ export interface Contract {
   allowances: number;
   // Comment above fix: Renamed basic_salary to basicSalary to resolve type mismatch errors in components
   basicSalary: number;
-  state: 'Active' | 'Expired' | 'Under Renewal' | 'Pending' | string;
+  state: "Active" | "Expired" | "Under Renewal" | "Pending" | string;
 }
 
 export interface Penalty {
@@ -414,7 +432,7 @@ export interface Performance {
   teamwork?: number; // Legacy
   communication?: number; // Legacy
   skillDevelopment?: number; // Legacy
-  status: 'COMPLETED' | 'DRAFT' | 'APPROVED' | string;
+  status: "COMPLETED" | "DRAFT" | "APPROVED" | string;
   notes?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -430,7 +448,7 @@ export interface PayrollLog {
   runBy: any; // populated
   numberOfEmployees: number;
   totalPayroll: number;
-  status: 'SUCCESS' | 'FAILED' | string;
+  status: "SUCCESS" | "FAILED" | string;
   notes?: string;
   runDate: string;
   createdAt?: string;
@@ -448,7 +466,7 @@ export interface CareerHistory {
   previousSalary: number;
   newSalary: number;
   effectiveDate: string;
-  changeType: 'PROMOTION' | 'TRANSFER' | 'INCREMENT' | string;
+  changeType: "PROMOTION" | "TRANSFER" | "INCREMENT" | string;
   notes?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -500,7 +518,7 @@ export interface Branch {
   name: string;
   email: string;
   address: string;
-  state: 'ACTIVE' | 'INACTIVE';
+  state: "ACTIVE" | "INACTIVE";
   createdAt?: string;
   updatedAt?: string;
 }
@@ -512,7 +530,7 @@ export interface Department {
   name?: string; // Legacy
   companyId: any; // populated
   managerName: string;
-  state: 'ACTIVE' | 'INACTIVE';
+  state: "ACTIVE" | "INACTIVE";
   createdAt?: string;
   updatedAt?: string;
 }
@@ -524,7 +542,7 @@ export interface Job {
   name?: string; // Legacy
   description: string;
   departmentId: any; // populated
-  state: 'ACTIVE' | 'INACTIVE';
+  state: "ACTIVE" | "INACTIVE";
   createdAt?: string;
   updatedAt?: string;
 }
@@ -621,8 +639,8 @@ export interface EndOfService {
   approved_by_manager?: boolean;
   approved_by_hr?: boolean;
   rejected_reason?: string;
-  companyId:string;
-  branchId:string;
+  companyId: string;
+  branchId: string;
 }
 
 export interface Customer {
@@ -638,7 +656,7 @@ export interface Customer {
   companyName: string;
   companyId?: any | null;
   branchId?: any | null;
-  status: 'ACTIVE' | 'INACTIVE';
+  status: "ACTIVE" | "INACTIVE";
   createdAt?: string;
   updatedAt?: string;
 }
@@ -668,9 +686,9 @@ export interface SalesOrder {
   discountAmount: number;
   taxAmount: number;
   totalAmount: number;
-  paymentStatus: 'PAID' | 'UNPAID' | 'PARTIALLY_PAID' | string;
-  deliveryStatus: 'PENDING' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED' | string;
-  status: 'DRAFT' | 'CONFIRMED' | 'CANCELLED' | string;
+  paymentStatus: "PAID" | "UNPAID" | "PARTIALLY_PAID" | string;
+  deliveryStatus: "PENDING" | "SHIPPED" | "DELIVERED" | "CANCELLED" | string;
+  status: "DRAFT" | "CONFIRMED" | "CANCELLED" | string;
   notes?: string;
   promoCode?: string;
   createdAt?: string;
@@ -704,7 +722,7 @@ export interface SalesInvoice {
   discountAmount: number;
   taxAmount: number;
   totalAmount: number;
-  paymentStatus: 'PAID' | 'UNPAID' | 'PARTIALLY_PAID';
+  paymentStatus: "PAID" | "UNPAID" | "PARTIALLY_PAID";
   notes?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -751,7 +769,7 @@ export interface POSProduct {
   productType: string;
   unitOfMeasure: string;
   expiredDate: string;
-  barcode:string;
+  barcode: string;
 }
 
 export interface POSOrderItem {
@@ -769,7 +787,7 @@ export interface POSOrder {
   id: string;
   _id?: string;
   orderNumber: string;
-  status: 'DRAFT' | 'PAID' | 'CANCELLED' | 'HOLD' | string;
+  status: "DRAFT" | "PAID" | "CANCELLED" | "HOLD" | string;
   customerId: any; // populated
   warehouseId: any; // populated
   companyId: string;
@@ -784,11 +802,11 @@ export interface POSOrder {
   holdReference: string;
   paidAt?: string | null;
   discount: {
-    type: 'AMOUNT' | 'PERCENT' | string;
+    type: "AMOUNT" | "PERCENT" | string;
     value: number;
   };
   tax: {
-    type: 'AMOUNT' | 'PERCENT' | string;
+    type: "AMOUNT" | "PERCENT" | string;
     value: number;
   };
   payments: any[];
@@ -801,21 +819,26 @@ export interface PricingRule {
   _id?: string;
   ruleName: string;
   customer: string;
-  priceType:string;
-  value:number;
+  priceType: string;
+  value: number;
   product: string;
   condition: string;
   priceChange: string;
-  appliesTo: 'PRODUCT' | 'CATEGORY' | 'CUSTOMER' | 'ORDER_TOTAL';
-  status: 'ACTIVE' | 'INACTIVE';
+  appliesTo: "PRODUCT" | "CATEGORY" | "CUSTOMER" | "ORDER_TOTAL";
+  status: "ACTIVE" | "INACTIVE";
 }
 
 export interface Discount {
   id: string;
-  _id:string;
+  _id: string;
   discountName: string;
-  type: 'PERCENTAGE' | 'FIXED';
-  appliesTo: 'PRODUCT' | 'CATEGORY' | 'CUSTOMER' | 'CUSTOMER_GROUP' | 'ORDER_TOTAL';
+  type: "PERCENTAGE" | "FIXED";
+  appliesTo:
+    | "PRODUCT"
+    | "CATEGORY"
+    | "CUSTOMER"
+    | "CUSTOMER_GROUP"
+    | "ORDER_TOTAL";
   productId?: any;
   categoryId?: string;
   customerId?: any;
@@ -823,7 +846,7 @@ export interface Discount {
   minOrderTotal?: number;
   startDate?: string | null;
   endDate?: string | null;
-  status: 'ACTIVE' | 'INACTIVE' | 'EXPIRED';
+  status: "ACTIVE" | "INACTIVE" | "EXPIRED";
   createdAt?: string;
   updatedAt?: string;
 }
@@ -832,8 +855,8 @@ export interface Promotion {
   id: string;
   _id?: string;
   promotionName: string;
-  type: 'PERCENTAGE' | 'FIXED' | 'BUY_X_GET_Y' | 'FREE_SHIPPING';
-  conditionType: 'ORDER_TOTAL' | 'PROMO_CODE' | 'PRODUCT' | 'CUSTOMER_TYPE';
+  type: "PERCENTAGE" | "FIXED" | "BUY_X_GET_Y" | "FREE_SHIPPING";
+  conditionType: "ORDER_TOTAL" | "PROMO_CODE" | "PRODUCT" | "CUSTOMER_TYPE";
   productId?: string | null;
   customerId?: string | null;
   promoCode?: string;
@@ -843,7 +866,7 @@ export interface Promotion {
   benefitDescription: string;
   startDate?: string;
   endDate?: string;
-  status: 'ACTIVE' | 'SCHEDULED' | 'EXPIRED';
+  status: "ACTIVE" | "SCHEDULED" | "EXPIRED";
   createdAt?: string;
   updatedAt?: string;
 }
@@ -876,14 +899,14 @@ export interface Quotation {
   totalAmount: number;
   notes?: string;
   termsAndConditions?: string;
-  status: 'DRAFT' | 'SENT' | 'EXPIRED' | string;
+  status: "DRAFT" | "SENT" | "EXPIRED" | string;
   createdAt?: string;
   updatedAt?: string;
 }
 
 export interface SalesSettings {
   vatPercentage: number;
-  invoiceNumberingMethod: 'Manual' | 'Automatic';
+  invoiceNumberingMethod: "Manual" | "Automatic";
   defaultPricelist: string;
   defaultPaymentTerms: string;
   defaultCurrency: string;
@@ -898,14 +921,14 @@ export interface StockAdjustment {
   adjustmentQty: number;
   reason: string;
   date: string;
-  status: 'Pending' | 'Completed';
+  status: "Pending" | "Completed";
 }
 
 export interface InventorySettings {
   allowNegativeStock: boolean;
   enableWarehouseTracking: boolean;
   defaultWarehouse: string;
-  stockValuationMethod: 'FIFO' | 'LIFO' | 'Average';
+  stockValuationMethod: "FIFO" | "LIFO" | "Average";
 }
 
 export interface PurchaseSettings {
@@ -931,7 +954,7 @@ export interface Supplier {
   companyName: string;
   companyId: any;
   branchId: any;
-  status: 'ACTIVE' | 'INACTIVE' | string;
+  status: "ACTIVE" | "INACTIVE" | string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -954,8 +977,8 @@ export interface PurchaseOrder {
     receivedQuantity: number;
     pendingQuantity: number;
   }[];
-  paymentStatus: 'PAID' | 'UNPAID' | 'PARTIAL' | string;
-  deliveryStatus: 'PENDING' | 'DELIVERED' | 'PROCESSING' | 'CANCELLED' | string;
+  paymentStatus: "PAID" | "UNPAID" | "PARTIAL" | string;
+  deliveryStatus: "PENDING" | "DELIVERED" | "PROCESSING" | "CANCELLED" | string;
   subtotal: number;
   taxAmount: number;
   totalAmount: number;
@@ -968,7 +991,7 @@ export interface GoodsReceipt {
   id: string;
   _id?: string;
   grnNumber: string;
-  branchId:string;
+  branchId: string;
   purchaseOrderId: any;
   receiptDate: string;
   warehouseId: any;
@@ -1012,8 +1035,8 @@ export interface PurchaseInvoice {
     tax: number;
     total: number;
   }[];
-  paymentStatus: 'PAID' | 'UNPAID' | 'PARTIAL' | string;
-  deliveryStatus: 'PENDING' | 'DELIVERED' | 'PROCESSING' | 'CANCELLED' | string;
+  paymentStatus: "PAID" | "UNPAID" | "PARTIAL" | string;
+  deliveryStatus: "PENDING" | "DELIVERED" | "PROCESSING" | "CANCELLED" | string;
   subtotal: number;
   taxAmount: number;
   discountAmount: number;
@@ -1039,7 +1062,7 @@ export interface PurchaseRequest {
     estimatedUnitCost: number;
     totalCost: number;
   }[];
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | string;
+  status: "PENDING" | "APPROVED" | "REJECTED" | string;
   notes?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -1053,54 +1076,48 @@ export interface SupplierRating {
   service: number;
   compliance: number;
   overallRating: number;
-  _id:string;
-  supplierId:string;
-  ratingCode:string;
-  createdAt:string;
+  _id: string;
+  supplierId: string;
+  ratingCode: string;
+  createdAt: string;
 }
 
 export interface ReturnToSupplier {
   id: string;
   rtsNumber: string;
-  returnNumber:string;
-  branchId:string;
-  warehouseId:string;
-  goodsReceiptId:string;
-  supplierId:string;
+  returnNumber: string;
+  branchId: string;
+  warehouseId: string;
+  goodsReceiptId: string;
+  supplierId: string;
   supplier: string;
   date: string;
-  status: 'Approval' | 'Pending' | 'Rejected';
+  status: "Approval" | "Pending" | "Rejected";
   product: string;
   reasonForReturn: string;
   receivedQty: number;
   createdBy: string;
   returnQty: number;
-  items:ReturnToSupplier[];
-  notes:string;
-  productId:string;
-  sku:string;
-  receivedQuantity:number;
-  returnQuantity:number;
+  items: ReturnToSupplier[];
+  notes: string;
+  productId: string;
+  sku: string;
+  receivedQuantity: number;
+  returnQuantity: number;
 }
 
 export interface Product {
   id: string;
-  _id?: string;
-  sku: string;
-  image: string;
-  productName: string;
-  category: string;
-  productType: 'STOCKABLE' | 'SERVICE' | 'CONSUMABLE' | string;
+  productType: "STOCKABLE" | "SERVICE" | "CONSUMABLE" | string;
   salesPrice: number;
   cost: number;
   description: string;
   unitOfMeasure: string;
-  barcode: string;
   companyName: string;
   companyId?: any | null;
   branchId?: any | null;
   hasExpiry: boolean;
-  status: 'ACTIVE' | 'INACTIVE' | string;
+  status: "ACTIVE" | "INACTIVE" | string;
   quantityOnHand?: number;
   currentStock?: number;
   reorderLevel?: number;
@@ -1113,6 +1130,18 @@ export interface Product {
   totalSold?: number;
   createdAt?: string;
   updatedAt?: string;
+  _id: string;
+  sku: string;
+  code?: string; // API sometimes uses 'code' instead of 'sku'
+  productName: string;
+  barcode?: string;
+  image?: string;
+  category: string | Category; // Can be string ID or populated Category object
+  isStockItem: "YES" | "NO";
+  openingStock: number;
+  warehouseId: string | Warehouse; // Can be string ID or populated Warehouse object
+  currentStockQty: number;
+  isDeleted?: boolean;
 }
 
 export interface Stock {
@@ -1127,7 +1156,7 @@ export interface Stock {
   inStockQty: number;
   reservedQty: number;
   unit: string;
-  status: 'In Stock' | 'Low Stock' | 'Out Of Stock';
+  status: "In Stock" | "Low Stock" | "Out Of Stock";
   availableQty?: number;
 }
 
@@ -1136,13 +1165,13 @@ export interface Warehouse {
   _id?: string;
   code: string;
   warehouseName: string;
-  type: 'MAIN_WAREHOUSE' | 'DISTRIBUTION_CENTER' | 'RETAIL_STORE' | string;
+  type: "MAIN_WAREHOUSE" | "DISTRIBUTION_CENTER" | "RETAIL_STORE" | string;
   companyId: any;
   branchId: any;
   managerName: string;
   phoneNumber: string;
   location: string;
-  state: 'ACTIVE' | 'INACTIVE' | string;
+  state: "ACTIVE" | "INACTIVE" | string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -1154,17 +1183,21 @@ export interface Unit {
   abbreviation: string;
   parentUnit: string;
   conversionFactor: string;
-  state: 'Active' | 'Inactive';
+  state: "Active" | "Inactive";
 }
 
 export interface Category {
-  id: string;
-  _id?: string;
-  status: 'ACTIVE' | 'INACTIVE' | string;
+  _id: string;
   name: string;
-  description: string;
-  createdAt: string;
-  state: 'Active' | 'Inactive';
+  description?: string;
+  status: "ACTIVE" | "INACTIVE";
+  incomeAccountId?: string | Account; // Can be string ID or populated Account object
+  expenseAccountId?: string | Account;
+  inventoryValuationAccountId?: string | Account;
+  costOfGoodsSoldAccountId?: string | Account;
+  isDeleted?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface StockMovement {
@@ -1172,22 +1205,25 @@ export interface StockMovement {
   productName: string;
   warehouse: string;
   qty: number;
-  type: 'In' | 'Out';
+  type: "In" | "Out";
   reference: string;
   userName: string;
   userRole: string;
   date: string;
 }
 
+// Account type
 export interface Account {
+  _id: string;
   id: string;
-  _id?: string;
   accountCode: string;
   accountName: string;
-  accountType: 'ASSET' | 'LIABILITY' | 'EQUITY' | 'REVENUE' | 'EXPENSE' | string;
-  parentAccountId?: any | null;
+  accountType: 'ASSET' | 'LIABILITY' | 'EQUITY' | 'REVENUE' | 'EXPENSE';
+  accountCategory: 'CASH' | 'BANK' | 'RECEIVABLE' | 'PAYABLE' | 'INVENTORY' | 'SALES' | 'COGS' | 'EXPENSE' | 'EQUITY' | 'OTHER';
+  paymentMethod: 'CASH' | 'BANK' | 'NONE';
+  parentAccountId?: string | Account | null;
   level?: number;
-  isActive?: boolean;
+  isActive: boolean;
   notes?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -1207,21 +1243,36 @@ export interface JournalEntry {
   referenceNumber: string;
   memo: string;
   lines: JournalLine[];
-  status: 'DRAFT' | 'POSTED' | 'CANCELLED' | string;
+  status: "DRAFT" | "POSTED" | "CANCELLED" | string;
   createdAt?: string;
   updatedAt?: string;
 }
 
+// Accounts Receivable type based on actual API response
 export interface AccountReceivable {
+  _id: string;
   id: string;
-  _id?: string;
   customerName: string;
+  contactId: string | CRMContact;
   invoiceNumber: string;
   invoiceDate: string;
   dueDate: string;
+  currencyId?: string;
+  exchangeRate?: number;
+  items: Array<{
+    productId: string | Product;
+    quantity: number;
+    unitPrice: number;
+    total: number;
+    _id?: string;
+  }>;
   amount: number;
+  amountBase?: number;
   paidAmount: number;
-  status: 'PENDING' | 'PARTIAL' | 'PAID' | string;
+  paymentType: 'CASH' | 'BANK';
+  cashAccountId: string | Account;
+  journalEntryId?: string;
+  status: 'PENDING' | 'PARTIAL' | 'PAID';
   notes?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -1297,7 +1348,7 @@ export interface AccountPayable {
   dueDate: string;
   amount: number;
   paidAmount: number;
-  status: 'PENDING' | 'PARTIAL' | 'PAID' | string;
+  status: "PENDING" | "PARTIAL" | "PAID" | string;
   notes?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -1334,7 +1385,7 @@ export interface Tax {
   _id?: string;
   taxName: string;
   taxCode: string;
-  taxType: 'VAT' | 'WITHHOLDING' | 'SALES_TAX' | string;
+  taxType: "VAT" | "WITHHOLDING" | "SALES_TAX" | string;
   rate: number;
   isActive: boolean;
   notes?: string;
@@ -1349,12 +1400,12 @@ export interface Income {
   amount: number;
   source: string;
   companyName: string;
-  paymentMethod: 'Cash' | 'Bank Transfer' | 'Online' | string;
+  paymentMethod: "Cash" | "Bank Transfer" | "Online" | string;
   note: string;
   incomeId: string;
   vatPercent: number;
   vatAmount: number;
-  status: 'Paid' | 'Unpaid' | 'partial' | string;
+  status: "Paid" | "Unpaid" | "partial" | string;
   isDeleted?: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -1371,9 +1422,9 @@ export interface Expense {
   payee: string;
   vatPercent: number;
   vatAmount: number;
-  paymentMethod: 'CASH' | 'BANK' | 'CARD' | 'ONLINE' | string;
+  paymentMethod: "CASH" | "BANK" | "CARD" | "ONLINE" | string;
   note: string;
-  status: 'PENDING' | 'COMPLETED' | string;
+  status: "PENDING" | "COMPLETED" | string;
   isDeleted?: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -1384,14 +1435,14 @@ export interface BankAccount {
   _id?: string;
   bankName: string;
   accountNumber: string;
-  accountName:string;
-  isActive:boolean;
+  accountName: string;
+  isActive: boolean;
   iban: string;
   currency: string;
   branch: string;
   balance: number;
   chartAccount?: string | any;
-  status: 'Active' | 'Inactive';
+  status: "Active" | "Inactive";
   company?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -1402,7 +1453,7 @@ export interface Budget {
   _id?: string;
   name: string;
   category: string;
-  period: 'MONTHLY' | 'QUARTERLY' | 'YEARLY' | string;
+  period: "MONTHLY" | "QUARTERLY" | "YEARLY" | string;
   budgetedAmount: number;
   fiscalYear: number;
   allocatedAmount: number;
@@ -1410,7 +1461,7 @@ export interface Budget {
   spentAmount: number;
   startDate: string;
   endDate: string;
-  status: 'ACTIVE' | 'COMPLETED' | 'CLOSED' | string;
+  status: "ACTIVE" | "COMPLETED" | "CLOSED" | string;
   notes?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -1462,12 +1513,12 @@ export interface Asset {
   warrantyEndDate: string;
   warrantyNumber: string;
   barcode: string;
-  category: 'ELECTRONICS' | 'FURNITURE' | 'VEHICLE' | 'IT Equipment'| string;
+  category: "ELECTRONICS" | "FURNITURE" | "VEHICLE" | "IT Equipment" | string;
   location: string;
   cost: number;
   purchaseDate: string;
   assignedTo: string;
-  state: 'ACTIVE' | 'INACTIVE' | 'IN_MAINTENANCE' | 'LOST' | 'SCRAP' | string;
+  state: "ACTIVE" | "INACTIVE" | "IN_MAINTENANCE" | "LOST" | "SCRAP" | string;
   notes: string;
   image?: string;
   attachments?: string[];
@@ -1576,7 +1627,7 @@ export interface Vehicle {
   type: string;
   fuelType: string;
   mileage: number;
-  status: 'Active' | 'In Maintenance' | 'Inactive' | string;
+  status: "Active" | "In Maintenance" | "Inactive" | string;
   createdAt: string;
   updatedAt: string;
 }
@@ -1589,7 +1640,7 @@ export interface Driver {
   licenseExpiry: string;
   phone: string;
   assignedVehicleId: string | Vehicle;
-  status: 'Active' | 'On Trip' | 'Inactive' | string;
+  status: "Active" | "On Trip" | "Inactive" | string;
   createdAt: string;
   updatedAt: string;
 }
@@ -1605,18 +1656,17 @@ export interface Trip {
   endTime?: string | null;
   fuelUsed: number;
   distance: number;
-  status: 'Ongoing' | 'Completed' | 'Cancelled' | string;
+  status: "Ongoing" | "Completed" | "Cancelled" | string;
   createdAt: string;
   updatedAt: string;
 }
-
 
 export interface CostCenter {
   _id: string;
   name: string;
   code: string;
   description: string;
-  status: 'Active' | 'Inactive' | string;
+  status: "Active" | "Inactive" | string;
   createdAt: string;
   updatedAt: string;
 }
@@ -1628,7 +1678,7 @@ export interface VehicleBooking {
   startDate: string;
   endDate: string;
   purpose: string;
-  status: 'Pending' | 'Approved' | 'Rejected' | 'Completed' | string;
+  status: "Pending" | "Approved" | "Rejected" | "Completed" | string;
   createdAt: string;
   updatedAt: string;
 }
@@ -1640,7 +1690,7 @@ export interface VehicleExpense {
   amount: number;
   date: string;
   description: string;
-  status: 'Paid' | 'Pending' | string;
+  status: "Paid" | "Pending" | string;
   createdAt: string;
   updatedAt: string;
 }
@@ -1651,10 +1701,10 @@ export interface Accident {
   driverId: string | Driver;
   date: string;
   location: string;
-  damageLevel: 'Low' | 'Medium' | 'High' | string;
+  damageLevel: "Low" | "Medium" | "High" | string;
   actualCost: number;
   insuranceProvider: string;
-  status: 'Open' | 'Closed' | string;
+  status: "Open" | "Closed" | string;
   createdAt: string;
   updatedAt: string;
 }
@@ -1667,7 +1717,7 @@ export interface MaintenanceRecord {
   cost: number;
   odometer: number;
   provider: string;
-  status: 'Scheduled' | 'Completed' | 'Cancelled' | string;
+  status: "Scheduled" | "Completed" | "Cancelled" | string;
   createdAt: string;
   updatedAt: string;
 }
@@ -1694,7 +1744,6 @@ export interface FleetKPIs {
   maintenanceCosts: number;
   summary?: string; // Added
 }
-
 
 // Manufacturing Module Types
 export interface BillOfMaterials {
@@ -1813,18 +1862,31 @@ export interface WorkInProgress {
   updatedAt?: string;
 }
 
-
 // CRM Module Types
 export interface CRMContact {
-  id: string;
-  _id?: string;
+  _id: string;
+  contactCode: string;
   name: string;
   phone: string;
-  tags: string;
-  location: string;
-  rating: number;
-  status: 'Active' | 'Inactive' | string;
+  email?: string;
+  address?: string;
+  location?: string;
+  notes?: string;
+  tags?: string; // "VIP" | "Promotion" | "Cold Lead"
+  rating?: number; // 0-5
+  status: 'Active' | 'Inactive';
+  companyName:string;
+  companyNameEn:string;
+  pricelistId: string;
+  mobile: string;
+  nameEn: string;
+  isCustomer: boolean;
+  isSupplier: boolean;
+  isDeleted?: boolean;
+  receivableAccountId?: string | Account; // Account object for customer receivables
+  payableAccountId?: string | Account;    // Account object for supplier payables
   createdAt?: string;
+  groupId:string;
   updatedAt?: string;
 }
 
@@ -1834,7 +1896,7 @@ export interface CRMDeal {
   dealName: string;
   customer: string;
   dealValue: number;
-  stage: 'Proposal' | 'Negotiation' | 'Won' | 'Lost' | string;
+  stage: "Proposal" | "Negotiation" | "Won" | "Lost" | string;
   closingDate: string;
   salesOwner: string;
   createdAt?: string;
@@ -1849,7 +1911,7 @@ export interface CRMLead {
   phone: string;
   company: string;
   leadOwner: string;
-  leadStatus: 'New' | 'Contacted' | 'Connected' | 'Qualified' | 'Lost' | string;
+  leadStatus: "New" | "Contacted" | "Connected" | "Qualified" | "Lost" | string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -1875,7 +1937,7 @@ export interface CRMProject {
   progress: number;
   startDate: string;
   deadline: string;
-  status: 'Planning' | 'In Progress' | 'On Hold' | 'Completed' | string;
+  status: "Planning" | "In Progress" | "On Hold" | "Completed" | string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -1887,13 +1949,34 @@ export interface CRMTask {
   startDate: string;
   dueDate: string;
   assignee: string;
-  state: 'To Do' | 'In Progress' | 'Review' | 'Done' | string;
+  state: "To Do" | "In Progress" | "Review" | "Done" | string;
   description: string;
-  priority?: 'Low' | 'Medium' | 'High';
+  priority?: "Low" | "Medium" | "High";
   createdAt?: string;
   updatedAt?: string;
 }
 
+export interface CRMGroup {
+  id?: string;
+  _id?: string;
+  name: string;
+  nameEn?: string;
+  description?: string;
+  discountPercentage: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CRMPricelist {
+  id?: string;
+  _id?: string;
+  name: string;
+  nameEn?: string;
+  currencyId: string;
+  discountPercentage: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
 
 export interface SalesReport {
   soldQty: number;

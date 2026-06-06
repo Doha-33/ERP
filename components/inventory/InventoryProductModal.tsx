@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Edit2, Package, DollarSign, Warehouse, Tag, Barcode, Upload } from "lucide-react";
+import { Plus, Edit2, Package, DollarSign, Warehouse, Tag, Barcode, Upload, AlertCircle } from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
-import { Button, Input, Select, TextArea, FileUpload } from "../../components/ui/Common";
-import { Product } from "../../types";
+import { Button, Input, Select, TextArea } from "../../components/ui/Common";
+import { Product, Category, Warehouse as WarehouseType } from "../../types";
 import { useData } from "../../context/DataContext";
+import { toast } from "sonner";
 
 interface InventoryProductModalProps {
   isOpen: boolean;
@@ -36,38 +37,55 @@ export const InventoryProductModal: React.FC<InventoryProductModalProps> = ({
     openingStock: 0,
     reorderLevel: 0,
     warehouseId: "",
-    currentStockQty: 0,
-    expired: "NO",
     purchasePrice: 0,
     sellingPrice: 0,
     description: "",
   });
 
+  // Helper to extract ID from object or string
+  const extractId = useCallback((value: any): string => {
+    if (!value) return "";
+    if (typeof value === "object") {
+      return value._id || value.id || "";
+    }
+    return value;
+  }, []);
+
+  // Helper to extract category ID
+  const extractCategoryId = useCallback((category: any): string => {
+    if (!category) return "";
+    if (typeof category === "object") {
+      return category._id || category.id || "";
+    }
+    return category;
+  }, []);
+
   useEffect(() => {
     if (productToEdit && isOpen) {
-      const warehouseId = typeof productToEdit.warehouseId === "object"
-        ? (productToEdit.warehouseId as any)?._id
-        : productToEdit.warehouseId;
+      // Extract category ID (could be string or object)
+      const categoryId = extractCategoryId(productToEdit.category);
+      
+      // Extract warehouse ID (could be string or object)
+      const warehouseId = extractId(productToEdit.warehouseId);
 
       setFormData({
-        sku: productToEdit.sku || "",
+        sku: productToEdit.sku || productToEdit.code || "",
         productName: productToEdit.productName || "",
         barcode: productToEdit.barcode || "",
         image: productToEdit.image || "",
-        category: productToEdit.category || "",
+        category: categoryId,
         defaultUnit: productToEdit.defaultUnit || "",
         isStockItem: productToEdit.isStockItem || "YES",
         companyName: productToEdit.companyName || "",
         openingStock: productToEdit.openingStock || 0,
         reorderLevel: productToEdit.reorderLevel || 0,
-        warehouseId: warehouseId || "",
-        currentStockQty: productToEdit.currentStockQty || 0,
-        expired: productToEdit.expired || "NO",
+        warehouseId: warehouseId,
         purchasePrice: productToEdit.purchasePrice || 0,
         sellingPrice: productToEdit.sellingPrice || 0,
         description: productToEdit.description || "",
       });
     } else if (!productToEdit && isOpen) {
+      // Generate random SKU for new product
       const randomNum = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
       setFormData({
         sku: `PROD-${randomNum}`,
@@ -81,27 +99,28 @@ export const InventoryProductModal: React.FC<InventoryProductModalProps> = ({
         openingStock: 0,
         reorderLevel: 0,
         warehouseId: "",
-        currentStockQty: 0,
-        expired: "NO",
         purchasePrice: 0,
         sellingPrice: 0,
         description: "",
       });
     }
-  }, [productToEdit, isOpen]);
+  }, [productToEdit, isOpen, extractCategoryId, extractId]);
 
-  const categoryOptions = categories.map(c => ({
-    value: c.name || c.categoryName,
-    label: c.name || c.categoryName,
+  // Prepare category options
+  const categoryOptions = categories.map(cat => ({
+    value: extractId(cat),
+    label: cat.name,
   }));
 
+  // Prepare unit options
   const unitOptions = units.map(u => ({
     value: u.name,
     label: `${u.name} (${u.abbreviation})`,
   }));
 
+  // Prepare warehouse options
   const warehouseOptions = warehouses.map(w => ({
-    value: w._id || w.id,
+    value: extractId(w),
     label: w.warehouseName,
   }));
 
@@ -117,16 +136,64 @@ export const InventoryProductModal: React.FC<InventoryProductModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    
+    // Validation
+    if (!formData.productName.trim()) {
+      toast.error(t("product_name_required"));
+      return;
+    }
+    if (!formData.category) {
+      toast.error(t("category_required"));
+      return;
+    }
+    if (!formData.defaultUnit) {
+      toast.error(t("unit_required"));
+      return;
+    }
+    if (!formData.warehouseId) {
+      toast.error(t("warehouse_required"));
+      return;
+    }
+    if (formData.purchasePrice <= 0) {
+      toast.error(t("purchase_price_required"));
+      return;
+    }
+    if (formData.sellingPrice <= 0) {
+      toast.error(t("selling_price_required"));
+      return;
+    }
+    
     setIsSubmitting(true);
     
     try {
-      await onSave({
-        ...formData,
-        currentStockQty: formData.openingStock,
-      });
+      const saveData: Partial<Product> = {
+        productName: formData.productName,
+        sku: formData.sku,
+        code: formData.sku, // API uses 'code' as well
+        barcode: formData.barcode || undefined,
+        category: formData.category,
+        defaultUnit: formData.defaultUnit,
+        isStockItem: formData.isStockItem,
+        companyName: formData.companyName || undefined,
+        openingStock: formData.openingStock,
+        reorderLevel: formData.reorderLevel,
+        warehouseId: formData.warehouseId,
+        purchasePrice: formData.purchasePrice,
+        sellingPrice: formData.sellingPrice,
+        description: formData.description || undefined,
+        currentStockQty: formData.openingStock, // Set initial stock
+      };
+      
+      // Only include image if exists
+      if (formData.image) {
+        saveData.image = formData.image;
+      }
+      
+      await onSave(saveData);
       onClose();
     } catch (error) {
       console.error("Error in form submission:", error);
+      toast.error(t("failed_to_save_product"));
     } finally {
       setIsSubmitting(false);
     }
@@ -136,8 +203,15 @@ export const InventoryProductModal: React.FC<InventoryProductModalProps> = ({
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleImageChange = (file: File | null) => {
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
     if (file) {
+      // Check file size (max 2MB)
+      if (file.size > 2 * 1024 * 1024) {
+        toast.error(t("image_too_large"));
+        return;
+      }
+      
       const reader = new FileReader();
       reader.onloadend = () => {
         setFormData(prev => ({ ...prev, image: reader.result as string }));
@@ -165,13 +239,17 @@ export const InventoryProductModal: React.FC<InventoryProductModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("sku")} <span className="text-red-500">*</span>
             </label>
-            <Input
-              value={formData.sku}
-              onChange={(e) => handleChange("sku", e.target.value)}
-              placeholder="PROD-001"
-              required
-              fullWidth
-            />
+            <div className="relative">
+              <Tag size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Input
+                value={formData.sku}
+                onChange={(e) => handleChange("sku", e.target.value)}
+                placeholder="PROD-001"
+                required
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
 
           {/* Product Name */}
@@ -193,12 +271,16 @@ export const InventoryProductModal: React.FC<InventoryProductModalProps> = ({
             <label className="text-sm font-medium text-gray-700">
               {t("barcode")}
             </label>
-            <Input
-              value={formData.barcode}
-              onChange={(e) => handleChange("barcode", e.target.value)}
-              placeholder="1234567890123"
-              fullWidth
-            />
+            <div className="relative">
+              <Barcode size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Input
+                value={formData.barcode}
+                onChange={(e) => handleChange("barcode", e.target.value)}
+                placeholder="1234567890123"
+                fullWidth
+                className="pl-10"
+              />
+            </div>
           </div>
 
           {/* Category */}
@@ -261,6 +343,7 @@ export const InventoryProductModal: React.FC<InventoryProductModalProps> = ({
           {/* Warehouse */}
           <div className="space-y-1">
             <label className="text-sm font-medium text-gray-700">
+              <Warehouse size={14} className="inline mr-1" />
               {t("warehouse")} <span className="text-red-500">*</span>
             </label>
             <Select
@@ -276,10 +359,12 @@ export const InventoryProductModal: React.FC<InventoryProductModalProps> = ({
           {/* Opening Stock */}
           <div className="space-y-1">
             <label className="text-sm font-medium text-gray-700">
+              <Package size={14} className="inline mr-1" />
               {t("opening_stock")}
             </label>
             <Input
               type="number"
+              min="0"
               value={formData.openingStock}
               onChange={(e) => handleChange("openingStock", Number(e.target.value))}
               placeholder="0"
@@ -290,25 +375,30 @@ export const InventoryProductModal: React.FC<InventoryProductModalProps> = ({
           {/* Reorder Level */}
           <div className="space-y-1">
             <label className="text-sm font-medium text-gray-700">
+              <AlertCircle size={14} className="inline mr-1" />
               {t("reorder_level")}
             </label>
             <Input
               type="number"
+              min="0"
               value={formData.reorderLevel}
               onChange={(e) => handleChange("reorderLevel", Number(e.target.value))}
               placeholder="0"
               fullWidth
             />
+            <p className="text-xs text-gray-500">{t("reorder_level_helper")}</p>
           </div>
 
           {/* Purchase Price */}
           <div className="space-y-1">
             <label className="text-sm font-medium text-gray-700">
+              <DollarSign size={14} className="inline mr-1 text-orange-600" />
               {t("purchase_price")} (EGP) <span className="text-red-500">*</span>
             </label>
             <Input
               type="number"
               step="0.01"
+              min="0"
               value={formData.purchasePrice}
               onChange={(e) => handleChange("purchasePrice", Number(e.target.value))}
               placeholder="0.00"
@@ -320,28 +410,16 @@ export const InventoryProductModal: React.FC<InventoryProductModalProps> = ({
           {/* Selling Price */}
           <div className="space-y-1">
             <label className="text-sm font-medium text-gray-700">
+              <DollarSign size={14} className="inline mr-1 text-green-600" />
               {t("selling_price")} (EGP) <span className="text-red-500">*</span>
             </label>
             <Input
               type="number"
               step="0.01"
+              min="0"
               value={formData.sellingPrice}
               onChange={(e) => handleChange("sellingPrice", Number(e.target.value))}
               placeholder="0.00"
-              required
-              fullWidth
-            />
-          </div>
-
-          {/* Expired */}
-          <div className="space-y-1">
-            <label className="text-sm font-medium text-gray-700">
-              {t("expired")} <span className="text-red-500">*</span>
-            </label>
-            <Select
-              value={formData.expired}
-              onChange={(e) => handleChange("expired", e.target.value)}
-              options={expiredOptions}
               required
               fullWidth
             />
@@ -353,7 +431,28 @@ export const InventoryProductModal: React.FC<InventoryProductModalProps> = ({
           <label className="text-sm font-medium text-gray-700">
             {t("product_image")}
           </label>
-          <FileUpload label={t("upload_image")} onChange={handleImageChange} accept="image/*" />
+          <div className="flex items-center gap-4">
+            <label className="cursor-pointer">
+              <div className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+                {t("upload_image")}
+              </div>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                className="hidden"
+              />
+            </label>
+            {formData.image && (
+              <button
+                type="button"
+                onClick={() => handleChange("image", "")}
+                className="text-sm text-red-600 hover:text-red-700"
+              >
+                {t("remove")}
+              </button>
+            )}
+          </div>
           {formData.image && (
             <div className="mt-2">
               <img
@@ -379,8 +478,13 @@ export const InventoryProductModal: React.FC<InventoryProductModalProps> = ({
           />
         </div>
 
-        <div className="flex justify-end gap-3 mt-8">
-          <Button variant="secondary" onClick={onClose} disabled={isSubmitting || isLoading}>
+        <div className="flex justify-end gap-3 mt-8 pt-4 border-t border-gray-100">
+          <Button 
+            variant="secondary" 
+            onClick={onClose} 
+            disabled={isSubmitting || isLoading}
+            type="button"
+          >
             {t("cancel")}
           </Button>
           <Button
@@ -390,7 +494,7 @@ export const InventoryProductModal: React.FC<InventoryProductModalProps> = ({
             isLoading={isSubmitting || isLoading}
             disabled={isSubmitting || isLoading}
           >
-            {productToEdit ? t("save") : t("add_product")}
+            {productToEdit ? t("update_product") : t("add_product")}
           </Button>
         </div>
       </form>

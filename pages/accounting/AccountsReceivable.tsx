@@ -5,6 +5,7 @@ import { Card, Button, Input, Select, Badge, ExportDropdown } from '../../compon
 import { Table, Column } from '../../components/ui/Table';
 import { ConfirmationModal } from '../../components/ui/ConfirmationModal';
 import { useData } from '../../context/DataContext';
+import { useCRM } from '../../context/crm/CRMContext';
 import { AccountReceivable } from '../../types';
 import { AccountsReceivableModal } from '../../components/accounting/AccountsReceivableModal';
 import { PaymentModal, PaymentFormData } from '../../components/accounting/PaymentModal';
@@ -14,8 +15,10 @@ export const AccountsReceivable: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { 
     accountsReceivable, accountingLoading, addAccountReceivable, 
-    updateAccountReceivable, deleteAccountReceivable, addARPayment 
+    updateAccountReceivable, deleteAccountReceivable, addARPayment,
+    currencies 
   } = useData();
+  const { contacts } = useCRM();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -27,22 +30,29 @@ export const AccountsReceivable: React.FC = () => {
 
   const isRTL = i18n.language === 'ar';
 
+  const getCustomerName = (ar: AccountReceivable) => {
+    if (ar.customerName) return ar.customerName;
+    const contact = contacts.find(c => (c as any)._id === ar.contactId || c.id === ar.contactId);
+    return contact?.name || (contact as any)?.customerName || t('unknown_customer');
+  };
+
   const filteredAR = useMemo(() => {
     return accountsReceivable.filter(ar => {
+      const name = getCustomerName(ar);
       const matchesSearch = 
-        (ar.customerName?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+        (name.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
         (ar.invoiceNumber?.toLowerCase() || '').includes(searchTerm.toLowerCase());
       
       const matchesStatus = statusFilter ? ar.status === statusFilter : true;
       
       return matchesSearch && matchesStatus;
     });
-  }, [accountsReceivable, searchTerm, statusFilter]);
+  }, [accountsReceivable, searchTerm, statusFilter, contacts]);
 
   // Calculate summary statistics
   const summary = useMemo(() => {
-    const totalReceivables = accountsReceivable.reduce((sum, ar) => sum + ar.amount, 0);
-    const totalPaid = accountsReceivable.reduce((sum, ar) => sum + ar.paidAmount, 0);
+    const totalReceivables = accountsReceivable.reduce((sum, ar) => sum + (ar.amount || 0), 0);
+    const totalPaid = accountsReceivable.reduce((sum, ar) => sum + (ar.paidAmount || 0), 0);
     const totalRemaining = totalReceivables - totalPaid;
     const overdueInvoices = accountsReceivable.filter(ar => {
       return ar.status !== 'PAID' && new Date(ar.dueDate) < new Date();
@@ -54,7 +64,7 @@ export const AccountsReceivable: React.FC = () => {
   const handleSave = async (data: any) => {
     try {
       if (selectedAR) {
-        await updateAccountReceivable(selectedAR._id || selectedAR.id, data);
+        await updateAccountReceivable(selectedAR._id || selectedAR.id || '', data);
         toast.success(t('accounts_receivable_updated_successfully'));
       } else {
         await addAccountReceivable(data);
@@ -62,9 +72,9 @@ export const AccountsReceivable: React.FC = () => {
       }
       setIsModalOpen(false);
       setSelectedAR(null);
-    } catch (error) {
+    } catch (error : any) {
       console.error('Failed to save accounts receivable:', error);
-      toast.error(t('failed_to_save_accounts_receivable'));
+      toast.error(error.message || t('failed_to_save_accounts_receivable'));
     }
   };
 
@@ -75,9 +85,9 @@ export const AccountsReceivable: React.FC = () => {
       setIsDeleteModalOpen(false);
       setArIdToDelete(null);
       toast.success(t('accounts_receivable_deleted_successfully'));
-    } catch (error) {
+    } catch (error : any) {
       console.error('Failed to delete accounts receivable:', error);
-      toast.error(t('failed_to_delete_accounts_receivable'));
+      toast.error(error.message || t('failed_to_delete_accounts_receivable'));
     }
   };
 
@@ -94,9 +104,9 @@ export const AccountsReceivable: React.FC = () => {
       setIsPaymentModalOpen(false);
       setSelectedAR(null);
       toast.success(t('payment_recorded_successfully'));
-    } catch (error) {
+    } catch (error:any) {
       console.error(error);
-      toast.error(t('failed_to_record_payment'));
+      toast.error(error.message || t('failed_to_record_payment'));
     }
   };
 
@@ -104,28 +114,43 @@ export const AccountsReceivable: React.FC = () => {
     { 
       header: t('customer_name'), 
       accessorKey: 'customerName',
-      cell: (item: AccountReceivable) => (
-        <span className="font-medium text-gray-900">{item.customerName}</span>
+      render: (item: AccountReceivable) => (
+        <span className="font-medium text-gray-900">{getCustomerName(item)}</span>
       )
     },
     { 
       header: t('invoice_number'), 
       accessorKey: 'invoiceNumber',
-      cell: (item: AccountReceivable) => (
-        <span className="font-mono text-sm">{item.invoiceNumber}</span>
+      render: (item: AccountReceivable) => (
+        <div className="flex flex-col">
+          <span className="font-mono text-sm">{item.invoiceNumber}</span>
+          {item.paymentType && (
+            <span className="text-[10px] text-gray-400">{item.paymentType}</span>
+          )}
+        </div>
       )
+    },
+    { 
+      header: t('currency'), 
+      render: (item: AccountReceivable) => {
+        const currency = currencies.find(c => (c as any)._id === item.currencyId || c.id === item.currencyId);
+        return (
+          <div className="flex flex-col">
+            <span className="text-sm font-medium">{currency?.code || '-'}</span>
+            {item.exchangeRate && item.exchangeRate !== 1 && (
+              <span className="text-[10px] text-gray-400">1 : {item.exchangeRate}</span>
+            )}
+          </div>
+        );
+      }
     },
     { 
       header: t('date'), 
-      render: (item) => item.invoiceDate ? new Date(item.invoiceDate).toLocaleDateString() : '-',
-      cell: (item: AccountReceivable) => (
-        <span className="whitespace-nowrap">{item.invoiceDate ? new Date(item.invoiceDate).toLocaleDateString() : '-'}</span>
-      )
+      render: (item: AccountReceivable) => item.invoiceDate ? new Date(item.invoiceDate).toLocaleDateString() : '-',
     },
     { 
       header: t('due_date'), 
-      render: (item) => item.dueDate ? new Date(item.dueDate).toLocaleDateString() : '-',
-      cell: (item: AccountReceivable) => {
+      render: (item: AccountReceivable) => {
         const isOverdue = item.status !== 'PAID' && new Date(item.dueDate) < new Date();
         return (
           <span className={`whitespace-nowrap ${isOverdue ? 'text-red-600 font-semibold' : ''}`}>
@@ -137,22 +162,19 @@ export const AccountsReceivable: React.FC = () => {
     },
     { 
       header: t('amount'), 
-      render: (item) => item.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-      cell: (item: AccountReceivable) => (
+      render: (item: AccountReceivable) => (
         <span className="font-semibold text-gray-900">{item.amount.toLocaleString()}</span>
       )
     },
     { 
       header: t('paid'), 
-      render: (item) => item.paidAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-      cell: (item: AccountReceivable) => (
+      render: (item: AccountReceivable) => (
         <span className="text-green-600">{item.paidAmount.toLocaleString()}</span>
       )
     },
     { 
       header: t('remaining_balance'), 
-      render: (item) => (item.amount - item.paidAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
-      cell: (item: AccountReceivable) => {
+      render: (item: AccountReceivable) => {
         const remaining = item.amount - item.paidAmount;
         return (
           <span className={`font-semibold ${remaining > 0 ? 'text-orange-600' : 'text-green-600'}`}>

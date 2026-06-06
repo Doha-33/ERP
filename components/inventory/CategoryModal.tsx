@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Edit2, Tag, FileText } from "lucide-react";
+import { Plus, Edit2, Tag, FileText, DollarSign, Package, TrendingUp, TrendingDown } from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
 import { Button, Input, Select, TextArea } from "../../components/ui/Common";
-import { Category } from "../../types";
+import { Category, Account } from "../../types";
 import { toast } from "sonner";
 
 interface CategoryModalProps {
@@ -11,6 +11,7 @@ interface CategoryModalProps {
   onClose: () => void;
   onSave: (data: Partial<Category>) => Promise<void>;
   categoryToEdit?: Category | null;
+  accounts?: Account[]; // List of accounts for selection
   isLoading?: boolean;
 }
 
@@ -19,6 +20,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
   onClose,
   onSave,
   categoryToEdit,
+  accounts = [],
   isLoading = false,
 }) => {
   const { t } = useTranslation();
@@ -27,10 +29,14 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
     name: "",
     description: "",
     status: "ACTIVE",
+    incomeAccountId: "",
+    expenseAccountId: "",
+    inventoryValuationAccountId: "",
+    costOfGoodsSoldAccountId: "",
   });
 
-  // Helper function to extract ID (for consistency)
-  const extractId = useCallback((value: any): string => {
+  // Helper to extract ID from account object or string
+  const extractAccountId = useCallback((value: any): string => {
     if (!value) return "";
     if (typeof value === "object") {
       return value._id || value.id || "";
@@ -43,26 +49,38 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
       setFormData({
         name: categoryToEdit.name || "",
         description: categoryToEdit.description || "",
-        status: categoryToEdit.status || categoryToEdit.state || "ACTIVE",
+        status: categoryToEdit.status || "ACTIVE",
+        incomeAccountId: extractAccountId(categoryToEdit.incomeAccountId),
+        expenseAccountId: extractAccountId(categoryToEdit.expenseAccountId),
+        inventoryValuationAccountId: extractAccountId(categoryToEdit.inventoryValuationAccountId),
+        costOfGoodsSoldAccountId: extractAccountId(categoryToEdit.costOfGoodsSoldAccountId),
       });
     } else if (!categoryToEdit && isOpen) {
       setFormData({
         name: "",
         description: "",
         status: "ACTIVE",
+        incomeAccountId: "",
+        expenseAccountId: "",
+        inventoryValuationAccountId: "",
+        costOfGoodsSoldAccountId: "",
       });
     }
-  }, [categoryToEdit, isOpen]);
+  }, [categoryToEdit, isOpen, extractAccountId]);
 
   const statusOptions = [
     { value: "ACTIVE", label: t("active") },
     { value: "INACTIVE", label: t("inactive") },
   ];
 
+  // Filter accounts by type
+  const revenueAccounts = accounts.filter(acc => acc.accountType === "REVENUE");
+  const expenseAccounts = accounts.filter(acc => acc.accountType === "EXPENSE");
+  const assetAccounts = accounts.filter(acc => acc.accountType === "ASSET");
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
-    // Validation
     if (!formData.name.trim()) {
       toast.error(t("category_name_required"));
       return;
@@ -77,8 +95,12 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
         status: formData.status,
       };
       
-      // If editing, include the ID (handled in parent component)
-      console.log("Saving category:", saveData);
+      // Only include account IDs if they are selected
+      if (formData.incomeAccountId) saveData.incomeAccountId = formData.incomeAccountId;
+      if (formData.expenseAccountId) saveData.expenseAccountId = formData.expenseAccountId;
+      if (formData.inventoryValuationAccountId) saveData.inventoryValuationAccountId = formData.inventoryValuationAccountId;
+      if (formData.costOfGoodsSoldAccountId) saveData.costOfGoodsSoldAccountId = formData.costOfGoodsSoldAccountId;
+      
       await onSave(saveData);
       onClose();
     } catch (error) {
@@ -91,6 +113,11 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
 
   const handleChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  // Format account option label
+  const getAccountLabel = (account: Account) => {
+    return `${account.accountCode} - ${account.accountName}`;
   };
 
   return (
@@ -141,6 +168,90 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                 className="pl-10"
               />
             </div>
+          </div>
+
+          {/* Income Account (Revenue) */}
+          <div className="col-span-2 space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              <TrendingUp size={14} className="inline mr-1 text-green-600" />
+              {t("income_account")}
+            </label>
+            <Select
+              value={formData.incomeAccountId}
+              onChange={(e) => handleChange("incomeAccountId", e.target.value)}
+              options={[
+                { value: "", label: t("select_income_account") },
+                ...revenueAccounts.map(acc => ({
+                  value: acc._id,
+                  label: getAccountLabel(acc)
+                }))
+              ]}
+              fullWidth
+            />
+            <p className="text-xs text-gray-500 mt-1">{t("income_account_helper")}</p>
+          </div>
+
+          {/* Expense Account */}
+          <div className="col-span-2 space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              <TrendingDown size={14} className="inline mr-1 text-red-600" />
+              {t("expense_account")}
+            </label>
+            <Select
+              value={formData.expenseAccountId}
+              onChange={(e) => handleChange("expenseAccountId", e.target.value)}
+              options={[
+                { value: "", label: t("select_expense_account") },
+                ...expenseAccounts.map(acc => ({
+                  value: acc._id,
+                  label: getAccountLabel(acc)
+                }))
+              ]}
+              fullWidth
+            />
+            <p className="text-xs text-gray-500 mt-1">{t("expense_account_helper")}</p>
+          </div>
+
+          {/* Inventory Valuation Account (Asset) */}
+          <div className="col-span-2 space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              <Package size={14} className="inline mr-1 text-blue-600" />
+              {t("inventory_valuation_account")}
+            </label>
+            <Select
+              value={formData.inventoryValuationAccountId}
+              onChange={(e) => handleChange("inventoryValuationAccountId", e.target.value)}
+              options={[
+                { value: "", label: t("select_inventory_account") },
+                ...assetAccounts.map(acc => ({
+                  value: acc._id,
+                  label: getAccountLabel(acc)
+                }))
+              ]}
+              fullWidth
+            />
+            <p className="text-xs text-gray-500 mt-1">{t("inventory_account_helper")}</p>
+          </div>
+
+          {/* Cost of Goods Sold Account (Expense) */}
+          <div className="col-span-2 space-y-1">
+            <label className="text-sm font-medium text-gray-700">
+              <DollarSign size={14} className="inline mr-1 text-orange-600" />
+              {t("cost_of_goods_sold_account")}
+            </label>
+            <Select
+              value={formData.costOfGoodsSoldAccountId}
+              onChange={(e) => handleChange("costOfGoodsSoldAccountId", e.target.value)}
+              options={[
+                { value: "", label: t("select_cogs_account") },
+                ...expenseAccounts.map(acc => ({
+                  value: acc._id,
+                  label: getAccountLabel(acc)
+                }))
+              ]}
+              fullWidth
+            />
+            <p className="text-xs text-gray-500 mt-1">{t("cogs_account_helper")}</p>
           </div>
 
           {/* Status */}

@@ -6,12 +6,12 @@ import { Table, Column } from "../../components/ui/Table";
 import { ConfirmationModal } from "../../components/ui/ConfirmationModal";
 import { InventoryProductModal } from "../../components/inventory/InventoryProductModal";
 import { useData } from "../../context/DataContext";
-import { Product } from "../../types";
+import { Product, Category } from "../../types";
 import { toast } from "sonner";
 
 export const InventoryProducts: React.FC = () => {
   const { t } = useTranslation();
-  const { inventoryProducts, addProduct, updateProduct, deleteProduct, fetchInventoryProducts, warehouses } = useData();
+  const { inventoryProducts, addProduct, updateProduct, deleteProduct, fetchInventoryProducts, warehouses, categories } = useData();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -31,6 +31,38 @@ export const InventoryProducts: React.FC = () => {
     return value;
   }, []);
 
+  // Helper to get category name
+  const getCategoryName = useCallback((product: Product): string => {
+    const category = product.category;
+    if (!category) return "-";
+    
+    // If category is an object with name
+    if (typeof category === "object" && category !== null) {
+      return (category as any).name || "-";
+    }
+    
+    // If it's a string ID, find from categories list
+    const categoryId = typeof category === "string" ? category : extractId(category);
+    const foundCategory = categories.find(c => extractId(c) === categoryId);
+    return foundCategory?.name || "-";
+  }, [categories, extractId]);
+
+  // Helper to get warehouse name
+  const getWarehouseName = useCallback((product: Product): string => {
+    const warehouse = product.warehouseId;
+    if (!warehouse) return "-";
+    
+    // If warehouse is an object with warehouseName
+    if (typeof warehouse === "object" && warehouse !== null) {
+      return (warehouse as any).warehouseName || "-";
+    }
+    
+    // If it's a string ID, find from warehouses list
+    const warehouseId = typeof warehouse === "string" ? warehouse : extractId(warehouse);
+    const foundWarehouse = warehouses.find(w => extractId(w) === warehouseId);
+    return foundWarehouse?.warehouseName || "-";
+  }, [warehouses, extractId]);
+
   const handleSave = async (productData: Partial<Product>) => {
     try {
       setIsLoading(true);
@@ -46,10 +78,8 @@ export const InventoryProducts: React.FC = () => {
         const updateData = {
           ...productData,
           _id: productId,
-          id: productId
         } as Product;
         
-        console.log("Updating product with ID:", productId, updateData);
         await updateProduct(updateData);
         toast.success(t("product_updated_successfully"));
       } else {
@@ -81,10 +111,8 @@ export const InventoryProducts: React.FC = () => {
     const productToEdit: Product = {
       ...product,
       _id: productId,
-      id: productId,
     };
     
-    console.log("Editing product:", productToEdit);
     setEditingProduct(productToEdit);
     setIsModalOpen(true);
   }, [extractId, t]);
@@ -123,14 +151,6 @@ export const InventoryProducts: React.FC = () => {
     }
   };
 
-  const getWarehouseName = (product: Product): string => {
-    if (typeof product.warehouseId === "object" && product.warehouseId !== null) {
-      return (product.warehouseId as any)?.warehouseName || "-";
-    }
-    const warehouse = warehouses.find(w => extractId(w) === product.warehouseId);
-    return warehouse?.warehouseName || "-";
-  };
-
   const getStockStatus = (currentStock: number, reorderLevel: number) => {
     if (currentStock <= 0) {
       return { label: t("out_of_stock"), variant: "danger" as const };
@@ -144,27 +164,36 @@ export const InventoryProducts: React.FC = () => {
   // Apply filters
   const filteredProducts = useMemo(() => {
     return inventoryProducts.filter(p => {
-      const matchesSearch = 
-        p.productName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.barcode?.includes(searchTerm);
+      const productName = p.productName || "";
+      const sku = p.sku || p.code || "";
+      const barcode = p.barcode || "";
       
-      const matchesCategory = !categoryFilter || p.category === categoryFilter;
+      const matchesSearch = 
+        productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        barcode.includes(searchTerm);
+      
+      const productCategory = getCategoryName(p);
+      const matchesCategory = !categoryFilter || productCategory === categoryFilter;
       
       return matchesSearch && matchesCategory;
     });
-  }, [inventoryProducts, searchTerm, categoryFilter]);
+  }, [inventoryProducts, searchTerm, categoryFilter, getCategoryName]);
 
   // Get unique categories for filter
   const uniqueCategories = useMemo(() => {
-    const categories = inventoryProducts.map(p => p.category).filter(Boolean);
-    return Array.from(new Set(categories));
-  }, [inventoryProducts]);
+    const cats = inventoryProducts.map(p => getCategoryName(p)).filter(c => c && c !== "-");
+    return Array.from(new Set(cats));
+  }, [inventoryProducts, getCategoryName]);
 
   // Statistics
   const totalProducts = filteredProducts.length;
   const totalValue = filteredProducts.reduce((sum, p) => sum + ((p.currentStockQty || p.openingStock || 0) * (p.sellingPrice || 0)), 0);
-  const lowStockProducts = filteredProducts.filter(p => (p.currentStockQty || p.openingStock || 0) <= (p.reorderLevel || 0)).length;
+  const lowStockProducts = filteredProducts.filter(p => {
+    const stock = p.currentStockQty || p.openingStock || 0;
+    const reorder = p.reorderLevel || 0;
+    return stock > 0 && stock <= reorder;
+  }).length;
   const outOfStockProducts = filteredProducts.filter(p => (p.currentStockQty || p.openingStock || 0) <= 0).length;
 
   const categoryOptions = [
@@ -193,7 +222,7 @@ export const InventoryProducts: React.FC = () => {
             )}
             <div className="flex flex-col">
               <span className="font-medium text-gray-900">{p.productName}</span>
-              <span className="text-xs text-gray-500">{p.sku}</span>
+              <span className="text-xs text-gray-500">{p.sku || p.code}</span>
             </div>
           </div>
         )
@@ -203,7 +232,7 @@ export const InventoryProducts: React.FC = () => {
         render: (p) => (
           <div className="flex items-center gap-1.5">
             <Tag size={14} className="text-gray-400" />
-            <span className="text-sm text-gray-600">{p.category || "-"}</span>
+            <span className="text-sm text-gray-600">{getCategoryName(p)}</span>
           </div>
         )
       },
@@ -231,11 +260,11 @@ export const InventoryProducts: React.FC = () => {
           <div className="flex flex-col gap-0.5">
             <div className="flex items-center gap-1.5">
               <DollarSign size={14} className="text-green-600" />
-              <span className="text-sm">Sell: {p.sellingPrice?.toLocaleString()} EGP</span>
+              <span className="text-sm">{t("sell")}: {p.sellingPrice?.toLocaleString()} EGP</span>
             </div>
             <div className="flex items-center gap-1.5">
               <DollarSign size={14} className="text-gray-400" />
-              <span className="text-xs text-gray-500">Cost: {p.purchasePrice?.toLocaleString()} EGP</span>
+              <span className="text-xs text-gray-500">{t("cost")}: {p.purchasePrice?.toLocaleString()} EGP</span>
             </div>
           </div>
         )
@@ -275,7 +304,7 @@ export const InventoryProducts: React.FC = () => {
         }
       }
     ],
-    [t, handleEdit, handleDelete, extractId]
+    [t, handleEdit, handleDelete, extractId, getCategoryName, getWarehouseName]
   );
 
   return (
@@ -379,8 +408,9 @@ export const InventoryProducts: React.FC = () => {
               setCategoryFilter("");
               setSearchTerm("");
             }}
-            className="text-sm text-red-600 hover:text-red-700"
+            className="text-sm text-red-600 hover:text-red-700 flex items-center gap-1"
           >
+            <X size={14} />
             {t("clear_filters")}
           </button>
         )}
