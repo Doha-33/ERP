@@ -150,9 +150,9 @@ export const Customers: React.FC = () => {
       );
       setSelectedIds([]);
       setIsBulkConfirmOpen(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Bulk delete failed", error);
-      toast.error(t("failed_to_delete_customers"));
+      toast.error(error.message || t("failed_to_delete_customers"));
     } finally {
       setIsLoading(false);
     }

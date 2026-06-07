@@ -133,9 +133,9 @@ export const POS: React.FC = () => {
       
       await refreshOrder(orderId!);
       toast.success(`${product.productName} added`);
-    } catch (error) {
+    } catch (error:any) {
       console.error('Error adding to order:', error);
-      toast.error('Failed to add item');
+      toast.error( error.message || 'Failed to add item');
     }
   };
 
@@ -149,8 +149,8 @@ export const POS: React.FC = () => {
         await updateItemQty(orderId, itemId, qty);
       }
       await refreshOrder(orderId);
-    } catch (error) {
-      toast.error('Failed to update quantity');
+    } catch (error:any) {
+      toast.error( error.message || 'Failed to update quantity');
     }
   };
 
@@ -161,8 +161,8 @@ export const POS: React.FC = () => {
       await removeItemFromPOSOrder(orderId, itemId);
       await refreshOrder(orderId);
       toast.success('Item removed');
-    } catch (error) {
-      toast.error('Failed to remove item');
+    } catch (error:any) {
+      toast.error( error.message || 'Failed to remove item');
     }
   };
 
@@ -174,8 +174,8 @@ export const POS: React.FC = () => {
       await refreshOrder(orderId);
       setActiveModal(null);
       toast.success('Discount applied');
-    } catch (error) {
-      toast.error('Failed to apply discount');
+    } catch (error:any) {
+      toast.error( error.message || 'Failed to apply discount');
     }
   };
 
@@ -187,8 +187,8 @@ export const POS: React.FC = () => {
       await refreshOrder(orderId);
       setActiveModal(null);
       toast.success('Tax applied');
-    } catch (error) {
-      toast.error('Failed to apply tax');
+    } catch (error:any) {
+      toast.error( error.message || 'Failed to apply tax');
     }
   };
 
@@ -200,8 +200,8 @@ export const POS: React.FC = () => {
       await refreshOrder(orderId);
       setActiveModal(null);
       toast.success('Shipping updated');
-    } catch (error) {
-      toast.error('Failed to apply shipping');
+    } catch (error:any) {
+      toast.error( error.message || 'Failed to apply shipping');
     }
   };
 
@@ -212,8 +212,8 @@ export const POS: React.FC = () => {
       await holdPOSOrder(orderId);
       toast.info('Order put on hold');
       setCurrentOrder(null);
-    } catch (error) {
-      toast.error('Failed to hold order');
+    } catch (error:any) {
+      toast.error( error.message || 'Failed to hold order');
     }
   };
 
@@ -224,8 +224,8 @@ export const POS: React.FC = () => {
       await cancelPOSOrder(orderId);
       toast.warning('Order cancelled');
       setCurrentOrder(null);
-    } catch (error) {
-      toast.error('Failed to cancel order');
+    } catch (error:any) {
+      toast.error( error.message || 'Failed to cancel order');
     }
   };
 
@@ -238,8 +238,8 @@ export const POS: React.FC = () => {
       setCurrentOrder(updated);
       setActiveModal('receipt');
       toast.success('Order paid successfully');
-    } catch (error) {
-      toast.error('Payment failed');
+    } catch (error:any) {
+      toast.error( error.message || 'Payment failed');
     }
   };
 

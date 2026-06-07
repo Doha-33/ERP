@@ -118,8 +118,8 @@ export const Invoices: React.FC = () => {
         setDeleteId(null);
         setSelectedIds((prev) => prev.filter((sid) => sid !== deleteId));
         await fetchSalesInvoicesData(); // Refresh data after deletion to ensure UI is in sync
-      } catch (error) {
-        toast.error(t("failed_to_delete_invoice"));
+      } catch (error: any) {
+        toast.error(error.message || t("failed_to_delete_invoice"));
       }
     }
   }, [deleteId, deleteSalesInvoice, t]);
@@ -133,9 +133,9 @@ export const Invoices: React.FC = () => {
       );
       setSelectedIds([]);
       setIsBulkConfirmOpen(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Bulk delete failed", error);
-      toast.error(t("failed_to_delete_invoices"));
+      toast.error(error.message || t("failed_to_delete_invoices"));
     } finally {
       setIsLoading(false);
     }

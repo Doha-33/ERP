@@ -69,9 +69,9 @@ export const Orders: React.FC = () => {
     setIsLoading(true);
     const data = await salesService.getAllSalesOrders();
     setOrders(data);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error fetching orders:", error);
-    toast.error(t("failed_to_fetch_orders"));
+    toast.error(error.message || t("failed_to_fetch_orders"));
   } finally {
     setIsLoading(false);
   }
@@ -146,8 +146,8 @@ const handleSave = async (order: Partial<SalesOrder>) => {
         setDeleteId(null);
         setSelectedIds((prev) => prev.filter((sid) => sid !== deleteId));
         await fetchOrders(); // Refresh data after deletion to ensure UI is in sync
-      } catch (error) {
-        toast.error(t("failed_to_delete_order"));
+      } catch (error: any) {
+        toast.error(error.message || t("failed_to_delete_order"));
       }
     }
   }, [deleteId, deleteSalesOrder, t]);
@@ -161,9 +161,9 @@ const handleSave = async (order: Partial<SalesOrder>) => {
       );
       setSelectedIds([]);
       setIsBulkConfirmOpen(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Bulk delete failed", error);
-      toast.error(t("failed_to_delete_orders"));
+      toast.error(error.message || t("failed_to_delete_orders"));
     } finally {
       setIsLoading(false);
     }

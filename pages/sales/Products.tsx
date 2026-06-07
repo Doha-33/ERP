@@ -120,9 +120,9 @@ export const Products: React.FC = () => {
       setSelectedIds([]);
       setIsBulkConfirmOpen(false);
       await fetchProducts();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Bulk delete failed", error);
-      toast.error(t("failed_to_delete_products"));
+      toast.error(error.message || t("failed_to_delete_products"));
     } finally {
       setIsLoading(false);
     }
